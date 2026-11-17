@@ -73,6 +73,20 @@ docs/
 
 This is a proposed starting structure, not a requirement to create every file at once. Keep modules small and introduce abstractions only when a concrete feature needs them.
 
+## Reference project: AniCraft
+
+The project uses [AniCraft](https://github.com/storytold/anicraft) as a workflow and architecture reference—not as a code dependency or a feature checklist. AniCraft is a broader Rust vector-animation studio with a stage, drawing tools, keyframes, timeline, and tweening. Its documentation and implementation provide useful examples of separating a document model, deterministic frame evaluation, editor commands, rendering, and timeline interaction.
+
+For Forma Deform, borrow only the principles that fit this smaller library:
+
+- Treat the document as data and make frame evaluation a deterministic operation.
+- Keep geometry and animation evaluation independent of the editor and renderer.
+- Use a stage/canvas plus a frame-based timeline as the basic authoring workflow.
+- Make drawing and editing operations explicit, so they can later support undo/redo or automation.
+- Build and test in small vertical slices.
+
+Do not copy AniCraft's Rust/egui application architecture, full editor feature set, file format, or shape-tween implementation. Forma Deform remains TypeScript-first, Canvas 2D, rectangle-only for its first milestone.
+
 ## Development plan
 
 See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the phased implementation plan, acceptance criteria, testing strategy, and deferred features.
