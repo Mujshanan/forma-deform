@@ -513,3 +513,34 @@ The first release is complete when a user can:
 8. Play and pause the animation.
 9. Save and reload the project.
 10. Run the core tests independently of the browser demo.
+
+
+## 15. Implementation progress
+
+Implementation is being developed on `feat/rectangle-deformation-mvp`; this is intentionally separate from `main` until reviewed.
+
+| Area | Current branch status |
+|---|---|
+| Bun + TypeScript setup | Added |
+| Pure four-point geometry | Initial implementation added |
+| Rectangle translation and corner editing | Added |
+| Timeline keyframes and linear evaluation | Initial implementation added |
+| Canvas drawing and selection demo | Added |
+| Timeline scrubber and playback controls | Added |
+| JSON project serialization | Added |
+| Automated geometry/timeline/document tests | Added; CI verification pending |
+| Browser interaction and edge-case validation | Pending |
+| PR review and merge | Not done |
+
+### First demo workflow
+
+1. Run `bun install` and `bun run dev`.
+2. Open `http://localhost:3000`.
+3. Draw a rectangle on the stage. This creates the initial keyframe.
+4. Move the playhead to frame 20.
+5. Select and drag the shape or one of its corner handles.
+6. Click **Set keyframe** to store the edited geometry at frame 20.
+7. Scrub frames 1–19 or press **Play** to see linear interpolation.
+8. Use **Save project** / **Open project** to round-trip the JSON document.
+
+The current code is a first vertical slice, not yet a release. Browser interaction, pointer cancellation, geometry validity for concave/self-intersecting quads, playback timing, and CI results still need review before the milestone is considered complete.
