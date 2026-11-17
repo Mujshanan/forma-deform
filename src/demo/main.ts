@@ -5,7 +5,8 @@ import {
 } from "../index";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#stage")!;
-const context = canvas.getContext("2d")!;
+const context = canvas.getContext("2d");
+if (!context) throw new Error("Canvas 2D is not available in this browser.");
 const frameInput = document.querySelector<HTMLInputElement>("#frame")!;
 const frameValue = document.querySelector<HTMLOutputElement>("#frame-value")!;
 const modeLabel = document.querySelector<HTMLElement>("#mode-label")!;
