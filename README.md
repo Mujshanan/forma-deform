@@ -4,7 +4,7 @@
 
 The project starts deliberately small: draw a rectangle, edit its corners at different points on a timeline, and interpolate the corner positions to produce an animation. The geometry and animation core should remain independent of the demo editor so it can later be embedded in Forma Studio or reused by other applications.
 
-> **Current status:** Planning / initial implementation not yet started.
+> **Current status:** First implementation in progress on `feat/rectangle-deformation-mvp`. The branch contains the pure geometry/timeline core and a minimal browser demo; the first CI run is still pending.
 
 ## Goals
 
@@ -41,7 +41,8 @@ The first geometry representation uses four ordered points rather than only posi
 - **Language:** TypeScript.
 - **Rendering:** Native HTML Canvas 2D.
 - **UI:** Minimal HTML and CSS; no UI framework initially.
-- **Build and tests:** Keep the toolchain minimal; choose and pin the concrete tooling during the setup phase.
+- **Runtime / tooling:** Bun and TypeScript, with Bun's built-in test runner and bundler.
+- **Build and tests:** `bun install`, `bun run dev`, `bun test`, `bun run typecheck`, and `bun run build`.
 - **Future native acceleration:** Rust/WASM only after measurement justifies it.
 
 ## Repository layout (target)
