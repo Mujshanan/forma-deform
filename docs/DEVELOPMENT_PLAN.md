@@ -21,6 +21,35 @@ The first vertical slice is intentionally narrow:
 
 The library core must remain usable without the demo UI.
 
+## 1A. Reference: AniCraft
+
+Reference repository: [storytold/anicraft](https://github.com/storytold/anicraft).
+
+AniCraft is a full vector-animation application written in Rust. It is useful as a reference for the *shape of the workflow* and for a few architectural principles, but Forma Deform is deliberately a much smaller library. Study its README, roadmap, and user guide when making decisions about the stage, tools, timeline, keyframes, and evaluation model.
+
+### Concepts to borrow
+
+| AniCraft concept | Forma Deform adaptation |
+|---|---|
+| Stage and drawing tools | A single HTML Canvas with Draw and Select tools |
+| Rectangle tool and subselection | Draw a rectangle, then edit its four corner points |
+| Frame-based timeline and keyframes | One simple timeline and one rectangle track |
+| Tweening between keyframes | Linear interpolation of four corresponding corner points |
+| Document as plain data | A small typed rectangle-animation document |
+| Pure frame evaluation (evaluate(document, frame)) | A deterministic TypeScript evaluator with no DOM or Canvas dependency |
+| Commands as explicit user actions | Keep editor operations explicit and separable; do not build a command bus until undo/redo or automation needs it |
+| Milestones with a green build/test state | Every phase ends with type-check, tests, and a runnable demo |
+
+### Concepts intentionally not copied
+
+- AniCraft's pure-Rust/egui application stack. This project starts with TypeScript and browser Canvas 2D.
+- AniCraft's complete vector drawing model, layers, symbols, scenes, masks, and file compatibility.
+- Classic, motion, and shape tween systems. The first implementation only interpolates four stable corner correspondences.
+- GPU/tiled rendering, background workers, CLI/MCP control, and broad import/export.
+- AniCraft's document format or internal code. It is a reference, not a dependency.
+
+**Guiding rule:** borrow the separation of document, evaluation, rendering, and interaction—not the size or complexity of the application.
+
 ## 2. Scope and constraints
 
 ### Included in the first release
@@ -247,7 +276,7 @@ Do not build a sophisticated dope sheet or nonlinear editor.
 - Keep playback scheduling out of the core geometry package.
 - Ensure the displayed frame is deterministic when the user scrubs manually.
 
-The core should accept a frame number; it should not own a browser clock.
+The core should accept a frame number; it should not own a browser clock. Follow AniCraft's useful principle that the displayed result is derived from document data and a requested frame, conceptually evaluate(document, frame). The evaluator must be pure and deterministic.
 
 ## 8. Project document and serialization
 
