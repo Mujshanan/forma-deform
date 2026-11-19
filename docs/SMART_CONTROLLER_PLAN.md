@@ -100,7 +100,7 @@ Easing is applied independently on each side so neutral remains fixed.
 ### Targets
 
 - **SymbolFrame:** negative, neutral, and positive frame anchors. Interpolate piecewise and round to the nearest integer frame. RelativeDelta is invalid.
-- **GeometryDeform:** negative, neutral, and positive 2D offsets. AbsolutePose returns the interpolated offset; RelativeDelta returns the interpolated offset minus the neutral offset.
+- **GeometryDeform:** stable element ID plus stable warp-pin ID, with negative, neutral, and positive 2D offsets. AbsolutePose returns the interpolated offset; RelativeDelta returns the interpolated offset minus the neutral offset.
 
 All target identifiers are stable strings. Array indices and current selection order are not persistent identity.
 
@@ -119,9 +119,9 @@ Choose the narrowest supported persistence mechanism and document its versioning
 Preview flow:
 
 1. Validate the binding.
-2. Resolve the controller input supplied by the preview request.
+2. Query the controller's evaluated angle through the read-only `bone.info` command, or accept an explicit angle for isolated testing.
 3. Calculate the pure core result.
-4. Ask the adapter to resolve and validate the target against the current document.
+4. Ask the adapter to resolve and validate the target against the current document (for geometry, confirm the element and pin through `warp.info`).
 5. Return a preview result.
 6. Display it only through a verified non-destructive host preview facility. If none exists, return the calculated result and report that visual host preview is unavailable.
 
@@ -167,7 +167,9 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - Implement the plugin entry point and command registration against verified SDK APIs.
 - Add bind, unbind, update, inspect, and preview actions where supported.
 - Resolve host targets and validate their types before any write.
-- Implement persistence using the verified mechanism.
+- Use `bone.info` for on-demand bone-angle input.
+- Use `warp.info` / `warp.pin_move` only for explicitly supported geometry preview operations.
+- Implement persistence using the verified mechanism or a separately reviewed AniCraft host extension.
 
 **Acceptance:** plugin loads in AniCraft; authoring actions work; save/reopen preserves bindings; invalid IDs and unsupported capabilities produce actionable errors.
 
@@ -234,9 +236,12 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | Smart Controller development plan | Added in this branch |
 | AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
 | Native Rust core | Initial implementation added; native test run pending |
+| On-demand bone-angle query | Available through `bone.info` |
+| Geometry pin target | Core now requires stable element and pin IDs; adapter verification pending |
 | Binding persistence | Requires a host-side document/engine extension |
-| WASM adapter | Core contract identified; command adapter implementation pending |
-| Host visual preview | Command-dialog preview exists; target-specific operations still need verification |
+| WASM adapter | SDK contract identified; adapter implementation pending |
+| Geometry visual preview | `warp.pin_move` can be used in command-dialog preview; adapter tests pending |
+| Symbol-frame visual preview | No direct instance-frame setter identified; host support or further command research required |
 | Continuous playback integration | Out of v1 scope |
 
 ## 10. Definition of done
