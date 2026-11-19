@@ -6,7 +6,7 @@ The project starts deliberately small: draw a rectangle, edit its corners at dif
 
 > **Current status:** The TypeScript rectangle/timeline demo is implemented on `feat/rectangle-deformation-mvp`. A separate Smart Controller v1 workstream is now being developed on `feat/smart-controller-v1`.
 
-> **Project direction:** The existing TypeScript demo is retained as a standalone geometry experiment. The Smart Controller plugin workstream adds a native Rust core and, after verification of AniCraft's actual plugin SDK, a thin WASM adapter. See [the Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md) and the [AniCraft SDK capability audit](docs/ANICRAFT_SDK_AUDIT.md).
+> **Project direction:** The existing TypeScript demo is retained as a standalone geometry experiment. The Smart Controller workstream now has an initial native Rust core and versioned binding-set JSON model; a thin WASM adapter follows the verified AniCraft SDK contract. Native test execution is pending. See [the Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md) and the [AniCraft SDK capability audit](docs/ANICRAFT_SDK_AUDIT.md).
 
 ## Goals
 
