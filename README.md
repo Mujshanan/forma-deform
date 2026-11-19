@@ -108,3 +108,8 @@ Do not copy AniCraft's Rust/egui application architecture, full editor feature s
 ## Status and contribution
 
 The repository contains an implemented TypeScript rectangle/timeline prototype and an active Smart Controller v1 workstream. The Smart Controller plan is authoritative for plugin scope, SDK capability gates, and native Rust implementation. Changes to the host integration contract must be based on verified AniCraft APIs, not assumptions.
+
+
+The Smart Controller branch also vendors the audited AniCraft guest SDK under
+`crates/anicraft-plugin-sdk`, pinned to an upstream commit. This allows the adapter
+to build independently without adding the full AniCraft repository as a submodule.
