@@ -3,7 +3,7 @@
 **Status:** Active development plan (2026-11-19)  
 **Target host:** [Mujshanan/anicraft](https://github.com/Mujshanan/anicraft)  
 **Repository:** [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform)  
-**V1 objective:** Author, persist, and preview Smart Controller bindings on demand.  
+**Plugin-only V1 objective:** Provide three independently callable, on-demand AniCraft command plugins with native deterministic cores and verified command adapters. Durable bindings and continuous evaluation remain host-extension work.  
 **Runtime constraint:** V1 does not provide continuous playback/scrubbing evaluation.
 
 ## 1. Product direction
@@ -204,7 +204,7 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - Use `warp.info` / `warp.pin_move` only for explicitly supported geometry preview operations.
 - Implement persistence using the verified mechanism or a separately reviewed AniCraft host extension.
 
-**Acceptance:** plugin loads in AniCraft; authoring actions work; save/reopen preserves bindings; invalid IDs and unsupported capabilities produce actionable errors.
+**Acceptance:** each plugin loads in AniCraft; read/query and calculation-only paths work; explicit geometry apply is undoable; invalid IDs and unsupported capabilities produce actionable errors. Document the absence of durable binding persistence.
 
 ### Phase 4 — On-demand preview
 
@@ -284,7 +284,9 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 
 ## 10. Definition of done
 
-V1 is complete when a user can author and save a binding, reopen the project, inspect it, request a preview for a chosen controller angle, receive a validated target result, and—if supported by the verified host API—see that result without modifying authored animation data. Native Rust tests and the WASM plugin build must pass. Continuous playback/scrubbing evaluation remains a later host-integration milestone.
+The plugin-only release slice is complete when all three command-plugin crates build for WASM, the full native Rust workspace test suite passes, the cross-plugin contract test passes, each adapter uses only verified host commands, and the AniCraft smoke-test procedure is documented. In-app smoke testing remains necessary to verify real document behavior.
+
+This slice does not include durable binding persistence, live playback/scrubbing evaluation, or symbol-frame visual application. Those require separately reviewed AniCraft host changes and are not considered silently completed by the plugin repository.
 
 
 ## 11. Three-plugin integration boundary
