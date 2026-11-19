@@ -4,7 +4,9 @@
 
 The project starts deliberately small: draw a rectangle, edit its corners at different points on a timeline, and interpolate the corner positions to produce an animation. The geometry and animation core should remain independent of the demo editor so it can later be embedded in Forma Studio or reused by other applications.
 
-> **Current status:** First implementation in progress on `feat/rectangle-deformation-mvp`. The branch contains the pure geometry/timeline core and a minimal browser demo; the first CI run is still pending.
+> **Current status:** The TypeScript rectangle/timeline demo is implemented on `feat/rectangle-deformation-mvp`. A separate Smart Controller v1 workstream is now being developed on `feat/smart-controller-v1`.
+
+> **Project direction:** The existing TypeScript demo is retained as a standalone geometry experiment. The Smart Controller plugin workstream adds a native Rust core and, after verification of AniCraft's actual plugin SDK, a thin WASM adapter. See [the Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md).
 
 ## Goals
 
@@ -88,9 +90,10 @@ For Forma Deform, borrow only the principles that fit this smaller library:
 
 Do not copy AniCraft's Rust/egui application architecture, full editor feature set, file format, or shape-tween implementation. Forma Deform remains TypeScript-first, Canvas 2D, rectangle-only for its first milestone.
 
-## Development plan
+## Development plans
 
-See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the phased implementation plan, acceptance criteria, testing strategy, and deferred features.
+- [Smart Controller v1](docs/SMART_CONTROLLER_PLAN.md) — authoritative plan for the AniCraft plugin workstream.
+- [Rectangle deformation demo](docs/DEVELOPMENT_PLAN.md) — original TypeScript/Canvas prototype plan and implementation history.
 
 ## Design principles
 
@@ -104,4 +107,4 @@ See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the phased implemen
 
 ## Status and contribution
 
-The project is at its planning stage. The development plan is the source of truth for the intended sequence and acceptance criteria. Implementation decisions that change the scope or data model should be documented before they are introduced.
+The repository contains an implemented TypeScript rectangle/timeline prototype and an active Smart Controller v1 workstream. The Smart Controller plan is authoritative for plugin scope, SDK capability gates, and native Rust implementation. Changes to the host integration contract must be based on verified AniCraft APIs, not assumptions.
