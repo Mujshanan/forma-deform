@@ -28,19 +28,26 @@ fn run(params: &Value) -> Result<(), String> {
     let document = ac::document()?;
     let playhead_frame = document["frame"].as_u64()
         .and_then(|value| u32::try_from(value).ok()).unwrap_or(0);
-    let frame = params.get("frame").and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok()).unwrap_or(playhead_frame);
-    let include_points = params["points"].as_bool().unwrap_or(false);
+    let query = build_query(params, playhead_frame);
+    let frame = query["frame"].as_u64().and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(playhead_frame);
+    let include_points = query["points"].as_bool().unwrap_or(false);
     let max_points = params["max_points"].as_u64().unwrap_or(30).clamp(1, 100) as usize;
-
-    let mut query = json!({"frame": frame, "points": include_points});
-    if let Some(layer) = params.get("layer").and_then(Value::as_u64) {
-        query["layer"] = json!(layer);
-    }
 
     let result = ac::command("bone.info", query)?;
     report_armatures(&result, frame, include_points, max_points);
     Ok(())
+}
+
+fn build_query(params: &Value, playhead_frame: u32) -> Value {
+    let frame = params.get("frame").and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok()).unwrap_or(playhead_frame);
+    let include_points = params["points"].as_bool().unwrap_or(false);
+    let mut query = json!({"frame": frame, "points": include_points});
+    if let Some(layer) = params.get("layer").and_then(Value::as_u64) {
+        query["layer"] = json!(layer);
+    }
+    query
 }
 
 fn report_armatures(result: &Value, frame: u32, include_points: bool, max_points: usize) {
@@ -249,6 +256,18 @@ mod tests {
                 }]
             }]
         })
+    }
+
+    #[test]
+    fn query_defaults_to_playhead_and_supports_frame_layer_and_points_filters() {
+        assert_eq!(
+            build_query(&json!({"points": true}), 9),
+            json!({"frame": 9, "points": true})
+        );
+        assert_eq!(
+            build_query(&json!({"frame": 4, "layer": 77, "points": false}), 9),
+            json!({"frame": 4, "layer": 77, "points": false})
+        );
     }
 
     #[test]
