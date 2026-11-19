@@ -6,7 +6,7 @@ The project starts deliberately small: draw a rectangle, edit its corners at dif
 
 > **Current status:** The TypeScript rectangle/timeline demo is implemented on `feat/rectangle-deformation-mvp`. A separate Smart Controller v1 workstream is now being developed on `feat/smart-controller-v1`.
 
-> **Project direction:** The existing TypeScript demo is retained as a standalone geometry experiment. The Smart Controller workstream now has an initial native Rust core and versioned binding-set JSON model; a thin WASM adapter follows the verified AniCraft SDK contract. Native test execution is pending. See [the Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md) and the [AniCraft SDK capability audit](docs/ANICRAFT_SDK_AUDIT.md).
+> **Project direction:** The existing TypeScript demo is retained as a standalone geometry experiment. The AniCraft plugin workstream is split into three independent plugin directories: Bone Query, Form Deform, and Smart Controller. Bone Query is the first read-only command-plugin implementation; its native tests and WASM build still need verification. The shared Smart Controller native core remains under `crates/`. See [the plugin overview](plugins/README.md), [the development plan](docs/SMART_CONTROLLER_PLAN.md), and the [AniCraft SDK capability audit](docs/ANICRAFT_SDK_AUDIT.md).
 
 ## Goals
 
