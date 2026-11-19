@@ -1,6 +1,6 @@
 # AniCraft plugins
 
-Each plugin has its own directory and independently buildable command-plugin crate.
+See the [build and smoke-test guide](INSTALL.md). Each plugin has its own directory and independently buildable command-plugin crate.
 
 | Directory | Responsibility | Status |
 |---|---|---|
