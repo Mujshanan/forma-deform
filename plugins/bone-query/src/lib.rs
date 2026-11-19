@@ -136,7 +136,7 @@ fn format_bone(bone: &Value) -> String {
     let bound_points = display_optional_u64(bone.get("points"));
 
     format!(
-        "Bone {id} '{name}' ({from} -> {to}; parent bone {parent}): angle {angle}°, spring swing {swing}°, angle + swing {displayed}°; rotation limits {rotation_limits}; pinned {pinned}; head {head}, tail {tail}; slide {slide}; translation X {slide_x}, Y {slide_y}; spring {spring}; shape {shape}, bound points {bound_points}"
+        "Bone {id} '{name}' ({from} -> {to}; parent bone {parent}): angle {angle}°, spring swing {swing}°, angle + swing {displayed}°; rotation limits {rotation_limits}; pinned {pinned}; head {head}, tail {tail}; slide {slide}; translation X {slide_x}, translation Y {slide_y}; spring {spring}; shape {shape}, bound points {bound_points}"
     )
 }
 
