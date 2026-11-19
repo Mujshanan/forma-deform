@@ -22,12 +22,14 @@ The report distinguishes from/to endpoint IDs from parent-bone IDs. For a bone i
 
 | Parameter | Default | Purpose |
 |---|---|---|
-| Frame | Current playhead | Optional 0-based frame passed to bone.info |
-| Armature layer ID | All armatures | Optional layer filter passed to bone.info |
+| Query a specific frame | Off | Enables the explicit frame override |
+| Frame | 0 | 0-based frame; used only when Query a specific frame is enabled |
+| Filter by armature layer | Off | Enables the layer filter |
+| Armature layer ID | 0 | Host layer ID; used only when Filter by armature layer is enabled |
 | Include shape point weights | Off | Requests detailed point positions and influences |
 | Maximum points per shape | 30 | Limits displayed point details per shape (1–100) |
 
-The plugin uses the document playhead when Frame is left blank. The host remains responsible for validating and clamping the requested frame.
+Both filters are opt-in. By default, the plugin queries the current playhead and all armatures. The explicit toggles matter because AniCraft supplies a default value for every declared manifest parameter; an unset integer parameter would otherwise resolve to 0 and unintentionally force frame/layer 0.
 
 ## Build
 
