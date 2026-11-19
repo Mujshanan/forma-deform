@@ -1,0 +1,9 @@
+[package]
+name = "smart-controller-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure, deterministic Smart Controller binding evaluation for Forma Deform"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
