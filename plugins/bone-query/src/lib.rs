@@ -18,7 +18,7 @@ const MANIFEST: &str = r##"{
     "use_frame": {"type": "bool", "default": false, "label": "Query a specific frame"},
     "frame": {"type": "int", "min": 0, "max": 1000000, "default": 0, "label": "Frame (0-based)"},
     "use_layer": {"type": "bool", "default": false, "label": "Filter by armature layer"},
-    "layer": {"type": "int", "min": 0, "max": 1000000, "default": 0, "label": "Armature layer ID"},
+    "layer": {"type": "int", "min": 0, "max": 1000000000000, "default": 0, "label": "Armature layer ID"},
     "points": {"type": "bool", "default": false, "label": "Include shape point weights"},
     "max_points": {"type": "int", "min": 1, "max": 100, "default": 30, "label": "Maximum points per shape"}
   }
