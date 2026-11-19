@@ -119,7 +119,7 @@ Choose the narrowest supported persistence mechanism and document its versioning
 Preview flow:
 
 1. Validate the binding.
-2. Query the controller's evaluated angle through the read-only `bone.info` command, or accept an explicit angle for isolated testing.
+2. Query the controller through the read-only `bone.info` command, or accept an explicit angle for isolated testing. Decide explicitly whether input uses the constrained keyed `angle` alone or the displayed angle `angle + swing` when spring is enabled.
 3. Calculate the pure core result.
 4. Ask the adapter to resolve and validate the target against the current document (for geometry, confirm the element and pin through `warp.info`).
 5. Return a preview result.
@@ -136,7 +136,8 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - [x] Inspect the AniCraft plugin SDK and example command plug-in.
 - [x] Verify documented document inspection, selection access, sandbox limits, persistence boundary, and preview behavior.
 - [x] Record capability findings in [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md).
-- [ ] Verify exact command schemas for the selected target operations before implementing host dispatch.
+- [x] Verify exact command schemas for bone.info, warp.info, and warp.pin_move in the current AniCraft reference and engine source.
+- [x] Record the distinction between keyed bone angle and spring swing; adapter input policy remains an explicit decision.
 
 **Result:** command plug-ins and command-dialog preview are supported. Arbitrary document metadata persistence, evaluated bone-angle access, and continuous custom evaluation are not exposed by the inspected plug-in contract. Durable bindings and live bone input therefore require a separately reviewed AniCraft host extension. No such host changes are included in this repository.
 
@@ -242,7 +243,7 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
 | Native Rust core | Initial implementation and binding-set CRUD added; native test run pending |
 | Versioned binding-set JSON | Schema v1, round-trip/version tests, and stable-ID CRUD added; native test run pending |
-| On-demand bone-angle query | Available through `bone.info` |
+| On-demand bone-angle query | Available through `bone.info`; keyed angle and spring swing are separate fields, so adapter input policy must be explicit |
 | Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
 | Binding persistence | JSON representation ready; durable document storage requires a host-side extension |
 | WASM adapter | SDK source vendored with pinned provenance; adapter implementation pending |
