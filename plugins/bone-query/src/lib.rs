@@ -15,8 +15,10 @@ const MANIFEST: &str = r##"{
   "author": "Mujshanan",
   "description": "Inspect armatures, bone poses, joint limits, springs, translation and shape weights.",
   "params": {
-    "frame": {"type": "int", "min": 0, "max": 1000000, "label": "Frame (0-based; blank uses playhead)"},
-    "layer": {"type": "int", "min": 0, "label": "Armature layer ID (blank includes all)"},
+    "use_frame": {"type": "bool", "default": false, "label": "Query a specific frame"},
+    "frame": {"type": "int", "min": 0, "max": 1000000, "default": 0, "label": "Frame (0-based)"},
+    "use_layer": {"type": "bool", "default": false, "label": "Filter by armature layer"},
+    "layer": {"type": "int", "min": 0, "max": 1000000, "default": 0, "label": "Armature layer ID"},
     "points": {"type": "bool", "default": false, "label": "Include shape point weights"},
     "max_points": {"type": "int", "min": 1, "max": 100, "default": 30, "label": "Maximum points per shape"}
   }
@@ -40,12 +42,20 @@ fn run(params: &Value) -> Result<(), String> {
 }
 
 fn build_query(params: &Value, playhead_frame: u32) -> Value {
-    let frame = params.get("frame").and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok()).unwrap_or(playhead_frame);
+    // Every declared manifest parameter receives a default from AniCraft. Explicit enable
+    // toggles are therefore needed to distinguish "use frame/layer 0" from "use the default".
+    let frame = if params["use_frame"].as_bool().unwrap_or(false) {
+        params["frame"].as_u64().and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(playhead_frame)
+    } else {
+        playhead_frame
+    };
     let include_points = params["points"].as_bool().unwrap_or(false);
     let mut query = json!({"frame": frame, "points": include_points});
-    if let Some(layer) = params.get("layer").and_then(Value::as_u64) {
-        query["layer"] = json!(layer);
+    if params["use_layer"].as_bool().unwrap_or(false) {
+        if let Some(layer) = params["layer"].as_u64() {
+            query["layer"] = json!(layer);
+        }
     }
     query
 }
@@ -259,14 +269,24 @@ mod tests {
     }
 
     #[test]
-    fn query_defaults_to_playhead_and_supports_frame_layer_and_points_filters() {
+    fn query_defaults_to_playhead_and_all_armatures() {
         assert_eq!(
-            build_query(&json!({"points": true}), 9),
+            build_query(&json!({
+                "use_frame": false, "frame": 0,
+                "use_layer": false, "layer": 0, "points": true
+            }), 9),
             json!({"frame": 9, "points": true})
         );
+    }
+
+    #[test]
+    fn query_can_explicitly_select_frame_zero_and_layer_zero() {
         assert_eq!(
-            build_query(&json!({"frame": 4, "layer": 77, "points": false}), 9),
-            json!({"frame": 4, "layer": 77, "points": false})
+            build_query(&json!({
+                "use_frame": true, "frame": 0,
+                "use_layer": true, "layer": 0, "points": false
+            }), 9),
+            json!({"frame": 0, "layer": 0, "points": false})
         );
     }
 
