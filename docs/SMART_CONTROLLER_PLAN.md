@@ -150,6 +150,8 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - [x] Add typed errors and native unit tests.
 - [x] Keep all host/WASM code out of this crate.
 - [ ] Run native tests and fix any failures.
+- [x] Vendor the audited AniCraft guest SDK with pinned upstream provenance.
+- [ ] Build a minimal WASM adapter against the vendored SDK after the authoring/persistence contract is settled.
 
 **Acceptance:** `cargo test -p smart-controller-core` passes natively; the crate has no AniCraft or WASM dependency; edge cases and overflow are tested.
 
@@ -159,7 +161,9 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - [x] Validate duplicate binding IDs and incompatible target/mode combinations.
 - [x] Add JSON serialization/deserialization in the native core.
 - [x] Add round-trip and unsupported-version tests.
-- [ ] Verify serialization tests natively and define host metadata migration behavior.
+- [x] Add stable-ID collection operations: get, insert, update, and remove.
+- [x] Define duplicate-insert and missing-update behavior with typed errors and tests.
+- [ ] Verify serialization and collection tests natively and define host metadata migration behavior.
 
 **Acceptance:** valid binding sets round-trip; invalid/unknown versions fail explicitly; controller and target IDs are preserved exactly.
 
@@ -236,12 +240,12 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | Smart Controller v1 scope | Defined |
 | Smart Controller development plan | Added in this branch |
 | AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
-| Native Rust core | Initial implementation added; native test run pending |
-| Versioned binding-set JSON | Schema v1 and round-trip/version tests added; native test run pending |
+| Native Rust core | Initial implementation and binding-set CRUD added; native test run pending |
+| Versioned binding-set JSON | Schema v1, round-trip/version tests, and stable-ID CRUD added; native test run pending |
 | On-demand bone-angle query | Available through `bone.info` |
 | Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
 | Binding persistence | JSON representation ready; durable document storage requires a host-side extension |
-| WASM adapter | SDK contract identified; SDK packaging strategy and adapter implementation pending |
+| WASM adapter | SDK source vendored with pinned provenance; adapter implementation pending |
 | Geometry visual preview | `warp.pin_move` can be used in command-dialog preview; adapter tests pending |
 | Symbol-frame visual preview | No direct instance-frame setter identified; host support or further command research required |
 | Continuous playback integration | Out of v1 scope |
