@@ -22,6 +22,9 @@
 | Read selected elements | SDK `selected_elements(paths)` | Supported for selected elements on active layer at playhead |
 | Enumerate elements | The raw `elements` request supports `selected: false` and returns visible elements on the active layer at the playhead; it is not a whole-document inventory | Supported for the active layer only |
 | Read a bone's evaluated angle/pose | The read-only `bone.info` command returns armature bones, joint angles, limits, and spring swing at an explicit frame; the plug-in command policy permits the `bone` namespace | Supported on demand through a command query; not a continuous callback |
+| Inspect geometry deformation pins | `warp.info {element?, frame?}` returns mesh pins and their IDs/positions; the `warp` namespace is allowed | Supported on demand |
+| Move a geometry pin | `warp.pin_move {element?, pin, x?, y?, dx?, dy?, frame?}` changes the document | Supported as a command; use only within command-dialog preview/undo semantics |
+| Set a nested graphic symbol's displayed frame | No direct instance-frame setter found in the inspected command reference | Not established; core can calculate frame, visual preview requires host support or further command research |
 | Persist arbitrary plug-in binding data inside the document | Guide says plug-ins belong to AniCraft, not documents; no custom metadata API found in inspected SDK | Not supported by current documented plug-in contract |
 | Read/write plug-in-owned files | Sandbox explicitly forbids file access | Not supported |
 | Network or clock access | Sandbox explicitly forbids both | Not supported |
@@ -42,7 +45,7 @@ The guest SDK exposes:
 The command reference documents `bone.info {frame?, layer?, points?}` as a read-only query returning armatures and their bones, including joint angle and spring swing at the requested frame. The plug-in command policy explicitly permits the `bone` namespace. Therefore an on-demand preview can query a bone's angle through the command interface; there is still no continuous evaluator callback.
 - `plugin!`, `exporter!`, and `ease!` ABI macros.
 
-The SDK source also documents that native builds use host-call stand-ins that return errors, allowing pure logic to be tested with native `cargo test`.
+The SDK source also documents that native builds use host-call stand-ins that return errors, allowing pure logic to be tested with native `cargo test`. The SDK crate itself is currently a local path dependency inside AniCraft's `examples/plugins` workspace, rather than a separately published dependency; the independent Forma Deform repository must choose a pinned vendoring/submodule strategy or a separately distributable SDK package before building its adapter.
 
 The command plug-in example reads selection data and invokes existing commands such as `element.select` and `modify.transform`. The host's `plugin_may_call` policy allows the `bone` and `warp` namespaces. The command reference documents `bone.info`, `warp.info`, and `warp.pin_move`; the last one changes the document and therefore must be used only through the host's preview/undo transaction when previewing. This demonstrates useful on-demand operations, not a persistent controller runtime.
 
