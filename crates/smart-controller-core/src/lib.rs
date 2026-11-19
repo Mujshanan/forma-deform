@@ -3,11 +3,13 @@
 //! This crate has no AniCraft, WASM, browser, or UI dependencies.
 //! Host identity resolution, persistence, and display belong in an adapter crate.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Vec2 {
     pub x: f64,
     pub y: f64,
@@ -19,7 +21,8 @@ impl Vec2 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InputRange {
     pub minimum: f64,
     pub neutral: f64,
@@ -65,7 +68,8 @@ impl InputRange {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EaseCurve {
     Linear,
     Smoothstep,
@@ -81,7 +85,8 @@ impl EaseCurve {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ControllerMode {
     /// Return the absolute value/offset declared by the target anchors.
     AbsolutePose,
@@ -89,7 +94,8 @@ pub enum ControllerMode {
     RelativeDelta,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ControllerTarget {
     SymbolFrame {
         symbol_instance_id: String,
@@ -106,7 +112,8 @@ pub enum ControllerTarget {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControllerBinding {
     /// Unique identity of this binding (not the controller/bone identity).
     pub id: String,
@@ -119,7 +126,8 @@ pub struct ControllerBinding {
     pub enabled: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreviewResult {
     SymbolFrame {
         symbol_instance_id: String,
@@ -142,6 +150,8 @@ pub enum ControllerError {
     NonFiniteTargetValue,
     RelativeDeltaUnsupportedForSymbolFrame,
     DuplicateBindingId(String),
+    UnsupportedSchemaVersion(u32),
+    Serialization(String),
     ArithmeticOverflow,
 }
 
@@ -158,6 +168,8 @@ impl fmt::Display for ControllerError {
                 write!(f, "RelativeDelta is not supported for SymbolFrame targets")
             }
             Self::DuplicateBindingId(id) => write!(f, "duplicate binding ID: {id}"),
+            Self::UnsupportedSchemaVersion(version) => write!(f, "unsupported binding schema version: {version}"),
+            Self::Serialization(message) => write!(f, "binding serialization failed: {message}"),
             Self::ArithmeticOverflow => write!(f, "controller evaluation produced a non-finite result"),
         }
     }
@@ -272,6 +284,48 @@ impl ControllerBinding {
         };
 
         Ok(Some(result))
+    }
+}
+
+/// Current version of the persisted binding-set schema.
+pub const BINDING_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned, serializable collection of controller bindings.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BindingSet {
+    pub schema_version: u32,
+    pub bindings: Vec<ControllerBinding>,
+}
+
+impl BindingSet {
+    pub fn new(bindings: Vec<ControllerBinding>) -> Result<Self, ControllerError> {
+        let set = Self {
+            schema_version: BINDING_SCHEMA_VERSION,
+            bindings,
+        };
+        set.validate()?;
+        Ok(set)
+    }
+
+    pub fn validate(&self) -> Result<(), ControllerError> {
+        if self.schema_version != BINDING_SCHEMA_VERSION {
+            return Err(ControllerError::UnsupportedSchemaVersion(self.schema_version));
+        }
+        validate_bindings(&self.bindings)
+    }
+
+    pub fn to_json(&self) -> Result<String, ControllerError> {
+        self.validate()?;
+        serde_json::to_string_pretty(self)
+            .map_err(|error| ControllerError::Serialization(error.to_string()))
+    }
+
+    pub fn from_json(source: &str) -> Result<Self, ControllerError> {
+        let set: Self = serde_json::from_str(source)
+            .map_err(|error| ControllerError::Serialization(error.to_string()))?;
+        set.validate()?;
+        Ok(set)
     }
 }
 
@@ -504,6 +558,41 @@ mod tests {
         second.id = first.id.clone();
         assert_eq!(
             validate_bindings(&[first, second]),
+            Err(ControllerError::DuplicateBindingId("binding-head-turn".into()))
+        );
+    }
+
+    #[test]
+    fn binding_set_json_round_trips() {
+        let set = BindingSet::new(vec![
+            symbol_binding(),
+            geometry_binding(ControllerMode::RelativeDelta),
+        ]).unwrap();
+        let json = set.to_json().unwrap();
+        let decoded = BindingSet::from_json(&json).unwrap();
+        assert_eq!(decoded, set);
+    }
+
+    #[test]
+    fn binding_set_rejects_unknown_schema_versions() {
+        let set = BindingSet::new(vec![symbol_binding()]).unwrap();
+        let json = set.to_json().unwrap().replace(
+            "\\"schema_version\\": 1",
+            "\\"schema_version\\": 2"
+        );
+        assert_eq!(
+            BindingSet::from_json(&json),
+            Err(ControllerError::UnsupportedSchemaVersion(2))
+        );
+    }
+
+    #[test]
+    fn binding_set_rejects_duplicate_binding_ids() {
+        let first = symbol_binding();
+        let mut second = geometry_binding(ControllerMode::AbsolutePose);
+        second.id = first.id.clone();
+        assert_eq!(
+            BindingSet::new(vec![first, second]),
             Err(ControllerError::DuplicateBindingId("binding-head-turn".into()))
         );
     }
