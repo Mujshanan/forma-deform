@@ -445,7 +445,7 @@ mod tests {
 
         let overflowing = InputRange {
             minimum: -f64::MAX,
-            neutral: 0.0,
+            neutral: f64::MAX / 2.0,
             maximum: f64::MAX,
         };
         assert_eq!(overflowing.validate(), Err(ControllerError::InvalidInputRange));
