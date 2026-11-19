@@ -131,21 +131,25 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 
 ### Phase 0 — Repository and SDK audit
 
-- Preserve the existing TypeScript rectangle demo and its history.
-- Record this Smart Controller scope and architecture.
-- Inspect the exact AniCraft plugin SDK version and example plugins.
-- Verify document inspection, stable IDs, persistence, command registration, and preview capabilities.
-- Record capability findings with source paths and exact command schemas.
+- [x] Preserve the existing TypeScript rectangle demo and its history.
+- [x] Record this Smart Controller scope and architecture.
+- [x] Inspect the AniCraft plugin SDK and example command plug-in.
+- [x] Verify documented document inspection, selection access, sandbox limits, persistence boundary, and preview behavior.
+- [x] Record capability findings in [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md).
+- [ ] Verify exact command schemas for the selected target operations before implementing host dispatch.
 
-**Acceptance:** a capability matrix identifies what can be implemented entirely in a plugin and what requires host-side work. No guessed API is used.
+**Result:** command plug-ins and command-dialog preview are supported. Arbitrary document metadata persistence, evaluated bone-angle access, and continuous custom evaluation are not exposed by the inspected plug-in contract. Durable bindings and live bone input therefore require a separately reviewed AniCraft host extension. No such host changes are included in this repository.
+
+**Acceptance:** capability matrix identifies what can be implemented entirely in a plug-in and what requires host-side work. No guessed API is used.
 
 ### Phase 1 — Native Rust controller core
 
-- Add a Cargo workspace without disrupting the Bun/TypeScript project.
-- Implement versionable binding types, input ranges, easing, modes, and target variants.
-- Implement validation, signed normalization, and pure target mapping.
-- Add typed errors and native unit tests.
-- Keep all host/WASM code out of this crate.
+- [x] Add a Cargo workspace without disrupting the Bun/TypeScript project.
+- [x] Implement binding types, input ranges, easing, modes, and target variants.
+- [x] Implement validation, signed normalization, and pure target mapping.
+- [x] Add typed errors and native unit tests.
+- [x] Keep all host/WASM code out of this crate.
+- [ ] Run native tests and fix any failures.
 
 **Acceptance:** `cargo test -p smart-controller-core` passes natively; the crate has no AniCraft or WASM dependency; edge cases and overflow are tested.
 
@@ -228,11 +232,11 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | Existing TypeScript rectangle geometry/timeline demo | Implemented on `feat/rectangle-deformation-mvp` |
 | Smart Controller v1 scope | Defined |
 | Smart Controller development plan | Added in this branch |
-| AniCraft SDK capability audit | Next |
-| Native Rust core | In progress |
-| Binding persistence | Blocked on SDK audit |
-| WASM adapter | Blocked on SDK audit |
-| Host visual preview | Blocked on SDK capability verification |
+| AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
+| Native Rust core | Initial implementation added; native test run pending |
+| Binding persistence | Requires a host-side document/engine extension |
+| WASM adapter | Core contract identified; command adapter implementation pending |
+| Host visual preview | Command-dialog preview exists; target-specific operations still need verification |
 | Continuous playback integration | Out of v1 scope |
 
 ## 10. Definition of done
