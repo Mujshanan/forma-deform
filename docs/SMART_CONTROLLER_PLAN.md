@@ -155,10 +155,11 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 
 ### Phase 2 — Binding collections and serialization contract
 
-- Define a versioned persisted binding-set representation.
-- Validate duplicate binding IDs and incompatible target/mode combinations.
-- Add serialization only after selecting a stable format and dependency policy.
-- Add round-trip and unsupported-version tests.
+- [x] Define a versioned binding-set representation (schema version 1).
+- [x] Validate duplicate binding IDs and incompatible target/mode combinations.
+- [x] Add JSON serialization/deserialization in the native core.
+- [x] Add round-trip and unsupported-version tests.
+- [ ] Verify serialization tests natively and define host metadata migration behavior.
 
 **Acceptance:** valid binding sets round-trip; invalid/unknown versions fail explicitly; controller and target IDs are preserved exactly.
 
@@ -236,10 +237,11 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | Smart Controller development plan | Added in this branch |
 | AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
 | Native Rust core | Initial implementation added; native test run pending |
+| Versioned binding-set JSON | Schema v1 and round-trip/version tests added; native test run pending |
 | On-demand bone-angle query | Available through `bone.info` |
-| Geometry pin target | Core now requires stable element and pin IDs; adapter verification pending |
-| Binding persistence | Requires a host-side document/engine extension |
-| WASM adapter | SDK contract identified; adapter implementation pending |
+| Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
+| Binding persistence | JSON representation ready; durable document storage requires a host-side extension |
+| WASM adapter | SDK contract identified; SDK packaging strategy and adapter implementation pending |
 | Geometry visual preview | `warp.pin_move` can be used in command-dialog preview; adapter tests pending |
 | Symbol-frame visual preview | No direct instance-frame setter identified; host support or further command research required |
 | Continuous playback integration | Out of v1 scope |
