@@ -99,6 +99,7 @@ pub enum ControllerTarget {
     },
     GeometryDeform {
         element_id: String,
+        pin_id: String,
         negative_offset: Vec2,
         neutral_offset: Vec2,
         positive_offset: Vec2,
@@ -126,6 +127,7 @@ pub enum PreviewResult {
     },
     GeometryDeform {
         element_id: String,
+        pin_id: String,
         offset: Vec2,
     },
 }
@@ -184,11 +186,12 @@ impl ControllerBinding {
             }
             ControllerTarget::GeometryDeform {
                 element_id,
+                pin_id,
                 negative_offset,
                 neutral_offset,
                 positive_offset,
             } => {
-                if element_id.trim().is_empty() {
+                if element_id.trim().is_empty() || pin_id.trim().is_empty() {
                     return Err(ControllerError::EmptyTargetId);
                 }
                 if !negative_offset.is_finite()
@@ -261,6 +264,7 @@ impl ControllerBinding {
                 }
                 PreviewResult::GeometryDeform {
                     element_id: element_id.clone(),
+                    pin_id: pin_id.clone(),
                     offset,
                 }
             }
@@ -342,6 +346,7 @@ mod tests {
             mode,
             target: ControllerTarget::GeometryDeform {
                 element_id: "shape-arm".into(),
+                pin_id: "pin-arm-tip".into(),
                 negative_offset: Vec2 { x: -4.0, y: 2.0 },
                 neutral_offset: Vec2 { x: 1.0, y: 1.0 },
                 positive_offset: Vec2 { x: 9.0, y: 5.0 },
@@ -404,6 +409,7 @@ mod tests {
             binding.evaluate(0.0).unwrap(),
             Some(PreviewResult::GeometryDeform {
                 element_id: "shape-arm".into(),
+                pin_id: "pin-arm-tip".into(),
                 offset: Vec2 { x: 0.0, y: 0.0 }
             })
         );
