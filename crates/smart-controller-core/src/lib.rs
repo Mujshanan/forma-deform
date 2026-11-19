@@ -576,10 +576,10 @@ mod tests {
     #[test]
     fn binding_set_rejects_unknown_schema_versions() {
         let set = BindingSet::new(vec![symbol_binding()]).unwrap();
-        let json = set.to_json().unwrap().replace(
-            "\\"schema_version\\": 1",
-            "\\"schema_version\\": 2"
-        );
+        let mut value: serde_json::Value =
+            serde_json::from_str(&set.to_json().unwrap()).unwrap();
+        value["schema_version"] = serde_json::json!(2);
+        let json = serde_json::to_string(&value).unwrap();
         assert_eq!(
             BindingSet::from_json(&json),
             Err(ControllerError::UnsupportedSchemaVersion(2))
