@@ -91,3 +91,14 @@ The AniCraft guest SDK is a small source crate under `examples/plugins/sdk`, but
 For this repository, vendor the audited SDK source as `crates/anicraft-plugin-sdk` with a standalone manifest. Pin provenance to the exact upstream AniCraft commit in `crates/anicraft-plugin-sdk/UPSTREAM.md`. This avoids pulling the entire AniCraft repository as a submodule and keeps native host-call stubs available for testing. Update the vendored copy only through an explicit SDK diff review.
 
 Pinned upstream source commit: [bcfea816478f2a00ab172cefe67f0bd5696b3886](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886).
+
+
+## 8. Exact target command contracts
+
+The current AniCraft command reference and engine implementations were checked for the v1 operations:
+
+- bone.info is read-only. Parameters: frame?, layer?, and points?. Each bone record includes a numeric stable bone ID, angle in degrees, limits, and swing in degrees. The implementation reports the constrained keyed pose angle separately from the spring contribution. If Smart Controller input is intended to follow the fully sprung displayed pose, the adapter must use angle + swing; this choice must be explicit and covered by tests.
+- warp.info is read-only. Parameters: element? and frame?. It returns the numeric element ID and pins with numeric pin IDs, current stage-space at coordinates, and artwork-space rest coordinates.
+- warp.pin_move is mutating. Parameters: element?, required pin, either both x and y or neither, optional dx and dy, and frame?. Absolute x/y coordinates are stage-space; dx/dy are stage-space deltas. The command keys the pin at the requested frame and participates in AniCraft's document undo transaction.
+
+The core's string IDs are adapter-neutral identifiers; the current AniCraft adapter must parse and validate decimal numeric host IDs rather than assuming arbitrary strings are accepted by host commands. A host ID is not interchangeable with an array index or current selection position.
