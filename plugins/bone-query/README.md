@@ -7,10 +7,10 @@ Bone Query calls AniCraft's bone.info command and reports the armature data expo
 ## Reported data
 
 - **Query context:** evaluated frame and optional armature-layer filter.
-- **Armature:** layer ID, name, pose-keyframe count, root instance IDs, member element IDs, mixed-armature flag, spring-enabled flag, and first shape ID.
-- **Bone identity and hierarchy:** bone ID/name, parent and child element IDs, optional parent-bone ID, and pin state.
+- **Armature:** layer ID, name, pose-keyframe count, root element IDs, member element IDs, mixed-armature flag, spring-enabled flag, and first shape ID.
+- **Bone identity and hierarchy:** bone ID/name, parent/child endpoint IDs (the child may be an internal joint-node ID for a bone inside a shape), optional parent-bone ID, and pin state.
 - **Pose:** joint angle in degrees, optional rotation limits, and spring swing reported separately. The informational angle-plus-swing value is their sum; it does not replace either source value.
-- **Geometry:** evaluated head and tail coordinates, plus joint slide coordinates. Missing geometry is shown as not evaluated rather than as zero.
+- **Geometry:** head and tail coordinates for the keyed pose at the requested frame, plus joint slide coordinates. Spring swing is reported separately; these endpoints are not spring-offset geometry. Missing geometry is shown as not evaluated rather than as zero.
 - **Joint translation:** X/Y enabled state and translation limits, or free/disabled state.
 - **Spring:** optional strength and damping percentages.
 - **Shape armatures:** shape IDs, their bone IDs, skin-point counts, and per-bone bound-point counts.
