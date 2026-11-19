@@ -1,3 +1,18 @@
+## Smart Controller roadmap (added 2026-11-19)
+
+This roadmap applies to the AniCraft Smart Controller plugin and its host-independent Rust core. The rectangle-deformation demo plan below remains a separate experiment.
+
+| Version | Scope | Acceptance boundary |
+|---|---|---|
+| V1 | Slider + deterministic preview | Native mapping, manual input, verified on-demand bone.info input, endpoint policy, JSON preview output; no timeline writes |
+| V2 | Transform | Pure transform mapping plus adapter integration only after host read/write commands are verified |
+| V3 | Presets | Versioned preset model and persistence only after a supported storage boundary is established |
+| V4 | MCP-driven interactive updates | Explore authenticated external-control updates; do not imply a continuous plugin callback or native playback evaluator |
+
+Timeline driving during playback is not a V1 capability. See CAPABILITIES.md and SMART_CONTROLLER_PLAN.md for detailed boundaries.
+
+---
+
 # Forma Deform — Development Plan
 
 **Status:** Proposed plan; implementation has not started.  

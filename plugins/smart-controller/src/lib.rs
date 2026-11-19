@@ -1,159 +1,75 @@
-//! On-demand Smart Controller adapter for AniCraft.
-//!
-//! The core evaluates bindings; this adapter resolves a live bone input, validates an Asset
-//! Warp pin, and optionally writes one absolute pin position through the host's undoable command.
-
+//! Thin AniCraft adapter. V1 calculates and logs a deterministic Slider preview;
+//! it does not drive the timeline during playback or mutate the document.
 use anicraft_plugin_sdk as ac;
 use serde_json::{Value, json};
-use smart_controller_core::{
-    ControllerBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, Vec2,
-    PreviewResult,
-};
+use smart_controller_core::{Mode, Params, preview_slider, validation};
 
 const MANIFEST: &str = r##"{
   "id": "org.mujshanan.smart-controller",
   "name": "Smart Controller",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "command",
   "author": "Mujshanan",
-  "description": "Map a bone angle through a validated three-anchor binding to an Asset Warp pin.",
+  "description": "Calculate a deterministic bone-angle-to-action-frame Slider preview.",
   "params": {
-    "use_bone_angle": {"type": "bool", "default": true, "label": "Read controller bone at playhead"},
-    "controller_bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Controller bone ID"},
-    "input_angle": {"type": "number", "default": 0, "label": "Explicit input angle (degrees, when bone query is off)"},
-    "include_spring_swing": {"type": "bool", "default": false, "label": "Include spring swing in bone input"},
-    "minimum": {"type": "number", "default": -45, "label": "Input minimum"},
-    "neutral": {"type": "number", "default": 0, "label": "Input neutral"},
-    "maximum": {"type": "number", "default": 45, "label": "Input maximum"},
-    "smoothstep": {"type": "bool", "default": false, "label": "Use Smoothstep easing"},
-    "relative_delta": {"type": "bool", "default": true, "label": "Output relative to neutral anchor"},
-    "element_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Target shape element ID"},
-    "pin_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Target warp pin ID"},
-    "base_x": {"type": "number", "default": 0, "label": "Neutral pin base X (stage px)"},
-    "base_y": {"type": "number", "default": 0, "label": "Neutral pin base Y (stage px)"},
-    "negative_x": {"type": "number", "default": -10, "label": "Negative anchor X offset (px)"},
-    "negative_y": {"type": "number", "default": 0, "label": "Negative anchor Y offset (px)"},
-    "neutral_x": {"type": "number", "default": 0, "label": "Neutral anchor X offset (px)"},
-    "neutral_y": {"type": "number", "default": 0, "label": "Neutral anchor Y offset (px)"},
-    "positive_x": {"type": "number", "default": 10, "label": "Positive anchor X offset (px)"},
-    "positive_y": {"type": "number", "default": 0, "label": "Positive anchor Y offset (px)"},
-    "apply": {"type": "bool", "default": false, "label": "Apply target pin position (undoable document edit)"}
+    "mode": {"type": "string", "default": "slider", "label": "Controller mode (V1: slider)"},
+    "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID"},
+    "driver_bone_name": {"type": "string", "default": "Head", "label": "Driver bone name"},
+    "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID"},
+    "min_rotation_deg": {"type": "number", "default": -45, "label": "Minimum driver angle (degrees)"},
+    "max_rotation_deg": {"type": "number", "default": 45, "label": "Maximum driver angle (degrees)"},
+    "action_start_frame": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Action start frame"},
+    "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Action end frame"},
+    "endpoint_policy": {"type": "string", "default": "exclusive", "label": "Endpoint policy: exclusive or inclusive"},
+    "manual_value": {"type": "number", "label": "Manual driver angle (overrides bone query)"}
   }
 }"##;
 
 ac::plugin!(MANIFEST, run);
 
-fn positive_id(params: &Value, key: &str) -> Result<u64, String> {
-    let value = params[key].as_u64().ok_or_else(|| format!("'{key}' must be a positive integer"))?;
-    if value == 0 { return Err(format!("'{key}' must be greater than zero")); }
-    Ok(value)
-}
-fn finite_number(params: &Value, key: &str) -> Result<f64, String> {
-    let value = params[key].as_f64().ok_or_else(|| format!("'{key}' must be a number"))?;
-    if value.is_finite() { Ok(value) } else { Err(format!("'{key}' must be finite")) }
-}
-fn find_bone(result: &Value, id: u64) -> Option<&Value> {
+fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
     result["armatures"].as_array()?.iter()
         .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
-        .find(|bone| bone["id"].as_u64() == Some(id))
+        .find(|bone| bone["name"].as_str() == Some(name))
+        .and_then(|bone| bone["angle"].as_f64())
 }
-fn has_pin(result: &Value, id: u64) -> bool {
-    result["warped"].as_bool() == Some(true)
-        && result["pins"].as_array().is_some_and(|pins| pins.iter().any(|pin| pin["pin"].as_u64() == Some(id)))
+fn query_driver_bone(params: &Params) -> Result<f64, String> {
+    let layer_id = params.driver_layer_id.ok_or("driver_layer_id is required for bone input")?;
+    let name = params.driver_bone_name.as_deref().ok_or("driver_bone_name is required for bone input")?;
+    let response = ac::command("bone.info", json!({"layer": layer_id}))?;
+    find_driver_bone(&response, name)
+        .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
 }
-
-fn run(params: &Value) -> Result<(), String> {
-    let use_bone = params["use_bone_angle"].as_bool().unwrap_or(true);
-    let include_spring = params["include_spring_swing"].as_bool().unwrap_or(false);
-    let controller_id = if use_bone { positive_id(params, "controller_bone_id")? } else { 0 };
-    let input = if use_bone {
-        let response = ac::command("bone.info", json!({}))?;
-        let bone = find_bone(&response, controller_id)
-            .ok_or_else(|| format!("controller bone {controller_id} was not found at the playhead"))?;
-        let angle = bone["angle"].as_f64()
-            .ok_or_else(|| format!("controller bone {controller_id} has no evaluated angle"))?;
-        angle + if include_spring { bone["swing"].as_f64().unwrap_or(0.0) } else { 0.0 }
-    } else {
-        finite_number(params, "input_angle")?
-    };
-    if !input.is_finite() { return Err("controller input is not finite".into()); }
-
-    let minimum = finite_number(params, "minimum")?;
-    let neutral = finite_number(params, "neutral")?;
-    let maximum = finite_number(params, "maximum")?;
-    let element_id = positive_id(params, "element_id")?;
-    let pin_id = positive_id(params, "pin_id")?;
-    let base_x = finite_number(params, "base_x")?;
-    let base_y = finite_number(params, "base_y")?;
-
-    let binding = ControllerBinding {
-        id: "invocation-binding".into(),
-        controller_id: if use_bone { controller_id.to_string() } else { "explicit-input".into() },
-        input_range: InputRange { minimum, neutral, maximum },
-        easing: if params["smoothstep"].as_bool().unwrap_or(false) { EaseCurve::Smoothstep } else { EaseCurve::Linear },
-        mode: if params["relative_delta"].as_bool().unwrap_or(true) { ControllerMode::RelativeDelta } else { ControllerMode::AbsolutePose },
-        target: ControllerTarget::GeometryDeform {
-            element_id: element_id.to_string(),
-            pin_id: pin_id.to_string(),
-            negative_offset: Vec2 { x: finite_number(params, "negative_x")?, y: finite_number(params, "negative_y")? },
-            neutral_offset: Vec2 { x: finite_number(params, "neutral_x")?, y: finite_number(params, "neutral_y")? },
-            positive_offset: Vec2 { x: finite_number(params, "positive_x")?, y: finite_number(params, "positive_y")? },
-        },
-        enabled: true,
-    };
-
-    let evaluated = binding.evaluate(input)
-        .map_err(|error| format!("invalid controller binding: {error}"))?
-        .ok_or_else(|| "controller binding is disabled".to_string())?;
-
-    let warp = ac::command("warp.info", json!({"element": element_id}))?;
-    if !has_pin(&warp, pin_id) {
-        return Err(format!("target pin {pin_id} was not found on warped element {element_id}"));
+fn run(p: &Value) -> Result<(), String> {
+    let params: Params = serde_json::from_value(p.clone())
+        .map_err(|error| format!("invalid parameters: {error}"))?;
+    validation::validate(&params)?;
+    if params.mode != Mode::Slider {
+        return Err("Transform mode is reserved for V2; the V1 plugin supports Slider preview only".into());
     }
-
-    let (target_x, target_y) = match evaluated {
-        PreviewResult::GeometryDeform { offset, .. } => (base_x + offset.x, base_y + offset.y),
-        PreviewResult::SymbolFrame { .. } => return Err("symbol-frame visual application is not exposed by the current AniCraft command API".into()),
+    let driver_value = match params.manual_value {
+        Some(value) => value,
+        None => query_driver_bone(&params)?,
     };
-    if !(target_x.is_finite() && target_y.is_finite()) {
-        return Err("calculated target position is not finite".into());
-    }
-
-    ac::log(&format!("Smart Controller — input {input:.3}; bone input: {use_bone}; spring swing included: {}", use_bone && include_spring));
-    ac::log(&format!("Target element {element_id}, pin {pin_id}: ({target_x:.2}, {target_y:.2}) stage px"));
-    if params["apply"].as_bool().unwrap_or(false) {
-        let result = ac::command("warp.pin_move", json!({
-            "element": element_id, "pin": pin_id, "x": target_x, "y": target_y
-        }))?;
-        ac::log(&format!("Applied target at {:?}. This edit is undoable.", result["at"]));
-    } else {
-        ac::log("Calculation only. Enable Apply target pin position to write the result.");
-    }
+    let output = preview_slider(&params, driver_value)?;
+    let serialized = serde_json::to_string(&output)
+        .map_err(|error| format!("could not serialize preview: {error}"))?;
+    ac::log(&format!("Smart Controller preview: {serialized}"));
+    ac::log("V1 is preview-only: no timeline command or document mutation was issued.");
     Ok(())
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use serde_json::json;
     #[test]
-    fn bone_resolution_uses_host_identity() {
-        let data = json!({"armatures":[{"bones":[{"id":8,"angle":10.0},{"id":21,"angle":-12.0}]}]});
-        assert_eq!(find_bone(&data, 21).unwrap()["angle"], -12.0);
-        assert!(find_bone(&data, 1).is_none());
+    fn bone_resolution_uses_bone_info_response_shape() {
+        let data = json!({"armatures":[{"bones":[{"name":"Head","angle":12.5},{"name":"Jaw","angle":-4.0}]}]});
+        assert_eq!(find_driver_bone(&data, "Jaw"), Some(-4.0));
+        assert_eq!(find_driver_bone(&data, "Missing"), None);
     }
-
     #[test]
-    fn pin_validation_requires_the_requested_pin() {
-        let data = json!({"warped":true,"pins":[{"pin":3},{"pin":5}]});
-        assert!(has_pin(&data, 5));
-        assert!(!has_pin(&data, 6));
-        assert!(!has_pin(&json!({"warped":false,"pins":[{"pin":5}]}), 5));
-    }
-
-    #[test]
-    fn malformed_bone_and_warp_responses_fail_closed() {
-        assert!(find_bone(&json!({"armatures":[]}), 7).is_none());
-        assert!(!has_pin(&json!({"pins":null}), 7));
+    fn malformed_bone_info_fails_closed() {
+        assert_eq!(find_driver_bone(&json!({"armatures":[]}), "Head"), None);
     }
 }

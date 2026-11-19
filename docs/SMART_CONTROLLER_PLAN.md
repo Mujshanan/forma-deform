@@ -1,296 +1,65 @@
-# Forma Deform — Smart Controller Development Plan
+# Smart Controller development plan
 
-**Status:** Active development plan (2026-11-19)  
-**Target host:** [Mujshanan/anicraft](https://github.com/Mujshanan/anicraft)  
-**Repository:** [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform)  
-**Plugin-only V1 objective:** Provide three independently callable, on-demand AniCraft command plugins with native deterministic cores and verified command adapters. Durable bindings and continuous evaluation remain host-extension work.  
-**Runtime constraint:** V1 does not provide continuous playback/scrubbing evaluation.
+**Status:** Active plan, revised 2026-11-19  
+**Host:** Mujshanan/AniCraft  
+**V1 objective:** Slider mapping plus deterministic, on-demand preview.
 
-## 1. Product direction
+## 1. Architecture boundary
 
-Forma Deform will provide a Smart Controller plugin for AniCraft, beginning with a small, independently testable controller-binding engine.
+- smart-controller-core owns host-independent Rust model, validation, normalization, endpoint-aware frame mapping, transform-value calculation, and preview output. It has no AniCraft, WASM, browser, or UI dependency.
+- plugins/smart-controller is a thin AniCraft command-plugin adapter. It deserializes JSON parameters, validates them through the core, reads a driver bone through the verified bone.info command when manual input is absent, invokes pure preview calculation, and logs JSON output.
 
-A binding connects a controller input (initially a bone angle) to one target property. V1 targets:
+The verified SDK entry point is ac::plugin!(MANIFEST, run) with fn run(p: &serde_json::Value) -> Result<(), String>. No speculative prelude, context object, or plugin error type is used.
 
-- **SymbolFrame:** map negative, neutral, and positive controller poses to frames of a nested symbol instance.
-- **GeometryDeform:** map negative, neutral, and positive controller poses to a two-dimensional geometry offset.
+The former single-file core remains in legacy.rs to preserve the three-anchor binding API used by the Form Deform integration test. New logic is split into model.rs, validation.rs, mapping.rs, and preview.rs.
 
-V1 is an authoring and on-demand preview tool. It must not claim automatic evaluation during AniCraft playback or timeline scrubbing. That requires a host runtime integration not yet established by the current plugin SDK.
+## 2. V1 scope — Slider + deterministic preview
 
-The existing TypeScript rectangle/timeline demo remains as a geometry experiment and visual reference. It is not the Smart Controller runtime and does not prove AniCraft plugin integration.
+- Read an evaluated driver angle on demand with bone.info, or accept manual_value as a first-class deterministic input.
+- Normalize between two finite rotation endpoints. Reversed endpoints are valid and reverse the mapping direction.
+- Map normalized input to an action frame with explicit endpoint semantics.
+- Default to Exclusive [start, end), where the end frame is never selected because cyclic actions commonly duplicate the first pose at the end.
+- Support Inclusive [start, end] when the last pose is distinct.
+- Emit a JSON preview record through the plugin log.
+- Do not change the timeline, modify bones, or write document data.
 
-## 2. V1 scope
+### Endpoint policy
 
-### Included
+For a non-degenerate frame interval:
+- Exclusive: start + min(floor(normalized × span), span - 1).
+- Inclusive: start + round(normalized × span).
 
-1. Define, validate, inspect, update, and remove controller bindings.
-2. Identify controller bones and targets using stable host IDs.
-3. Support finite, ordered input ranges with negative, neutral, and positive values.
-4. Support Linear and Smoothstep interpolation.
-5. Support AbsolutePose and RelativeDelta modes with explicit semantics.
-6. Preview a binding for a caller-supplied controller angle.
-7. Resolve target existence/type through the host adapter before host-side preview.
-8. Persist bindings only through a verified AniCraft document metadata or engine-command API.
-9. Keep the pure controller model, validation, normalization, easing, and mapping independent of WASM host calls.
-10. Run core unit tests natively with `cargo test`; build the host adapter for `wasm32` only after its SDK contract is verified.
+Both clamp normalized input to [0, 1]. A degenerate mapping helper returns start; Slider validation rejects end <= start.
 
-### Explicitly excluded
+## 3. Deferred scope
 
-- Continuous evaluation during playback or timeline scrubbing.
-- Runtime hooks or custom bone evaluator APIs not exposed by the verified SDK.
-- Mutating authored keyframes during preview.
-- Applying preview by repeatedly issuing relative transform commands.
-- Arbitrary mesh topology changes, skinning, weight painting, or IK.
-- Geometry targets requiring unsupported host mutation APIs.
-- A custom animation editor replacing AniCraft.
+- V2 — Transform: expose the core transform mapping through an adapter only after host transform read/write commands and semantics are verified.
+- V3 — Presets: define versioned preset/binding persistence only after a supported storage boundary is established.
+- V4 — MCP-driven interactive updates: investigate authenticated external-control updates. This is not a claim that the current command-plugin ABI can run continuously during playback.
+- Continuous playback evaluation and durable document-owned bindings remain host-extension decisions unless the host contract changes.
 
-## 3. Architecture
+## 4. Source layout
 
-Repository layout:
+    crates/smart-controller-core/
+      src/lib.rs          # public re-exports
+      src/legacy.rs       # compatibility API for Form Deform contract
+      src/model.rs        # Params, Mode, EndpointPolicy
+      src/validation.rs   # mode-aware validation
+      src/mapping.rs      # normalization and mapping
+      src/preview.rs      # PreviewOutput and pure preview functions
+      tests/mapping_tests.rs
+      tests/validation_tests.rs
+    plugins/smart-controller/src/lib.rs  # SDK entry point and thin adapter
 
-```text
-crates/
-  smart-controller-core/     # Shared native controller model and evaluator
-  anicraft-plugin-sdk/       # Pinned guest SDK source
-plugins/
-  bone-query/                # Read-only bone/armature query plugin (first implementation)
-  form-deform/               # Bone-driven shape deformation plugin (planned)
-  smart-controller/          # General-purpose controller plugin (planned)
-src/                         # Existing TypeScript rectangle demonstration
-docs/
-  DEVELOPMENT_PLAN.md
-  SMART_CONTROLLER_PLAN.md
-  ANICRAFT_SDK_AUDIT.md
-```
+## 5. Verification criteria
 
-Each plugin has its own directory and manifest/entry point. Shared deterministic logic belongs in reusable crates under `crates/`; adapters stay thin and host-specific.
+- cargo test -p smart-controller-core
+- cargo test -p anicraft-smart-controller-plugin
+- cargo test -p smart-controller-core -p anicraft-smart-controller-plugin
+- cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
 
-### Core responsibilities
+Native tests cover endpoint policy, reversed angle ranges, mode-aware validation, explicit manual input, and the retained legacy cross-plugin math contract. An AniCraft in-app smoke test is still required to verify the installed plugin and real bone.info response.
 
-- Binding data types and schema version.
-- Input-range validation and signed neutral-centered normalization.
-- Easing and piecewise mapping through negative → neutral → positive values.
-- Pure target-value calculation.
-- Binding-set validation, including duplicate binding IDs.
-- Typed errors for invalid ranges, incompatible modes, non-finite arithmetic, and invalid targets.
+## 6. Non-goals
 
-The core must not import AniCraft SDK types, WASM host functions, browser APIs, or UI code.
-
-### Adapter responsibilities
-
-- Register plugin metadata and commands using the actual AniCraft SDK contract.
-- Inspect the current document and resolve controller/target IDs.
-- Load and save bindings through a verified durable storage mechanism.
-- Convert host data into core inputs and results back into host operations.
-- Keep preview read-only unless the SDK provides a documented temporary-preview mechanism.
-- Report unsupported host capabilities rather than simulating them with unsafe mutations.
-
-The core calculates values. The adapter resolves host identity, persistence, and display. The host remains authoritative for document validity and rendering.
-
-## 4. Binding semantics
-
-A binding has its own stable binding ID and a separate controller ID. One controller may drive multiple bindings.
-
-Input ranges are ordered: `minimum < neutral < maximum`. Input is clamped and normalized piecewise around neutral:
-
-- minimum maps to -1;
-- neutral maps to 0;
-- maximum maps to +1.
-
-Easing is applied independently on each side so neutral remains fixed.
-
-### Modes
-
-- **AbsolutePose:** calculated target values are absolute values in the target's declared coordinate/property space.
-- **RelativeDelta:** calculated geometry output is an offset relative to the neutral pose; at neutral it must be exactly zero. V1 does not allow RelativeDelta for SymbolFrame because integer frame selection is an absolute target, not a meaningful additive delta.
-
-### Targets
-
-- **SymbolFrame:** negative, neutral, and positive frame anchors. Interpolate piecewise and round to the nearest integer frame. RelativeDelta is invalid.
-- **GeometryDeform:** stable element ID plus stable warp-pin ID, with negative, neutral, and positive 2D offsets. AbsolutePose returns the interpolated offset; RelativeDelta returns the interpolated offset minus the neutral offset.
-
-All target identifiers are stable strings. Array indices and current selection order are not persistent identity.
-
-## 5. Persistence and preview rules
-
-Persistence is not assumed. Before implementing it, audit the current AniCraft plugin SDK and engine/document APIs for:
-
-1. Reading the document and stable element/bone IDs.
-2. Durable document metadata or supported plugin-owned storage.
-3. Command registration and command argument/result schemas.
-4. A non-destructive preview or temporary display-list override.
-5. Whether command sequences can be atomic and undoable.
-
-Choose the narrowest supported persistence mechanism and document its versioning behavior. Do not invent metadata fields or command schemas.
-
-Preview flow:
-
-1. Validate the binding.
-2. Query the controller through the read-only `bone.info` command, or accept an explicit angle for isolated testing. Decide explicitly whether input uses the constrained keyed `angle` alone or the displayed angle `angle + swing` when spring is enabled.
-3. Calculate the pure core result.
-4. Ask the adapter to resolve and validate the target against the current document (for geometry, confirm the element and pin through `warp.info`).
-5. Return a preview result.
-6. Display it only through a verified non-destructive host preview facility. If none exists, return the calculated result and report that visual host preview is unavailable.
-
-Preview must never rewrite authored keyframes or accumulate transforms.
-
-## 6. Development phases
-
-### Phase 0 — Repository and SDK audit
-
-- [x] Preserve the existing TypeScript rectangle demo and its history.
-- [x] Record this Smart Controller scope and architecture.
-- [x] Inspect the AniCraft plugin SDK and example command plug-in.
-- [x] Verify documented document inspection, selection access, sandbox limits, persistence boundary, and preview behavior.
-- [x] Record capability findings in [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md).
-- [x] Verify exact command schemas for bone.info, warp.info, and warp.pin_move in the current AniCraft reference and engine source.
-- [x] Record the distinction between keyed bone angle and spring swing; adapter input policy remains an explicit decision.
-
-**Result:** command plug-ins can query an evaluated bone angle on demand through the read-only bone.info command and can use command-dialog preview. Arbitrary document metadata persistence and continuous custom evaluation during playback/scrubbing are not exposed by the inspected plug-in contract. Durable bindings and live bone input therefore require a separately reviewed AniCraft host extension. No such host changes are included in this repository.
-
-**Acceptance:** capability matrix identifies what can be implemented entirely in a plug-in and what requires host-side work. No guessed API is used.
-
-### Phase 1 — Native Rust controller core
-
-- [x] Add a Cargo workspace without disrupting the Bun/TypeScript project.
-- [x] Implement binding types, input ranges, easing, modes, and target variants.
-- [x] Implement validation, signed normalization, and pure target mapping.
-- [x] Add typed errors and native unit tests.
-- [x] Keep all host/WASM code out of this crate.
-- [ ] Run native tests and fix any failures.
-- [x] Vendor the audited AniCraft guest SDK with pinned upstream provenance.
-- [x] Create separate plugin directories for Bone Query, Form Deform, and Smart Controller.
-- [x] Add the first Bone Query command-plugin crate using the vendored SDK and the verified `bone.info` command.
-- [ ] Run Bone Query native tests and build its WASM module.
-- [ ] Build a minimal Smart Controller adapter after the authoring/persistence contract is settled.
-
-**Acceptance:** `cargo test -p smart-controller-core` passes natively; the crate has no AniCraft or WASM dependency; edge cases and overflow are tested.
-
-### Phase 2 — Binding collections and serialization contract
-
-- [x] Define a versioned binding-set representation (schema version 1).
-- [x] Validate duplicate binding IDs and incompatible target/mode combinations.
-- [x] Add JSON serialization/deserialization in the native core.
-- [x] Add round-trip and unsupported-version tests.
-- [x] Add stable-ID collection operations: get, insert, update, and remove.
-- [x] Define duplicate-insert and missing-update behavior with typed errors and tests.
-- [ ] Verify serialization and collection tests natively and define host metadata migration behavior.
-
-**Acceptance:** valid binding sets round-trip; invalid/unknown versions fail explicitly; controller and target IDs are preserved exactly.
-
-### Phase 3 — AniCraft SDK adapters
-
-#### Bone Query (first plugin)
-
-- [x] Add a separate `plugins/bone-query` command-plugin crate.
-- [x] Use the actual AniCraft ABI v1 `MANIFEST` + `ac::plugin!(MANIFEST, run)` entry-point pattern.
-- [x] Read the active playhead frame through `ac::document()`.
-- [x] Query armatures and bones through the verified read-only `bone.info` command.
-- [x] Report keyed/constrained angle and spring swing separately, plus their summed displayed angle.
-- [x] Add optional shape-point/weight reporting with a per-shape output limit.
-- [x] Keep the plugin read-only; it issues no document-mutating commands.
-- [ ] Run native tests and compile the WASM target.
-- [ ] Verify the plugin in AniCraft with a project containing multiple armatures, spring-enabled bones, and shape skins.
-
-#### Form Deform and Smart Controller
-
-- [ ] Implement the Form Deform native core and adapter.
-- [ ] Implement Smart Controller host adapter and integrate shared core capabilities.
-
-- Implement the plugin entry point and command registration against verified SDK APIs.
-- Add bind, unbind, update, inspect, and preview actions where supported.
-- Resolve host targets and validate their types before any write.
-- Use `bone.info` for on-demand bone-angle input.
-- Use `warp.info` / `warp.pin_move` only for explicitly supported geometry preview operations.
-- Implement persistence using the verified mechanism or a separately reviewed AniCraft host extension.
-
-**Acceptance:** each plugin loads in AniCraft; read/query and calculation-only paths work; explicit geometry apply is undoable; invalid IDs and unsupported capabilities produce actionable errors. Document the absence of durable binding persistence.
-
-### Phase 4 — On-demand preview
-
-- Accept an explicit angle or normalized input in the preview request.
-- Calculate target output with the native core.
-- Integrate only a documented non-destructive host preview facility.
-- Ensure repeated preview requests are deterministic and do not mutate authored data.
-
-**Acceptance:** preview at negative, neutral, and positive inputs returns expected values; repeated preview has no cumulative effects; no live playback claim is made.
-
-### Phase 5 — Verification and v1 release
-
-- Run native Rust tests and formatting/lint checks.
-- Build the WASM adapter for the SDK's supported target.
-- Test plugin loading, persistence, target validation, and preview in AniCraft.
-- Document install, supported AniCraft version, limitations, and examples.
-
-**Acceptance:** native tests and WASM build pass; a clean AniCraft project can author, save, reopen, inspect, and on-demand preview a binding; documented limitations match observed host behavior.
-
-## 7. Testing strategy
-
-### Native core tests
-
-- Invalid, non-finite, reversed, and overflowing input ranges.
-- Values below minimum and above maximum.
-- Exact negative, neutral, and positive normalization.
-- Linear and Smoothstep interpolation on both sides of neutral.
-- Symbol-frame interpolation and rounding.
-- Rejection of RelativeDelta for SymbolFrame.
-- Geometry absolute offsets and neutral-relative deltas.
-- Non-finite output detection after arithmetic.
-- Duplicate binding IDs.
-- Disabled bindings and deterministic repeated evaluation.
-- No mutation of input bindings during evaluation.
-
-### Adapter tests
-
-- Unknown controller ID.
-- Missing target ID.
-- Target exists but has the wrong host type.
-- Persistence round trip and schema migration behavior.
-- Preview unsupported by host.
-- Host operation failure without partial document mutation.
-
-## 8. Risks and decision gates
-
-| Risk | Required response |
-|---|---|
-| SDK cannot persist plugin metadata | Do not fake document persistence; evaluate a minimal host extension or defer persistence |
-| SDK cannot read bone pose/input | Keep explicit-angle preview; request the smallest host API extension for bone-driven input |
-| SDK cannot preview without mutation | Return computed preview data only; do not issue accumulating transform commands |
-| Symbol frame cannot be temporarily overridden | Keep the core result and defer visual preview until host support exists |
-| Geometry target cannot be identified stably | Do not use array positions; verify stable IDs first |
-| Existing TypeScript demo diverges from plugin model | Keep it as a separate demo; do not couple it to plugin persistence or runtime |
-
-## 9. Current progress
-
-| Work item | Status |
-|---|---|
-| Existing TypeScript rectangle geometry/timeline demo | Implemented on `feat/rectangle-deformation-mvp` |
-| Smart Controller v1 scope | Defined |
-| Smart Controller development plan | Added in this branch |
-| AniCraft SDK capability audit | Completed; see [ANICRAFT_SDK_AUDIT.md](ANICRAFT_SDK_AUDIT.md) |
-| Native Rust core | Initial implementation and binding-set CRUD added; native test run pending |
-| Versioned binding-set JSON | Schema v1, round-trip/version tests, and stable-ID CRUD added; native test run pending |
-| On-demand bone-angle query | Available through `bone.info`; keyed angle and spring swing are separate fields, so adapter input policy must be explicit |
-| Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
-| Binding persistence | Core JSON schema ready; plugin adapter is one-shot and does not persist bindings; durable storage requires a host extension |
-| Plugin directories | Bone Query, Form Deform, and Smart Controller have separate folders |
-| Bone Query adapter | Initial read-only command plugin added; native/WASM verification pending |
-| Form Deform adapter | Initial bone-to-warp-pin command implemented; native/WASM verification pending |
-| Smart Controller adapter | Initial bone-to-geometry binding command implemented; native/WASM verification pending |
-| WASM adapters | All three command-plugin crates added; native/WASM verification pending |
-| Geometry application | Explicit apply option uses `warp.pin_move` as an undoable document edit; calculation-only is default |
-| Symbol-frame visual application | Not supported by the current verified host command API |
-| Continuous playback integration | Out of v1 scope |
-
-## 10. Definition of done
-
-The plugin-only release slice is complete when all three command-plugin crates build for WASM, the full native Rust workspace test suite passes, the cross-plugin contract test passes, each adapter uses only verified host commands, and the AniCraft smoke-test procedure is documented. In-app smoke testing remains necessary to verify real document behavior.
-
-This slice does not include durable binding persistence, live playback/scrubbing evaluation, or symbol-frame visual application. Those require separately reviewed AniCraft host changes and are not considered silently completed by the plugin repository.
-
-
-## 11. Three-plugin integration boundary
-
-The three crates are now members of the same Cargo workspace. A cross-plugin native contract test in the Smart Controller crate exercises Smart Controller geometry output through the Form Deform neutral-position calculation. CI builds all three WASM command modules and runs the full Rust workspace test suite.
-
-This test validates the shared mathematical boundary only. It does not replace host integration testing in AniCraft. The current plug-in contract still lacks document-owned persistent plugin metadata, a continuous playback/scrubbing evaluator, and a verified nested-symbol frame setter. Those remain explicit host-extension decisions, not claims of this plug-in-only release.
+Do not invent timeline or bone-write commands. Do not interpret guessed JSON document paths as an API. Do not silently substitute zero for a failed bone query. Do not claim live playback, durable binding storage, or in-app success before those capabilities are verified.

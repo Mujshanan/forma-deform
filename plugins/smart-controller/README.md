@@ -1,35 +1,37 @@
 # Smart Controller
 
-**Status:** First on-demand command-plugin implementation.
+**V1 status:** Slider mapping and deterministic, on-demand preview.
 
-Smart Controller is the general-purpose input-to-target mapper. It uses the shared smart-controller-core crate for validation, neutral-centered normalization, easing, and three-anchor interpolation.
+The host-independent Rust core performs validation, normalization, endpoint-aware frame mapping, and preview calculation. The AniCraft adapter only resolves the driver input through the verified bone.info command, calls the core, and logs JSON output.
 
 ## V1 workflow
 
-1. Create an AniCraft armature and note a controller bone ID.
-2. Add an Asset Warp mesh and pin to the target shape; note the element and pin IDs.
-3. Set the input minimum, neutral, and maximum.
-4. Set negative, neutral, and positive X/Y output anchors.
-5. Set the neutral pin base position in stage coordinates.
-6. Run with Apply disabled to inspect the calculated output.
-7. Enable Apply to write the absolute pin position through warp.pin_move (undoable).
+1. Select the driver layer/armature and driver bone name.
+2. Select the action layer and configure its start/end frame range.
+3. Set minimum and maximum driver rotation angles.
+4. Choose Exclusive (default) or Inclusive endpoint policy.
+5. Run using the host bone input, or provide manual_value for deterministic tests.
+6. Inspect normalized input and calculated output frame in the plugin log.
 
-The default Relative Delta mode subtracts the neutral output anchor before adding it to the neutral pin base. Absolute Pose mode uses the interpolated anchor as an offset from that base. Both modes are deterministic and do not accumulate from the pin's current position.
+Manual input overrides the host query. A missing or malformed bone response is an error; it is never silently replaced with zero.
 
-The input can come from the live bone angle at the playhead or an explicit angle for testing. Spring swing is excluded by default and can be included explicitly. Linear and Smoothstep easing are supported.
+## Endpoint policy
+
+- Exclusive maps [start, end). The end frame is reserved as the wrap point and is never selected; useful when the last frame duplicates the first pose.
+- Inclusive maps [start, end]. Both endpoint frames can be selected when the last pose is distinct.
+- Degenerate mapping helper intervals return start, although Slider validation requires end > start.
+- Rotation endpoints may be reversed; +45° to -45° maps +45° to normalized 0 and -45° to normalized 1.
 
 ## Boundaries
 
-- One binding is configured per invocation; this v1 adapter does not yet persist a binding set in the document.
-- It can calculate geometry targets and apply a verified Asset Warp pin position.
-- The shared core can also calculate SymbolFrame targets, but the current AniCraft command API has no verified command for visually setting a nested symbol instance's displayed frame. The adapter therefore does not pretend to apply that target.
-- It is an on-demand command, not a playback/scrubbing evaluator.
-- Apply is an explicit document edit; it is not a non-destructive live preview. Use AniCraft undo to revert it.
-- No automatic binding coordination between Form Deform and Smart Controller is claimed yet; both use the same verified warp-pin command boundary and remain separately callable.
+- V1 is an on-demand preview command, not a playback/scrubbing evaluator.
+- The plugin does not set the AniCraft timeline or write bone properties; no unverified command IDs are used.
+- action_layer_id is validated as configuration metadata; no host action/timeline API is assumed.
+- Transform calculations are pure-core groundwork for V2; the V1 adapter rejects Transform mode.
+- Bindings are not durably persisted in the AniCraft document.
 
-## Build
+## Build and test
 
-```sh
-cargo test -p anicraft-smart-controller-plugin
-cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
-```
+    cargo test -p smart-controller-core
+    cargo test -p anicraft-smart-controller-plugin
+    cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
