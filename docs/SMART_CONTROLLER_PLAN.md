@@ -46,17 +46,24 @@ The existing TypeScript rectangle/timeline demo remains as a geometry experiment
 
 ## 3. Architecture
 
-Intended Rust layout:
+Repository layout:
 
 ```text
 crates/
-  smart-controller-core/    # Native Rust library; no WASM or AniCraft dependencies
-  anicraft-plugin/          # Thin WASM adapter; add only after SDK audit
+  smart-controller-core/     # Shared native controller model and evaluator
+  anicraft-plugin-sdk/       # Pinned guest SDK source
+plugins/
+  bone-query/                # Read-only bone/armature query plugin (first implementation)
+  form-deform/               # Bone-driven shape deformation plugin (planned)
+  smart-controller/          # General-purpose controller plugin (planned)
 src/                         # Existing TypeScript rectangle demonstration
 docs/
-  DEVELOPMENT_PLAN.md        # Existing rectangle-lab plan/history
-  SMART_CONTROLLER_PLAN.md   # Authoritative Smart Controller plan
+  DEVELOPMENT_PLAN.md
+  SMART_CONTROLLER_PLAN.md
+  ANICRAFT_SDK_AUDIT.md
 ```
+
+Each plugin has its own directory and manifest/entry point. Shared deterministic logic belongs in reusable crates under `crates/`; adapters stay thin and host-specific.
 
 ### Core responsibilities
 
@@ -152,7 +159,10 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - [x] Keep all host/WASM code out of this crate.
 - [ ] Run native tests and fix any failures.
 - [x] Vendor the audited AniCraft guest SDK with pinned upstream provenance.
-- [ ] Build a minimal WASM adapter against the vendored SDK after the authoring/persistence contract is settled.
+- [x] Create separate plugin directories for Bone Query, Form Deform, and Smart Controller.
+- [x] Add the first Bone Query command-plugin crate using the vendored SDK and the verified `bone.info` command.
+- [ ] Run Bone Query native tests and build its WASM module.
+- [ ] Build a minimal Smart Controller adapter after the authoring/persistence contract is settled.
 
 **Acceptance:** `cargo test -p smart-controller-core` passes natively; the crate has no AniCraft or WASM dependency; edge cases and overflow are tested.
 
@@ -168,7 +178,24 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 
 **Acceptance:** valid binding sets round-trip; invalid/unknown versions fail explicitly; controller and target IDs are preserved exactly.
 
-### Phase 3 — AniCraft SDK adapter
+### Phase 3 — AniCraft SDK adapters
+
+#### Bone Query (first plugin)
+
+- [x] Add a separate `plugins/bone-query` command-plugin crate.
+- [x] Use the actual AniCraft ABI v1 `MANIFEST` + `ac::plugin!(MANIFEST, run)` entry-point pattern.
+- [x] Read the active playhead frame through `ac::document()`.
+- [x] Query armatures and bones through the verified read-only `bone.info` command.
+- [x] Report keyed/constrained angle and spring swing separately, plus their summed displayed angle.
+- [x] Add optional shape-point/weight reporting with a per-shape output limit.
+- [x] Keep the plugin read-only; it issues no document-mutating commands.
+- [ ] Run native tests and compile the WASM target.
+- [ ] Verify the plugin in AniCraft with a project containing multiple armatures, spring-enabled bones, and shape skins.
+
+#### Form Deform and Smart Controller
+
+- [ ] Implement the Form Deform native core and adapter.
+- [ ] Implement Smart Controller host adapter and integrate shared core capabilities.
 
 - Implement the plugin entry point and command registration against verified SDK APIs.
 - Add bind, unbind, update, inspect, and preview actions where supported.
@@ -246,7 +273,11 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | On-demand bone-angle query | Available through `bone.info`; keyed angle and spring swing are separate fields, so adapter input policy must be explicit |
 | Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
 | Binding persistence | JSON representation ready; durable document storage requires a host-side extension |
-| WASM adapter | SDK source vendored with pinned provenance; adapter implementation pending |
+| Plugin directories | Bone Query, Form Deform, and Smart Controller have separate folders |
+| Bone Query adapter | Initial read-only command plugin added; native/WASM verification pending |
+| Form Deform adapter | Directory reserved; not started |
+| Smart Controller adapter | Directory reserved; not started |
+| WASM adapter | SDK source vendored with pinned provenance; Bone Query adapter added, verification pending |
 | Geometry visual preview | `warp.pin_move` can be used in command-dialog preview; adapter tests pending |
 | Symbol-frame visual preview | No direct instance-frame setter identified; host support or further command research required |
 | Continuous playback integration | Out of v1 scope |
