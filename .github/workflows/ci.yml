@@ -18,4 +18,5 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - run: bun run build
-      - run: cargo test -p smart-controller-core
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace
