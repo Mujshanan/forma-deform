@@ -74,7 +74,7 @@ fn report_armature(armature: &Value, include_points: bool, max_points: usize) {
         "Armature layer {layer}: {name} | poses {poses} | springs {springs} | mixed {mixed}"
     ));
     ac::log(&format!(
-        "  Roots (instance IDs): [{roots}] | members (element IDs): [{members}] | first shape: {first_shape}"
+        "  Roots (root element IDs): [{roots}] | members (element IDs): [{members}] | first shape: {first_shape}"
     ));
 
     if let Some(bones) = armature["bones"].as_array() {
