@@ -9,7 +9,7 @@ const server = Bun.serve({
       return new Response(Bun.file("./style.css"), { headers: { "content-type": "text/css; charset=utf-8" } });
     }
     if (path === "/main.js") {
-      const result = await Bun.build({ entrypoints: ["./src/demo/main.ts"], target: "browser", write: false });
+      const result = await Bun.build({ entrypoints: ["./src/demo/main.ts"], target: "browser" });
       if (!result.success) return new Response("Could not build demo entry point.", { status: 500 });
       const output = result.outputs.find(file => file.path.endsWith(".js"));
       if (!output) return new Response("Demo bundle was not produced.", { status: 500 });
