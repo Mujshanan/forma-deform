@@ -272,16 +272,23 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 | Versioned binding-set JSON | Schema v1, round-trip/version tests, and stable-ID CRUD added; native test run pending |
 | On-demand bone-angle query | Available through `bone.info`; keyed angle and spring swing are separate fields, so adapter input policy must be explicit |
 | Geometry pin target | Core requires stable element and pin IDs; stage-space offset semantics defined |
-| Binding persistence | JSON representation ready; durable document storage requires a host-side extension |
+| Binding persistence | Core JSON schema ready; plugin adapter is one-shot and does not persist bindings; durable storage requires a host extension |
 | Plugin directories | Bone Query, Form Deform, and Smart Controller have separate folders |
 | Bone Query adapter | Initial read-only command plugin added; native/WASM verification pending |
-| Form Deform adapter | Directory reserved; not started |
-| Smart Controller adapter | Directory reserved; not started |
-| WASM adapter | SDK source vendored with pinned provenance; Bone Query adapter added, verification pending |
-| Geometry visual preview | `warp.pin_move` can be used in command-dialog preview; adapter tests pending |
-| Symbol-frame visual preview | No direct instance-frame setter identified; host support or further command research required |
+| Form Deform adapter | Initial bone-to-warp-pin command implemented; native/WASM verification pending |
+| Smart Controller adapter | Initial bone-to-geometry binding command implemented; native/WASM verification pending |
+| WASM adapters | All three command-plugin crates added; native/WASM verification pending |
+| Geometry application | Explicit apply option uses `warp.pin_move` as an undoable document edit; calculation-only is default |
+| Symbol-frame visual application | Not supported by the current verified host command API |
 | Continuous playback integration | Out of v1 scope |
 
 ## 10. Definition of done
 
 V1 is complete when a user can author and save a binding, reopen the project, inspect it, request a preview for a chosen controller angle, receive a validated target result, and—if supported by the verified host API—see that result without modifying authored animation data. Native Rust tests and the WASM plugin build must pass. Continuous playback/scrubbing evaluation remains a later host-integration milestone.
+
+
+## 11. Three-plugin integration boundary
+
+The three crates are now members of the same Cargo workspace. A cross-plugin native contract test in the Smart Controller crate exercises Smart Controller geometry output through the Form Deform neutral-position calculation. CI builds all three WASM command modules and runs the full Rust workspace test suite.
+
+This test validates the shared mathematical boundary only. It does not replace host integration testing in AniCraft. The current plug-in contract still lacks document-owned persistent plugin metadata, a continuous playback/scrubbing evaluator, and a verified nested-symbol frame setter. Those remain explicit host-extension decisions, not claims of this plug-in-only release.
