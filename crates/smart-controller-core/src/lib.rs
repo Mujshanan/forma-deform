@@ -243,6 +243,7 @@ impl ControllerBinding {
             }
             ControllerTarget::GeometryDeform {
                 element_id,
+                pin_id,
                 negative_offset,
                 neutral_offset,
                 positive_offset,
@@ -417,6 +418,7 @@ mod tests {
             binding.evaluate(-45.0).unwrap(),
             Some(PreviewResult::GeometryDeform {
                 element_id: "shape-arm".into(),
+                pin_id: "pin-arm-tip".into(),
                 offset: Vec2 { x: -5.0, y: 1.0 }
             })
         );
@@ -429,6 +431,7 @@ mod tests {
             binding.evaluate(45.0).unwrap(),
             Some(PreviewResult::GeometryDeform {
                 element_id: "shape-arm".into(),
+                pin_id: "pin-arm-tip".into(),
                 offset: Vec2 { x: 9.0, y: 5.0 }
             })
         );
