@@ -70,3 +70,24 @@ If durable document storage and live controller input are required, the smallest
 - Later, a pure extension to document/frame evaluation that consumes bindings and produces effective target values without rewriting authored keyframes.
 
 These are proposals only. They require separate implementation planning and review in the AniCraft repository. This audit does not authorize changes to AniCraft.
+
+
+## 6. Frame-script capability check
+
+The current AniCraft plug-in API also supports `kind: "frame-script"`, which is distinct from command plug-ins:
+
+- A frame script runs when playback enters a keyframe that names its entry point.
+- Every invocation starts a fresh WebAssembly instance.
+- It can read `player` state (scene/frame, playback state, clips, pointer and timeline) and queue timeline actions such as `set_property` or `goto_and_stop`.
+- It cannot call `command`, `document`, or `elements`; those requests are explicitly refused.
+- It therefore cannot call `bone.info` or `warp.info`, and cannot implement a bone-angle-driven Smart Controller. It is also keyframe-entry driven rather than a persistent per-frame controller evaluator.
+
+Frame scripts are useful for playback interactivity, but they do not close the live Smart Controller runtime gap. The v1 scope remains an on-demand command plug-in.
+
+## 7. SDK packaging decision
+
+The AniCraft guest SDK is a small source crate under `examples/plugins/sdk`, but it is a local path dependency in AniCraft's sample-plugin workspace and is not a separately published crate. A Cargo git dependency cannot select that nested package by subdirectory.
+
+For this repository, vendor the audited SDK source as `crates/anicraft-plugin-sdk` with a standalone manifest. Pin provenance to the exact upstream AniCraft commit in `crates/anicraft-plugin-sdk/UPSTREAM.md`. This avoids pulling the entire AniCraft repository as a submodule and keeps native host-call stubs available for testing. Update the vendored copy only through an explicit SDK diff review.
+
+Pinned upstream source commit: [bcfea816478f2a00ab172cefe67f0bd5696b3886](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886).
