@@ -1,3 +1,7 @@
 [workspace]
-members = ["crates/smart-controller-core", "crates/anicraft-plugin-sdk"]
+members = [
+    "crates/smart-controller-core",
+    "crates/anicraft-plugin-sdk",
+    "plugins/bone-query",
+]
 resolver = "2"
