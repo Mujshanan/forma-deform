@@ -139,7 +139,7 @@ Preview must never rewrite authored keyframes or accumulate transforms.
 - [x] Verify exact command schemas for bone.info, warp.info, and warp.pin_move in the current AniCraft reference and engine source.
 - [x] Record the distinction between keyed bone angle and spring swing; adapter input policy remains an explicit decision.
 
-**Result:** command plug-ins and command-dialog preview are supported. Arbitrary document metadata persistence, evaluated bone-angle access, and continuous custom evaluation are not exposed by the inspected plug-in contract. Durable bindings and live bone input therefore require a separately reviewed AniCraft host extension. No such host changes are included in this repository.
+**Result:** command plug-ins can query an evaluated bone angle on demand through the read-only bone.info command and can use command-dialog preview. Arbitrary document metadata persistence and continuous custom evaluation during playback/scrubbing are not exposed by the inspected plug-in contract. Durable bindings and live bone input therefore require a separately reviewed AniCraft host extension. No such host changes are included in this repository.
 
 **Acceptance:** capability matrix identifies what can be implemented entirely in a plug-in and what requires host-side work. No guessed API is used.
 
