@@ -12,7 +12,7 @@ The branch feat/smart-controller-v1 contains three separate command plugins:
 
 Each plugin has its own crate and manifest. Shared native logic is isolated under crates/. The AniCraft guest SDK is vendored with pinned upstream provenance.
 
-See [plugin overview](plugins/README.md), [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md), and [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md).
+See [plugin overview](plugins/README.md) and the [unified build and smoke-test guide](plugins/INSTALL.md), [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md), and [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md).
 
 ## Important host boundaries
 
