@@ -150,6 +150,7 @@ pub enum ControllerError {
     NonFiniteTargetValue,
     RelativeDeltaUnsupportedForSymbolFrame,
     DuplicateBindingId(String),
+    BindingNotFound(String),
     UnsupportedSchemaVersion(u32),
     Serialization(String),
     ArithmeticOverflow,
@@ -168,6 +169,7 @@ impl fmt::Display for ControllerError {
                 write!(f, "RelativeDelta is not supported for SymbolFrame targets")
             }
             Self::DuplicateBindingId(id) => write!(f, "duplicate binding ID: {id}"),
+            Self::BindingNotFound(id) => write!(f, "binding not found: {id}"),
             Self::UnsupportedSchemaVersion(version) => write!(f, "unsupported binding schema version: {version}"),
             Self::Serialization(message) => write!(f, "binding serialization failed: {message}"),
             Self::ArithmeticOverflow => write!(f, "controller evaluation produced a non-finite result"),
@@ -313,6 +315,38 @@ impl BindingSet {
             return Err(ControllerError::UnsupportedSchemaVersion(self.schema_version));
         }
         validate_bindings(&self.bindings)
+    }
+
+    /// Find a binding by its stable binding ID.
+    pub fn get(&self, id: &str) -> Option<&ControllerBinding> {
+        self.bindings.iter().find(|binding| binding.id == id)
+    }
+
+    /// Add a new binding. Existing IDs are never silently overwritten.
+    pub fn insert(&mut self, binding: ControllerBinding) -> Result<(), ControllerError> {
+        binding.validate()?;
+        if self.get(&binding.id).is_some() {
+            return Err(ControllerError::DuplicateBindingId(binding.id));
+        }
+        self.bindings.push(binding);
+        Ok(())
+    }
+
+    /// Replace an existing binding identified by the replacement's stable ID.
+    pub fn update(&mut self, binding: ControllerBinding) -> Result<(), ControllerError> {
+        binding.validate()?;
+        let id = binding.id.clone();
+        let Some(existing) = self.bindings.iter_mut().find(|item| item.id == id) else {
+            return Err(ControllerError::BindingNotFound(id));
+        };
+        *existing = binding;
+        Ok(())
+    }
+
+    /// Remove a binding by ID, returning the removed value when it existed.
+    pub fn remove(&mut self, id: &str) -> Option<ControllerBinding> {
+        let index = self.bindings.iter().position(|binding| binding.id == id)?;
+        Some(self.bindings.remove(index))
     }
 
     pub fn to_json(&self) -> Result<String, ControllerError> {
@@ -560,6 +594,63 @@ mod tests {
             validate_bindings(&[first, second]),
             Err(ControllerError::DuplicateBindingId("binding-head-turn".into()))
         );
+    }
+
+    #[test]
+    fn binding_set_insert_get_update_and_remove_work_by_stable_id() {
+        let first = symbol_binding();
+        let mut set = BindingSet::new(vec![first.clone()]).unwrap();
+
+        assert_eq!(set.get(&first.id), Some(&first));
+
+        let mut added = geometry_binding(ControllerMode::AbsolutePose);
+        added.id = "binding-leg".into();
+        set.insert(added.clone()).unwrap();
+        assert_eq!(set.get("binding-leg"), Some(&added));
+
+        added.enabled = false;
+        set.update(added.clone()).unwrap();
+        assert_eq!(set.get("binding-leg"), Some(&added));
+
+        let removed = set.remove("binding-leg").unwrap();
+        assert_eq!(removed, added);
+        assert_eq!(set.get("binding-leg"), None);
+        assert_eq!(set.remove("missing"), None);
+        assert_eq!(set.bindings.len(), 1);
+    }
+
+    #[test]
+    fn binding_set_insert_rejects_duplicate_and_invalid_bindings() {
+        let first = symbol_binding();
+        let mut set = BindingSet::new(vec![first.clone()]).unwrap();
+        assert_eq!(
+            set.insert(first.clone()),
+            Err(ControllerError::DuplicateBindingId(first.id))
+        );
+
+        let mut invalid = geometry_binding(ControllerMode::AbsolutePose);
+        invalid.id = "   ".into();
+        assert_eq!(set.insert(invalid), Err(ControllerError::EmptyBindingId));
+        assert_eq!(set.bindings.len(), 1);
+    }
+
+    #[test]
+    fn binding_set_update_requires_an_existing_id_and_valid_value() {
+        let mut set = BindingSet::new(vec![symbol_binding()]).unwrap();
+        let mut missing = geometry_binding(ControllerMode::AbsolutePose);
+        missing.id = "missing".into();
+        assert_eq!(
+            set.update(missing),
+            Err(ControllerError::BindingNotFound("missing".into()))
+        );
+
+        let mut invalid = symbol_binding();
+        invalid.mode = ControllerMode::RelativeDelta;
+        assert_eq!(
+            set.update(invalid),
+            Err(ControllerError::RelativeDeltaUnsupportedForSymbolFrame)
+        );
+        assert_eq!(set.bindings, vec![symbol_binding()]);
     }
 
     #[test]
