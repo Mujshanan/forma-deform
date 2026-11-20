@@ -463,8 +463,16 @@ mod tests {
         run_with_host(&raw, &mut host).unwrap();
 
         assert!(host.commands.is_empty());
-        assert!(host.logs.iter().any(|line| line.contains("\"normalized\":0.75")));
-        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":15")));
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"normalized\":0.75"))
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"output_frame\":15"))
+        );
         assert!(host.logs.iter().any(|line| line.contains("preview-only")));
     }
 
@@ -475,9 +483,20 @@ mod tests {
 
         run_with_host(&slider_params(None), &mut host).unwrap();
 
-        assert_eq!(host.commands, vec![("bone.info".into(), json!({"layer":5}))]);
-        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":19")));
-        assert!(host.logs.iter().any(|line| line.contains("no timeline command")));
+        assert_eq!(
+            host.commands,
+            vec![("bone.info".into(), json!({"layer":5}))]
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"output_frame\":19"))
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("no timeline command"))
+        );
     }
 
     #[test]
@@ -506,8 +525,16 @@ mod tests {
                 ("warp.info".into(), json!({"element":8}))
             ]
         );
-        assert!(host.logs.iter().any(|line| line.contains("Pin 9 target: (125.00, 77.50)")));
-        assert!(host.logs.iter().any(|line| line.contains("Calculation only")));
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("Pin 9 target: (125.00, 77.50)"))
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("Calculation only"))
+        );
     }
 
     #[test]
@@ -547,8 +574,16 @@ mod tests {
 
         run_with_host(&raw, &mut host).unwrap();
 
-        assert!(host.logs.iter().any(|line| line.contains("effective angle 12.000°")));
-        assert!(host.logs.iter().any(|line| line.contains("Pin 9 target: (12.00, 0.00)")));
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("effective angle 12.000°"))
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("Pin 9 target: (12.00, 0.00)"))
+        );
     }
 
     #[test]
@@ -590,22 +625,28 @@ mod tests {
     fn malformed_host_responses_and_host_errors_propagate() {
         let mut malformed_bone = FakeHost::default();
         malformed_bone.respond(json!({"armatures":null}));
-        assert!(run_with_host(&deform_params(false), &mut malformed_bone)
-            .unwrap_err()
-            .contains("invalid bone.info response"));
+        assert!(
+            run_with_host(&deform_params(false), &mut malformed_bone)
+                .unwrap_err()
+                .contains("invalid bone.info response")
+        );
 
         let mut malformed_warp = FakeHost::default();
         malformed_warp.respond(bone_response(10.0, None));
         malformed_warp.respond(json!({"warped":true}));
-        assert!(run_with_host(&deform_params(false), &mut malformed_warp)
-            .unwrap_err()
-            .contains("invalid warp.info response"));
+        assert!(
+            run_with_host(&deform_params(false), &mut malformed_warp)
+                .unwrap_err()
+                .contains("invalid warp.info response")
+        );
 
         let mut host_error = FakeHost::default();
         host_error.fail("host refused request");
-        assert!(run_with_host(&slider_params(None), &mut host_error)
-            .unwrap_err()
-            .contains("host refused request"));
+        assert!(
+            run_with_host(&slider_params(None), &mut host_error)
+                .unwrap_err()
+                .contains("host refused request")
+        );
     }
 
     #[test]
@@ -634,7 +675,11 @@ mod tests {
 
         run_with_host(&raw, &mut host).unwrap();
 
-        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":20")));
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"output_frame\":20"))
+        );
         assert!(host.commands.is_empty());
     }
 
@@ -647,8 +692,16 @@ mod tests {
 
         run_with_host(&raw, &mut host).unwrap();
 
-        assert!(host.logs.iter().any(|line| line.contains("\"normalized\":0.5")));
-        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":10")));
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"normalized\":0.5"))
+        );
+        assert!(
+            host.logs
+                .iter()
+                .any(|line| line.contains("\"output_frame\":10"))
+        );
         assert!(host.commands.is_empty());
     }
 
@@ -658,16 +711,20 @@ mod tests {
         slider["min_rotation_deg"] = json!(10.0);
         slider["max_rotation_deg"] = json!(10.0);
         let mut slider_host = FakeHost::default();
-        assert!(run_with_host(&slider, &mut slider_host)
-            .unwrap_err()
-            .contains("rotation range"));
+        assert!(
+            run_with_host(&slider, &mut slider_host)
+                .unwrap_err()
+                .contains("rotation range")
+        );
         assert!(slider_host.commands.is_empty());
 
         let deform = json!({"mode":"deform","bone_id":4});
         let mut deform_host = FakeHost::default();
-        assert!(run_with_host(&deform, &mut deform_host)
-            .unwrap_err()
-            .contains("invalid Deform parameters"));
+        assert!(
+            run_with_host(&deform, &mut deform_host)
+                .unwrap_err()
+                .contains("invalid Deform parameters")
+        );
         assert!(deform_host.commands.is_empty());
     }
 
@@ -701,12 +758,16 @@ mod tests {
     #[test]
     fn transform_and_unknown_modes_are_rejected_without_host_calls() {
         let mut host = FakeHost::default();
-        assert!(run_with_host(&json!({"mode":"transform"}), &mut host)
-            .unwrap_err()
-            .contains("Transform mode remains deferred"));
-        assert!(run_with_host(&json!({"mode":"not-a-mode"}), &mut host)
-            .unwrap_err()
-            .contains("unsupported Smart Controller mode"));
+        assert!(
+            run_with_host(&json!({"mode":"transform"}), &mut host)
+                .unwrap_err()
+                .contains("Transform mode remains deferred")
+        );
+        assert!(
+            run_with_host(&json!({"mode":"not-a-mode"}), &mut host)
+                .unwrap_err()
+                .contains("unsupported Smart Controller mode")
+        );
         assert!(host.commands.is_empty());
     }
 }
