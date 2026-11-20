@@ -1,4 +1,4 @@
-//! Guest-side helpers for AniCraft WebAssembly plug-ins (ABI v1).
+#![allow(unsafe_code)] // Raw pointers and host imports are isolated in this audited ABI boundary.\n\n//! Guest-side helpers for AniCraft WebAssembly plug-ins (ABI v1).
 //!
 //! The normative contract is docs/PLUGIN_ABI_V1.md. Keep this crate as the only guest-side
 //! implementation of the ABI: plug-ins should not declare host imports or raw ABI exports.
