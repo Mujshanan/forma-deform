@@ -266,7 +266,12 @@ pub fn deform_mesh_with_diagnostics(
     }
     for segment in options.bone_segments {
         if !segment.start.is_finite() || !segment.end.is_finite() { return Err(DeformError::NonFiniteInput.into()); }
-        if segment.end.sub(segment.start).length_squared() <= 1e-24 {
+        let delta = segment.end.sub(segment.start);
+        let length_squared = delta.length_squared();
+        if !delta.is_finite() || !length_squared.is_finite() {
+            return Err(DeformError::ArithmeticOverflow.into());
+        }
+        if length_squared <= 1e-24 {
             warnings.push(DeformWarning::ZeroLengthBone { bone_id: segment.bone_id });
         }
     }

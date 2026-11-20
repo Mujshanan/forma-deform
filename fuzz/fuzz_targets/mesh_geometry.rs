@@ -37,8 +37,11 @@ fuzz_target!(|data: &[u8]| {
         };
         vertices.push(MeshVertex { bind_position: Vec2 { x, y }, influences });
     }
-    let mesh = DeformMesh { vertices, pins: vec![MeshPin {
-        id: 1, vertex_index: usize::MAX, target: Vec2::default(),
-    }] };
+    let pins = if vertices.is_empty() {
+        vec![]
+    } else {
+        vec![MeshPin { id: 1, vertex_index: 0, target: Vec2::default() }]
+    };
+    let mesh = DeformMesh { vertices, pins };
     let _ = deform_mesh_with_diagnostics(&mesh, &bones, DeformDiagnosticsOptions::default());
 });
