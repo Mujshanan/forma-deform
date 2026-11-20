@@ -4,7 +4,6 @@ members = [
     "crates/form-deform-core",
     "crates/anicraft-plugin-sdk",
     "plugins/bone-query",
-    "plugins/form-deform",
     "plugins/smart-controller",
 ]
 resolver = "2"
