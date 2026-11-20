@@ -45,7 +45,7 @@ The current automated fixture is `plugins/smart-controller/tests/core_compositio
 | Check | Expected |
 |---|---:|
 | Experimental binding normalized input | `0.5` |
-| Controller geometry offset | `(6, -2)` |
+| Experimental binding geometry offset | `(6, -2)` |
 | Deformation base position after offset | `(126, 78)` |
 | Effective deformation angle | `10°` |
 | Absolute target pin position | `(131, 75.5)` |
