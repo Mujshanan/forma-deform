@@ -2,6 +2,7 @@
 members = [
     "crates/smart-controller-core",
     "crates/form-deform-core",
+    "crates/forma-document-core",
     "crates/anicraft-plugin-sdk",
     "plugins/bone-query",
     "plugins/smart-controller",

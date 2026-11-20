@@ -1,0 +1,14 @@
+[package]
+name = "forma-document-core"
+version = "0.1.0"
+edition = "2024"
+description = "Authoritative document, rectangle geometry, and timeline model for Forma Deform"
+license = "MIT"
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
