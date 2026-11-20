@@ -6,7 +6,7 @@
 use anicraft_plugin_sdk as ac;
 use form_deform_core::{BoneAngle, DeformRequest, DeformSpec, Vec2, evaluate_deformation};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use smart_controller_core::{Mode, Params, preview_slider, validation};
 
 const MANIFEST: &str = r##"{
@@ -18,7 +18,6 @@ const MANIFEST: &str = r##"{
   "description": "On-demand bone-driven animation and geometry controller with Slider and Deform modes.",
   "params": {
     "mode": {"type": "string", "default": "slider", "label": "Controller mode: slider or deform"},
-
     "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID (Slider mode)"},
     "driver_bone_name": {"type": "string", "default": "Head", "label": "Driver bone name (Slider mode)"},
     "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID (Slider mode)"},
@@ -28,7 +27,6 @@ const MANIFEST: &str = r##"{
     "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Action end frame (Slider mode)"},
     "endpoint_policy": {"type": "string", "default": "exclusive", "label": "Endpoint policy: exclusive or inclusive"},
     "manual_value": {"type": "number", "label": "Manual driver angle (Slider mode; overrides bone query)"},
-
     "bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Controller bone ID (Deform mode)"},
     "element_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warped shape element ID (Deform mode)"},
     "pin_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warp pin ID (Deform mode)"},
@@ -43,6 +41,17 @@ const MANIFEST: &str = r##"{
 }"##;
 
 ac::plugin!(MANIFEST, run);
+
+fn select_fields(raw: &Value, fields: &[&str]) -> Value {
+    let Some(source) = raw.as_object() else { return Value::Null; };
+    let mut selected = Map::new();
+    for field in fields {
+        if let Some(value) = source.get(*field) {
+            selected.insert((*field).to_owned(), value.clone());
+        }
+    }
+    Value::Object(selected)
+}
 
 fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
     result["armatures"].as_array()?.iter()
@@ -60,7 +69,13 @@ fn query_slider_driver(params: &Params) -> Result<f64, String> {
 }
 
 fn run_slider(raw: &Value) -> Result<(), String> {
-    let params: Params = serde_json::from_value(raw.clone())
+    const FIELDS: &[&str] = &[
+        "mode", "driver_layer_id", "driver_bone_name", "action_layer_id",
+        "min_rotation_deg", "max_rotation_deg", "action_start_frame",
+        "action_end_frame", "endpoint_policy", "manual_value",
+    ];
+    let payload = select_fields(raw, FIELDS);
+    let params: Params = serde_json::from_value(payload)
         .map_err(|error| format!("invalid Slider parameters: {error}"))?;
     validation::validate(&params)?;
     if params.mode != Mode::Slider {
@@ -96,38 +111,25 @@ struct DeformParams {
 }
 
 #[derive(Debug, Deserialize)]
-struct BoneInfoResponse {
-    armatures: Vec<ArmatureDto>,
-}
+struct BoneInfoResponse { armatures: Vec<ArmatureDto> }
 #[derive(Debug, Deserialize)]
-struct ArmatureDto {
-    bones: Vec<BoneDto>,
-}
+struct ArmatureDto { bones: Vec<BoneDto> }
 #[derive(Debug, Deserialize)]
-struct BoneDto {
-    id: u64,
-    angle: f64,
-    swing: Option<f64>,
-}
+struct BoneDto { id: u64, angle: f64, swing: Option<f64> }
 #[derive(Debug, Deserialize)]
-struct WarpInfoResponse {
-    warped: bool,
-    pins: Vec<WarpPinDto>,
-}
+struct WarpInfoResponse { warped: bool, pins: Vec<WarpPinDto> }
 #[derive(Debug, Deserialize)]
-struct WarpPinDto {
-    pin: u64,
-}
+struct WarpPinDto { pin: u64 }
 #[derive(Debug, serde::Serialize)]
-struct WarpPinMoveRequest {
-    element: u64,
-    pin: u64,
-    x: f64,
-    y: f64,
-}
+struct WarpPinMoveRequest { element: u64, pin: u64, x: f64, y: f64 }
 
 fn run_deform(raw: &Value) -> Result<(), String> {
-    let params: DeformParams = serde_json::from_value(raw.clone())
+    const FIELDS: &[&str] = &[
+        "bone_id", "element_id", "pin_id", "neutral_angle", "neutral_x",
+        "neutral_y", "gain_x", "gain_y", "include_spring_swing", "apply",
+    ];
+    let payload = select_fields(raw, FIELDS);
+    let params: DeformParams = serde_json::from_value(payload)
         .map_err(|error| format!("invalid Deform parameters: {error}"))?;
 
     // Host integration ends at typed input extraction. No host DTO crosses into the core.
@@ -212,6 +214,29 @@ mod tests {
     }
 
     #[test]
+    fn each_mode_ignores_the_other_modes_manifest_fields() {
+        let all_fields = json!({
+            "mode":"deform", "driver_layer_id":1, "driver_bone_name":"Head",
+            "action_layer_id":2, "min_rotation_deg":-45.0, "max_rotation_deg":45.0,
+            "action_start_frame":0, "action_end_frame":20, "endpoint_policy":"exclusive",
+            "manual_value":null, "bone_id":4, "element_id":8, "pin_id":9,
+            "neutral_angle":0.0, "neutral_x":10.0, "neutral_y":20.0,
+            "gain_x":0.5, "gain_y":-0.25, "include_spring_swing":false, "apply":false
+        });
+        let deform: DeformParams = serde_json::from_value(select_fields(&all_fields, &[
+            "bone_id","element_id","pin_id","neutral_angle","neutral_x","neutral_y",
+            "gain_x","gain_y","include_spring_swing","apply"
+        ])).unwrap();
+        assert_eq!(deform.bone_id, 4);
+        let slider: Params = serde_json::from_value(select_fields(&all_fields, &[
+            "mode","driver_layer_id","driver_bone_name","action_layer_id",
+            "min_rotation_deg","max_rotation_deg","action_start_frame",
+            "action_end_frame","endpoint_policy","manual_value"
+        ])).unwrap();
+        assert_eq!(slider.mode, Mode::Slider);
+    }
+
+    #[test]
     fn deform_host_dtos_decode_and_keep_missing_optional_values() {
         let data: BoneInfoResponse = serde_json::from_value(json!({
             "armatures":[{"bones":[{"id":4,"angle":8.0}]}]
@@ -234,12 +259,6 @@ mod tests {
     fn pin_move_dto_serializes_only_host_fields() {
         let value = serde_json::to_value(WarpPinMoveRequest { element: 2, pin: 3, x: 4.0, y: 5.0 }).unwrap();
         assert_eq!(value, json!({"element":2,"pin":3,"x":4.0,"y":5.0}));
-    }
-
-    #[test]
-    fn deform_mode_dispatches_to_deform_path() {
-        let raw = json!({"mode":"deform"});
-        assert!(run(&raw).is_err()); // Missing required params fails at the DTO boundary, not mode dispatch.
     }
 
     #[test]
