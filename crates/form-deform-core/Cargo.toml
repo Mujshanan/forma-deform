@@ -9,5 +9,13 @@ repository.workspace = true
 [lib]
 path = "src/lib.rs"
 
-[dev-dependencies]\nproptest = "1.6"\ncriterion = "0.5"\n\n[[bench]]\nname = "deform_mesh"\nharness = false\n\n[lints]
+[dev-dependencies]
+proptest = "1.6"
+criterion = "0.5"
+
+[[bench]]
+name = "deform_mesh"
+harness = false
+
+[lints]
 workspace = true
