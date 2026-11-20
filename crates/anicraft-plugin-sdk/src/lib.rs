@@ -16,7 +16,7 @@ pub const MAX_MODULE_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_LINEAR_MEMORY_BYTES: usize = 256 * 1024 * 1024;
 pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
 pub const MAX_PLUGIN_PARAMS_BYTES: usize = 64 * 1024;
-pub const MAX_HOST_REQUEST_BYTES: usize = 1 * 1024 * 1024;
+pub const MAX_HOST_REQUEST_BYTES: usize = 1024 * 1024;
 pub const MAX_HOST_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
 pub const MAX_EXPORT_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
 /// Stable status returned by command exports.
