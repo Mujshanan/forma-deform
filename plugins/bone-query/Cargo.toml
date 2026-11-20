@@ -5,10 +5,14 @@ edition = "2024"
 description = "Read-only AniCraft armature and bone inspection plugin"
 license = "MIT"
 publish = false
+repository.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anicraft-plugin-sdk = { path = "../../crates/anicraft-plugin-sdk" }
-serde_json = "1"
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
