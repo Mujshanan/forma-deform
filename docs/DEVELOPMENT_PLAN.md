@@ -104,7 +104,7 @@ All four workflows passed after the contract/documentation and test-fixture corr
 - [WebAssembly — workspace and both plugin release builds](https://github.com/Mujshanan/forma-deform/actions/runs/44699172929)
 - [Fuzz Smoke — both targets](https://github.com/Mujshanan/forma-deform/actions/runs/44699172802)
 
-## P2 — Test the real plugin adapter boundary (current priority)
+## P2 — Test the real plugin adapter boundary (completed)
 
 **Why third:** The former `core_composition.rs` test was only a core-to-core calculation. P2 now adds a private host-command seam used by the production adapter and a fake host in tests, so the actual mode dispatcher and command translation can be exercised deterministically.
 
@@ -128,7 +128,7 @@ All four workflows passed after the contract/documentation and test-fixture corr
 - Tests assert outputs and host commands, including absence of forbidden commands.
 - Pure-core tests remain independent and pass.
 
-## P3 — Verify against a pinned AniCraft host
+## P3 — Verify against a pinned AniCraft host (current priority)
 
 **Why fourth:** Unit and simulated-host tests cannot establish actual host compatibility.
 
@@ -185,7 +185,7 @@ Each capability requires its own host contract review, core/adapter boundary, te
 | Formatting | Passed on verified P0 baseline |
 | Clippy | Passed with `-D warnings` on verified P0 baseline |
 | ControllerBinding runtime integration | Explicitly excluded from V1; retained as experimental core API |
-| Actual adapter-level integration tests | Incomplete; P2 |
+| Actual adapter-level integration tests | Implemented and CI-verified; P2 complete |
 | Pinned-host smoke project | Outstanding; P3 |
 | Native integration decision | Not accepted; P4 |
 | Durable bindings and continuous playback | Unsupported by currently verified host surface; P5 |
