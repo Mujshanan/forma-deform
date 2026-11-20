@@ -1,0 +1,16 @@
+{
+  "name": "forma-deform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/demo/server.ts",
+    "build": "bun build ./src/demo/main.ts --outdir ./dist --target browser",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.5",
+    "typescript": "5.9.3"
+  }
+}

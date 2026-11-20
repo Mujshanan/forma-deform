@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forma Deform — Rectangle Tween</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="mark">F</span><strong>FORMA DEFORM</strong><span class="subtle">/ rectangle lab</span></div>
+    <div class="top-actions">
+      <button id="save" class="quiet">Save project</button>
+      <label class="button quiet" for="load">Open project</label>
+      <input id="load" type="file" accept="application/json,.json" hidden>
+    </div>
+  </header>
+  <main>
+    <section class="workspace">
+      <aside class="toolrail" aria-label="Tools">
+        <button id="draw-tool" class="tool active" title="Draw rectangle">＋<small>Draw</small></button>
+        <button id="select-tool" class="tool" title="Select and edit">↖<small>Select</small></button>
+      </aside>
+      <section class="stage-wrap">
+        <div class="stage-heading"><div><strong>Stage</strong><span id="mode-label">Draw a rectangle to begin</span></div><span class="coordinates">DOCUMENT SPACE · 960 × 560</span></div>
+        <div class="canvas-shell"><canvas id="stage" width="960" height="560"></canvas></div>
+        <div class="hint" id="hint">Click and drag on the stage to create your first rectangle.</div>
+      </section>
+    </section>
+    <section class="timeline-panel">
+      <div class="timeline-top">
+        <div><strong>Timeline</strong><span class="subtle"> · 24 FPS</span></div>
+        <div class="transport">
+          <button id="first-frame" class="icon-button" title="Go to frame 0">|◀</button>
+          <button id="play" class="play-button">▶ Play</button>
+          <button id="set-key" class="primary" disabled>◆ Set keyframe</button>
+          <button id="remove-key" class="quiet" disabled>Remove key</button>
+        </div>
+      </div>
+      <div class="scrub-row">
+        <label for="frame">FRAME</label><input id="frame" type="range" min="0" max="60" value="0" step="1">
+        <output id="frame-value">0</output>
+      </div>
+      <div class="track-wrap"><div class="track-label">Rectangle</div><div id="track" class="track"><div class="ticks"></div><div id="playhead" class="playhead"></div></div></div>
+      <div class="timeline-foot"><span id="key-count">No keyframes</span><span>Linear interpolation · endpoint hold</span></div>
+    </section>
+  </main>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

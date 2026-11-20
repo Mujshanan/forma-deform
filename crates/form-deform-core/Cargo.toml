@@ -1,0 +1,9 @@
+[package]
+name = "form-deform-core"
+version = "0.1.0"
+edition = "2024"
+description = "Deterministic bone-driven warp-pin deformation math"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"

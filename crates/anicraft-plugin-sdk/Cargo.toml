@@ -1,0 +1,10 @@
+[package]
+name = "anicraft-plugin-sdk"
+version = "1.0.0"
+edition = "2024"
+description = "Vendored guest-side helpers for AniCraft WebAssembly plug-ins (ABI v1)"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+serde_json = "1"
