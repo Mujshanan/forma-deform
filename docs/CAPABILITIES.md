@@ -1,14 +1,17 @@
-# Smart Controller capability matrix
+# AniCraft Smart Controller capability matrix
 
 | Capability | Status | Boundary |
 |---|---|---|
-| Host-independent Slider normalization and frame mapping | V1 | Native Rust core; deterministic and independently testable |
+| Slider normalization and action-frame mapping | V1 | Pure smart-controller-core; deterministic and independently testable |
 | Manual driver input | V1 | Explicit value overrides the host bone query |
 | On-demand driver bone query | V1 | Uses the verified bone.info command |
-| Deterministic preview output | V1 | Logs normalized input and calculated frame |
-| Transform mapping calculation | V2 foundation | Pure-core calculation only; not exposed by the V1 adapter |
+| Deterministic Slider preview output | V1 | Logs normalized input and calculated frame; does not set the timeline |
+| Deform neutral-angle pin-target calculation | V1 | Pure form-deform-core; absolute target from authored neutral data |
+| Optional spring-swing contribution | V1 | Explicit opt-in; fails if the host does not provide swing |
+| Asset Warp pin validation and explicit Apply | V1 | Uses verified warp.info and warp.pin_move commands; Apply is undoable |
+| Weighted mesh skinning math | Core foundation | Pure form-deform-core API; not wired to live host mesh because complete geometry/weights/world poses are not exposed |
+| Transform mapping calculation | V2 foundation | Pure-core calculation only; not exposed by the adapter |
 | Transform constraint application | V2 | Requires a verified host write surface |
-| Presets | V3 | Persistence contract remains to be designed |
-| Timeline driving during playback | Not in V1; proposed for V4 via MCP | Requires independent verification of external-control workflow |
+| Presets and durable bindings | Not established | Current inspected plugin contract exposes no plugin-owned document metadata API |
+| Timeline driving during playback | Not in V1 | Requires independent verification of external-control workflow |
 | Continuous native playback evaluator | Not established | Requires a separately reviewed AniCraft host extension |
-| Durable binding persistence in the document | Not established | Current inspected plugin contract exposes no plugin-owned document metadata API |
