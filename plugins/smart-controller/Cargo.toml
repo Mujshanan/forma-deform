@@ -2,7 +2,7 @@
 name = "anicraft-smart-controller-plugin"
 version = "0.1.0"
 edition = "2024"
-description = "On-demand AniCraft bone-to-target Smart Controller plugin"
+description = "Unified AniCraft Smart Controller with Slider and Asset Warp Deform modes"
 license = "MIT"
 publish = false
 repository.workspace = true
@@ -13,10 +13,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anicraft-plugin-sdk = { path = "../../crates/anicraft-plugin-sdk" }
 smart-controller-core = { path = "../../crates/smart-controller-core" }
-serde_json = { workspace = true }
-
-[dev-dependencies]
 form-deform-core = { path = "../../crates/form-deform-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
