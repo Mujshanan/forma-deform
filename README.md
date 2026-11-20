@@ -7,8 +7,9 @@ A Rust deformation library and AniCraft Smart Controller plugin suite. The defor
 | Area | Maturity | Scope |
 |---|---|---|
 | form-deform-core | Implemented and tested | Pure Rust 2D transforms, weighted mesh deformation, authored-angle-to-pin-target calculation, validation, and opt-in diagnostics |
-| smart-controller-core | Implemented and tested | Slider validation and bone-angle-to-action-frame preview mapping |
+| smart-controller-core | Implemented and tested | Slider validation and bone-angle-to-action-frame preview mapping; also retains an experimental three-anchor binding model not used by the plugin runtime |
 | AniCraft Smart Controller | Experimental integration | On-demand Slider preview and Deform pin-target calculation; explicit Deform apply issues an undoable Asset Warp pin edit |
+| ControllerBinding / BindingSet | Experimental core API; excluded from V1 | Three-anchor evaluation and JSON helpers only; not wired into the plugin or persisted in the AniCraft document |
 | Live deformation and playback | Not implemented | No continuous playback/scrubbing evaluation or live mesh-skinning integration |
 | Persistence and authoring UI | Not implemented | Bindings are plugin parameters; arbitrary plugin metadata is not persisted in the AniCraft document |
 
@@ -70,7 +71,7 @@ See [AniCraft Plugin ABI v1](docs/PLUGIN_ABI_V1.md) for required exports/imports
 - Current AniCraft host queries do not provide complete bind mesh data, skin weights, or evaluated bone world transforms. The mesh LBS API is therefore not wired to live AniCraft geometry.
 - Slider mode calculates and logs a frame preview; it does not set the timeline or write bone properties.
 - Deform mode queries a bone angle and Asset Warp pin, calculates an absolute stage-pixel target, and optionally calls the undoable warp.pin_move command. It is not a playback/scrubbing evaluator.
-- Bindings are not durably persisted in the AniCraft document. The host does not expose durable arbitrary plugin metadata.
+- The V1 plugin uses mode-specific command parameters, not the experimental ControllerBinding/BindingSet model. That core-only model is not wired into the adapter and is not durably persisted in the AniCraft document; the host does not expose durable arbitrary plugin metadata.
 - Transform mode remains deferred until verified host transform read/write APIs are available.
 - Diagnostics are opt-in. Degenerate-triangle and zero-length-bone warnings require caller-supplied triangle indices and bone segment endpoints. Native elapsed time is reported only when requested; WASM timing should be measured by the host adapter. Solver metrics are absent because LBS is not iterative.
 
