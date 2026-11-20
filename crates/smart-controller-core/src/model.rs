@@ -7,18 +7,14 @@ pub enum Mode {
     Transform,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EndpointPolicy {
     /// [start, end): the end frame is reserved as the wrap point.
+    #[default]
     Exclusive,
     /// [start, end]: both endpoint frames are reachable.
     Inclusive,
-}
-impl Default for EndpointPolicy {
-    fn default() -> Self {
-        Self::Exclusive
-    }
 }
 
 /// Host-independent preview parameters. Host identity is resolved only by the adapter.
