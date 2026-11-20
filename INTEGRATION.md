@@ -108,10 +108,10 @@ A wishlist item being unavailable is not, by itself, a kill condition. It become
 
 ## 5. Current evidence and next decision
 
-- Pure Rust cores and selected adapter helper/DTO behavior have automated tests; see `cargo test --workspace`. The current suite does not execute the real plugin command path with a simulated host-command boundary; that is P2 work.
+- Pure Rust cores and the actual Smart Controller `run_with_host` mode dispatcher have automated tests; a fake host captures the same command/log boundary used by production `run()`. Coverage includes Slider manual/bone input and endpoint behavior, Deform preview/Apply and exact `warp.pin_move` payload, optional spring swing, malformed/missing host data, command failures, and repeated absolute evaluation. SDK tests cover malformed JSON and oversized plugin parameters. See `cargo test --workspace`.
 - The adapter currently performs on-demand bone and warp queries. Deform Apply uses the undoable `warp.pin_move` command.
 - The current host contract does **not** establish continuous playback/scrubbing evaluation, durable arbitrary plugin metadata, or a verified command to set a nested symbol instance's displayed frame.
 - Weighted mesh skinning exists as a host-independent core foundation. It is not wired to live AniCraft mesh geometry because the required complete geometry, skin weights, and evaluated bone world poses are not exposed by the inspected host responses.
 - The in-app smoke project and exact target host commit are still outstanding.
 
-**Next decision gates:** finalize the V1 runtime contract (P1), add adapter-boundary tests that capture host commands (P2), then pin the AniCraft host commit and run the minimal in-app smoke project (P3). Do not request native integration review before those gates are satisfied.
+**Next decision gates:** verify the adapter-boundary test suite in CI (P2), then pin the AniCraft host commit and run the minimal in-app smoke project (P3). The V1 runtime contract is documented; do not request native integration review before P2 and P3 evidence is complete.
