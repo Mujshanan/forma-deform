@@ -1,6 +1,6 @@
 # AniCraft Smart Controller development plan
 
-**Status:** V1 command modes implemented; runtime contract documented; adapter-boundary tests remain incomplete  
+**Status:** V1 command modes and runtime contract implemented; adapter-boundary test seam added; CI validation pending  
 **Host:** Mujshanan/AniCraft  
 **Plugin identity:** AniCraft Smart Controller (`org.mujshanan.smart-controller`)
 
@@ -94,4 +94,4 @@ plugins/
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin`
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`
 
-Native tests cover each pure core and selected adapter helper/DTO behavior: Slider bone resolution, Deform host-response decoding, mode-specific field isolation, and serialization of the pin-move request DTO. They do not yet execute the plugin mode dispatcher while capturing host commands; that is P2 work. AniCraft in-app smoke testing is still required for real host behavior.
+Adapter tests execute the same `run_with_host` mode dispatcher used by production `run()`, with a fake host that captures commands and logs. They cover Slider manual/bone inputs, endpoint and reversed-range behavior, Deform preview/apply, exact pin-move payload, optional spring swing, malformed/missing host data, command failures, and repeat evaluation. SDK tests cover malformed JSON and oversized plugin parameters. AniCraft in-app smoke testing is still required for real host behavior.
