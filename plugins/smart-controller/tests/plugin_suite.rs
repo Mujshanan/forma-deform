@@ -8,8 +8,9 @@ use smart_controller_core::{
 };
 
 #[test]
-fn controller_geometry_output_flows_into_pure_deformation_evaluation() {
-    // Same stable-ID / keyed-angle / spring-swing fields returned by AniCraft bone.info.
+fn experimental_binding_core_composes_with_deformation_core() {
+    // Synthetic fields resembling a subset of bone.info. This fixture does not invoke
+    // the Smart Controller adapter or issue an AniCraft host command.
     let bone_info = json!({
         "frame": 12,
         "armatures": [{
@@ -48,8 +49,8 @@ fn controller_geometry_output_flows_into_pure_deformation_evaluation() {
         panic!("expected a geometry target");
     };
 
-    // Compose the controller's relative offset with an authored neutral pin position,
-    // then evaluate the separate bone-driven deformation core from that stable base.
+    // This is a separate pure-core calculation with explicit inputs. It does not consume
+    // the synthetic bone.info fixture or exercise the plugin's Deform dispatch.
     let base = DeformVec2 {
         x: 120.0 + offset.x,
         y: 80.0 + offset.y,
