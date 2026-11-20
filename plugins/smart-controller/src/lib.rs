@@ -627,6 +627,79 @@ mod tests {
     }
 
     #[test]
+    fn slider_inclusive_endpoint_can_select_the_end_frame() {
+        let mut raw = slider_params(Some(45.0));
+        raw["endpoint_policy"] = json!("inclusive");
+        let mut host = FakeHost::default();
+
+        run_with_host(&raw, &mut host).unwrap();
+
+        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":20")));
+        assert!(host.commands.is_empty());
+    }
+
+    #[test]
+    fn slider_reversed_rotation_range_maps_the_midpoint() {
+        let mut raw = slider_params(Some(0.0));
+        raw["min_rotation_deg"] = json!(45.0);
+        raw["max_rotation_deg"] = json!(-45.0);
+        let mut host = FakeHost::default();
+
+        run_with_host(&raw, &mut host).unwrap();
+
+        assert!(host.logs.iter().any(|line| line.contains("\"normalized\":0.5")));
+        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":10")));
+        assert!(host.commands.is_empty());
+    }
+
+    #[test]
+    fn invalid_mode_parameters_fail_before_host_access() {
+        let mut slider = slider_params(Some(0.0));
+        slider["min_rotation_deg"] = json!(10.0);
+        slider["max_rotation_deg"] = json!(10.0);
+        let mut slider_host = FakeHost::default();
+        assert!(run_with_host(&slider, &mut slider_host)
+            .unwrap_err()
+            .contains("rotation range"));
+        assert!(slider_host.commands.is_empty());
+
+        let mut deform = json!({"mode":"deform","bone_id":4});
+        let mut deform_host = FakeHost::default();
+        assert!(run_with_host(&deform, &mut deform_host)
+            .unwrap_err()
+            .contains("invalid Deform parameters"));
+        assert!(deform_host.commands.is_empty());
+        deform["mode"] = json!("deform");
+    }
+
+    #[test]
+    fn requesting_unavailable_spring_swing_fails_before_apply() {
+        let mut raw = deform_params(true);
+        raw["include_spring_swing"] = json!(true);
+        let mut host = FakeHost::default();
+        host.respond(bone_response(10.0, None));
+        host.respond(warp_response(true, &[9]));
+
+        let error = run_with_host(&raw, &mut host).unwrap_err();
+
+        assert!(error.contains("spring swing"));
+        assert_eq!(host.commands.len(), 2);
+    }
+
+    #[test]
+    fn pin_move_command_failure_is_propagated() {
+        let mut host = FakeHost::default();
+        host.respond(bone_response(10.0, None));
+        host.respond(warp_response(true, &[9]));
+        host.fail("pin move rejected");
+
+        let error = run_with_host(&deform_params(true), &mut host).unwrap_err();
+
+        assert!(error.contains("pin move rejected"));
+        assert_eq!(host.commands.last().unwrap().0, "warp.pin_move");
+    }
+
+    #[test]
     fn transform_and_unknown_modes_are_rejected_without_host_calls() {
         let mut host = FakeHost::default();
         assert!(run_with_host(&json!({"mode":"transform"}), &mut host)
