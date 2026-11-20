@@ -1,49 +1,36 @@
 # Form Deform
 
-**Status:** First on-demand command-plugin implementation.
+Form Deform is an AniCraft command adapter over a host-independent deformation engine.
 
-Form Deform drives one AniCraft Asset Warp pin from one armature bone angle. It is a focused deformation tool, separate from the general-purpose Smart Controller.
+## Architecture boundary
 
-## API boundaries
+- `form-deform-core` owns domain types, bone transforms, weighted mesh deformation, pin references, validation, and mathematical evaluation.
+- `anicraft-form-deform-plugin` owns the AniCraft manifest, ABI entry point, host calls, Serde DTOs, and translation between host payloads and core inputs/outputs.
+- `anicraft-plugin-sdk` owns the generic JSON/WASM ABI transport only. It contains no Form Deform rules or geometry math.
 
-The deformation API is an explicit, host-independent Rust data model in `form-deform-core`:
+The core has no Serde, JSON, SDK, or WASM dependency. It can be compiled and tested as an ordinary Rust library.
 
-- `DeformSpec` — authored neutral pin position, neutral bone angle, and per-degree displacement gains.
-- `BoneAngle` — keyed angle and an optional, separately reported spring swing.
-- `DeformRequest` — complete evaluation input, including the explicit spring-inclusion choice.
-- `DeformResult` — keyed angle, reported spring value, effective angle, angle delta, and absolute target position.
-- `DeformError` — explicit invalid-input, unavailable-spring, and arithmetic-overflow failures.
+## Core model
 
-The core crate has no Serde, JSON, AniCraft SDK, or WASM dependency. The plugin adapter owns Serde DTOs for manifest parameters and the `bone.info` / `warp.info` host responses. It serializes a typed `warp.pin_move` command payload at the host boundary. Host response JSON is never returned as the deformation result.
+- `BonePose` / `BoneTransform`: stable bone identity and evaluated 2D world transform.
+- `MeshVertex` / `BoneWeight`: bind-space vertex and explicit normalized skin influences.
+- `DeformMesh` / `MeshPin`: mesh vertices and stable pin-to-vertex references.
+- `deform_mesh`: linear-blend skinning using evaluated bone transforms; validates influence IDs, weights, and pin indices.
+- `DeformRequest` / `DeformResult`: deterministic absolute pin target evaluation from authored neutral data.
 
-Missing spring swing is not treated as zero when spring inclusion is requested. Missing required response fields or malformed host data produce an adapter error. The core result is a typed `DeformResult`, not an undocumented JSON object.
+The current `bone.info` and `warp.info` host responses used by this plugin expose bone angles and pin identifiers, but do not provide the complete bind mesh, skin weights, or evaluated bone world transforms needed to run `deform_mesh` on live AniCraft geometry. The adapter therefore does not fabricate those fields or claim to apply the core mesh solver to host geometry. Integrating live mesh deformation requires an explicit host API/DTO contract that supplies those values. Until then, the active command path uses the core's authored pin-target evaluator and the host's documented pin-move command.
 
-## Workflow
+## Current command workflow
 
-1. Create an armature and pose its controller bone.
-2. Add an Asset Warp mesh and pin to the target shape.
-3. Note the bone, element, and pin IDs.
-4. Set the authored neutral bone angle and the pin's neutral stage-space position.
-5. Set X/Y displacement gains in stage pixels per degree.
-6. Run Form Deform with Apply pin position disabled to inspect the calculated target.
-7. Enable Apply pin position to write the absolute pin position through the host's warp.pin_move command. The host command is undoable.
+1. Select a controller bone ID, warped element ID, and pin ID.
+2. Enter the authored neutral angle and neutral stage-space pin position.
+3. Enter X/Y displacement gains in pixels per degree.
+4. Run without Apply to inspect the computed absolute target.
+5. Enable Apply to send the explicit `warp.pin_move` command.
 
-The calculation is non-accumulating: every run derives an absolute target from the authored neutral pin position, not from the pin's current displayed position.
+Every evaluation is derived from authored neutral values; it does not accumulate from the displayed pin position. Spring swing is included only when explicitly requested and present.
 
-## Spring policy
-
-By default, the input uses the constrained keyed bone angle. Include spring swing explicitly adds the separately reported spring swing. If spring swing is requested but absent from the host response, evaluation fails explicitly rather than assuming zero. Head/tail coordinates are not used as pose inputs.
-
-## Limits
-
-- One bone drives one warp pin per invocation.
-- The host is queried at the current playhead.
-- This is an on-demand command, not a live playback/scrubbing evaluator.
-- The plugin does not create warp meshes or pins; use AniCraft's Asset Warp tools first.
-- Applying the result changes the document through warp.pin_move; use the explicit Apply option and normal undo workflow.
-- No durable plugin-owned binding data is stored in the AniCraft document.
-
-## Build
+## Build and tests
 
 ```sh
 cargo test -p form-deform-core
