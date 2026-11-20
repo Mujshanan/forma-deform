@@ -14,6 +14,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -21,6 +24,8 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - run: bun run build
+      - run: python -m py_compile tools/v4_mcp_slider.py
+      - run: python -m unittest discover -s tests -p "test_v4_mcp_slider.py" -v
       - run: cargo test --workspace
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
