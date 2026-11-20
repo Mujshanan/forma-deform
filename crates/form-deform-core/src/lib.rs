@@ -9,10 +9,16 @@ use std::fmt;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 { pub x: f64, pub y: f64 }
+impl std::ops::Add for Vec2 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output { Self { x: self.x + rhs.x, y: self.y + rhs.y } }
+}
+impl std::ops::Sub for Vec2 {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output { Self { x: self.x - rhs.x, y: self.y - rhs.y } }
+}
 impl Vec2 {
     pub fn is_finite(self) -> bool { self.x.is_finite() && self.y.is_finite() }
-    pub fn add(self, rhs: Self) -> Self { Self { x: self.x + rhs.x, y: self.y + rhs.y } }
-    pub fn sub(self, rhs: Self) -> Self { Self { x: self.x - rhs.x, y: self.y - rhs.y } }
     pub fn scale(self, factor: f64) -> Self { Self { x: self.x * factor, y: self.y * factor } }
     pub fn length_squared(self) -> f64 { self.x * self.x + self.y * self.y }
 }
@@ -180,7 +186,7 @@ pub struct DeformDiagnosticError {
 }
 impl fmt::Display for DeformDiagnosticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", format!("{:?}", self.code), self.message)
+        write!(f, "{:?}: {}", self.code, self.message)
     }
 }
 impl std::error::Error for DeformDiagnosticError {}
@@ -200,7 +206,7 @@ pub fn evaluate_deformation(request: DeformRequest) -> Result<DeformResult, Defo
     if request.include_spring_swing && spring.is_none() { return Err(DeformError::MissingSpringSwing); }
     let effective = keyed + if request.include_spring_swing { spring.unwrap_or(0.0) } else { 0.0 };
     let delta = effective - spec.neutral_angle_degrees;
-    let target = spec.neutral_position.add(spec.gain_per_degree.scale(delta));
+    let target = spec.neutral_position + spec.gain_per_degree.scale(delta);
     if !effective.is_finite() || !delta.is_finite() || !target.is_finite() { return Err(DeformError::ArithmeticOverflow); }
     Ok(DeformResult { keyed_angle_degrees: keyed, spring_swing_degrees: spring,
         effective_angle_degrees: effective, angle_delta_degrees: delta, target_position: target })
@@ -266,7 +272,7 @@ pub fn deform_mesh_with_diagnostics(
     }
     for segment in options.bone_segments {
         if !segment.start.is_finite() || !segment.end.is_finite() { return Err(DeformError::NonFiniteInput.into()); }
-        let delta = segment.end.sub(segment.start);
+        let delta = segment.end - segment.start;
         let length_squared = delta.length_squared();
         if !delta.is_finite() || !length_squared.is_finite() {
             return Err(DeformError::ArithmeticOverflow.into());
@@ -288,7 +294,7 @@ pub fn deform_mesh_with_diagnostics(
             let bone = bone_lookup.get(&influence.bone_id)
                 .copied().ok_or(DeformError::MissingInfluenceBone(influence.bone_id))?;
             let transformed = bone.world.transform_point(vertex.bind_position)?;
-            position = position.add(transformed.scale(influence.weight));
+            position = position + transformed.scale(influence.weight);
             sum += influence.weight;
         }
         if (sum - 1.0).abs() > 1e-6 { return Err(DeformError::InvalidWeightSum.into()); }
@@ -329,7 +335,7 @@ fn check_limit(resource: DeformResource, actual: usize, limit: usize) -> Result<
     }
 }
 
-pub fn find_bone<'a>(bones: &'a [BonePose], id: u64) -> Result<&'a BonePose, DeformError> {
+pub fn find_bone(bones: &[BonePose], id: u64) -> Result<&BonePose, DeformError> {
     bones.iter().find(|bone| bone.id == id).ok_or(DeformError::MissingBone(id))
 }
 pub fn find_pin(mesh: &DeformMesh, id: u64) -> Result<&MeshPin, DeformError> {
