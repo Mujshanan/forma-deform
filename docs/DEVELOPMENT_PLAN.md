@@ -25,7 +25,7 @@ anicraft-smart-controller-plugin
   └── anicraft-plugin-sdk
 ```
 
-- `smart-controller-core` owns Slider mapping, validation, endpoint handling, and the separate three-anchor `ControllerBinding` model.
+- `smart-controller-core` owns Slider mapping, validation, and endpoint handling; its separate three-anchor `ControllerBinding` model is experimental and excluded from V1.
 - `form-deform-core` owns deformation types, bone transforms, weighted mesh deformation, pin references, validation, and evaluation.
 - `anicraft-plugin-sdk` owns generic ABI, serialization, allocation, and host communication only.
 - `forma-document-core` owns project document geometry and timeline data; it is not Smart Controller binding persistence.
@@ -81,11 +81,15 @@ Fixes required during verification included the Bone Query collapsible-if lint, 
 
 **Why second:** The adapter's actual runtime uses mode-specific DTOs and dispatch: `Params` + `preview_slider()` for Slider, and `DeformParams` + `evaluate_deformation()` for Deform. The three-anchor `ControllerBinding` type exists in `smart-controller-core`, but the plugin runtime does not currently use it.
 
+### V1 decision
+Keep `ControllerBinding` / `BindingSet` as an experimental, host-independent core API and explicitly exclude it from V1. The adapter does not call this model; it is not the Slider/Deform runtime model, and its JSON helpers do not persist bindings in AniCraft. Retain it for future evaluation rather than expanding V1 to include a workflow the current host cannot store or execute.
+
 ### Tasks
 1. Document actual Slider and Deform input/output contracts, required host fields, validation, defaults, and failure behavior.
-2. Resolve the V1 status of `ControllerBinding`: either integrate it into a defined runtime workflow, or mark it as a core-level experimental/future API and exclude it from V1 acceptance. Do not describe it as runtime functionality until the adapter uses it.
-3. Align `INTEGRATION.md`, `CAPABILITIES.md`, `SMART_CONTROLLER_PLAN.md`, README, and tests so no fixture implies that a Slider frame preview is exercised by a geometry-deformation binding test.
-4. Keep Transform mode deferred until host transform read/write semantics are verified.
+2. Record the ControllerBinding decision in the architecture, capability, README, integration, and source-module documentation.
+3. Correct the automated baseline description and rename the core-to-core test so it cannot be mistaken for an adapter or host integration test. The fixture must not imply that a Slider frame preview is exercised by a geometry-deformation binding test.
+4. Document that `action_layer_id` is currently required by Slider parameter validation but is not queried or used to drive a host action; frame preview uses the supplied frame bounds.
+5. Keep Transform mode deferred until host transform read/write semantics are verified.
 
 ### Exit criteria
 - One authoritative V1 contract describes what users can configure and what the plugin executes.
@@ -95,7 +99,7 @@ Fixes required during verification included the Bone Query collapsible-if lint, 
 
 ## P2 — Test the real plugin adapter boundary
 
-**Why third:** Existing `plugin_suite.rs` is a core-composition test. It verifies a synthetic ControllerBinding-to-deformation calculation, not the actual plugin adapter, command dispatch, or Slider frame preview.
+**Why third:** Existing `core_composition.rs` is a core-composition test. It verifies a synthetic ControllerBinding-to-deformation calculation, not the actual plugin adapter, command dispatch, or Slider frame preview.
 
 ### Tasks
 1. Add a testable host-command boundary (or equivalent deterministic seam) so tests can provide host responses and capture commands without a running AniCraft process.
