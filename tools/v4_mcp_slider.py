@@ -209,6 +209,7 @@ def arguments():
     p.add_argument("--interval", type=float, default=0.25)
     p.add_argument("--cycles", type=int, default=0, help="watch updates; 0 runs until Ctrl+C")
     p.add_argument("--log", type=Path, default=Path("v4_mcp_latency.csv"))
+    p.add_argument("--discovery-log", type=Path, default=Path("v4_mcp_discovery.json"))
     return p.parse_args()
 
 
@@ -237,7 +238,16 @@ def main() -> int:
         return 1
     try:
         commands = discover(client)
-        print("Discovered commands: bone.info, timeline.goto")
+        args.discovery_log.parent.mkdir(parents=True, exist_ok=True)
+        args.discovery_log.write_text(
+            json.dumps([commands[key] for key in sorted(commands)], indent=2) + "\\n",
+            encoding="utf-8",
+        )
+        print(f"Discovered command metadata saved to {args.discovery_log}")
+        for command_id in ("bone.info", "timeline.goto", "bone.pose"):
+            if command_id in commands:
+                item = commands[command_id]
+                print(f"  {command_id}: {item.get('label', 'label unavailable')}; params={item.get('params', 'not reported')}")
         if "bone.pose" in commands:
             print("bone.pose is available but is intentionally not used (driver pose remains artist-authored).")
         if args.watch:
