@@ -1,6 +1,7 @@
-//! Pure Smart Controller binding model and evaluator.
+//! Experimental, host-independent three-anchor binding model and evaluator.
 //!
-//! This crate has no AniCraft, WASM, browser, or UI dependencies.
+//! This legacy core API is not used by the V1 Smart Controller plugin runtime.
+//! Its BindingSet JSON helpers do not provide AniCraft document persistence.
 //! Host identity resolution, persistence, and display belong in an adapter crate.
 
 use serde::{Deserialize, Serialize};
