@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(MAX_MODULE_BYTES, 16 * 1024 * 1024);
         assert_eq!(MAX_MANIFEST_BYTES, 64 * 1024);
         assert_eq!(MAX_PLUGIN_PARAMS_BYTES, 64 * 1024);
-        assert_eq!(MAX_HOST_REQUEST_BYTES, 1 * 1024 * 1024);
+        assert_eq!(MAX_HOST_REQUEST_BYTES, 1024 * 1024);
         assert_eq!(MAX_HOST_RESPONSE_BYTES, 32 * 1024 * 1024);
         assert_eq!(MAX_EXPORT_OUTPUT_BYTES, 64 * 1024 * 1024);
     }
