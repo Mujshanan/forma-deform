@@ -19,6 +19,10 @@ The two modules are:
 
 Install each module in AniCraft through **Commands → Install Plug-in…**. Smart Controller exposes Slider and Deform modes from one installed command.
 
+## ABI contract
+
+All plugin modules follow [AniCraft Plugin ABI v1](../docs/PLUGIN_ABI_V1.md). The specification defines ABI version negotiation, kind-specific exports, host imports, 16 MiB payload limits, ownership/deallocation, reentrancy, traps, stable status codes, JSON encoding, and pointer/length packing. Do not change these assumptions in a plugin manifest or adapter; propose a versioned ABI change instead.
+
 ## Suggested smoke-test project
 
 Prepare one project containing:
