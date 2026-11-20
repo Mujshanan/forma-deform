@@ -12,13 +12,16 @@ This document is the maintainer's review entry point. The prototype demonstrates
 | Item | Current reference | Meaning |
 |---|---|---|
 | Target host repository | [Mujshanan/AniCraft](https://github.com/Mujshanan/anicraft) | Intended host fork |
-| Target host commit for an integration run | **TBD — pin before host smoke testing or proposing a merge** | Do not substitute the moving default branch |
+| Target host commit (main head checked 2026-11-20) | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | Pinned P3 candidate; source reviewed, in-app smoke still pending |
 | Prototype repository | [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform) | This prototype and reusable calculation cores |
 | Prototype branch | `feat/smart-controller-v1` | Current development branch |
-| Prototype baseline commit | [`14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`](https://github.com/Mujshanan/forma-deform/commit/14e5f3f27f1f7b1ace65b714c93b920b5229a3b8) | Exact source revision reviewed for this record |
-| Vendored AniCraft guest SDK source | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | SDK source pin recorded in `crates/anicraft-plugin-sdk/UPSTREAM.md`; **not** the target host commit |
+| Prototype baseline commit | [`0ed13f243068392d4a8c649fff5f091f022fe1e3`](https://github.com/Mujshanan/forma-deform/commit/0ed13f243068392d4a8c649fff5f091f022fe1e3) | Host-response compatibility fix; P0/P2 CI verified |
+| Vendored AniCraft guest SDK source | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | SDK source pin recorded in `crates/anicraft-plugin-sdk/UPSTREAM.md`; independently checked against host `main` head, which happens to be the same SHA |
+| Host plugin ABI | v1 | Confirmed in `docs/plugins.md` at the pinned host commit |
+| Host build baseline | Rust 1.95 minimum; Cargo edition 2024 | `cargo run` from the pinned AniCraft repository root |
+| Plugin build configuration | Rust stable; `wasm32-unknown-unknown`; release | Build the Smart Controller and Bone Query plugin crates using the repository's CI commands |
 
-Before any host integration test, record the exact AniCraft commit SHA, build configuration, plugin ABI version, and prototype commit SHA used together. The SDK source pin must not be misrepresented as the host fork revision.
+The host revision, plugin ABI, and prototype baseline are now pinned for P3. The SDK source pin and host main-head revision are recorded as separate facts even though they currently resolve to the same SHA. Source inspection is not a substitute for running the pinned host application.
 
 ## 2. Smoke-test baseline
 
@@ -53,23 +56,34 @@ The current automated fixture is `plugins/smart-controller/tests/core_compositio
 
 The test asserts the experimental binding's geometry offset, the separate deformation core's absolute target, and repeatability. It does **not** test Slider frame preview, plugin mode dispatch, DTO translation, host commands, or adapter behavior. Slider mapping has separate pure-core tests. This fixture is **not** an adapter integration test, real AniCraft project, or proof of host behavior.
 
-### 2.2 Required in-app host smoke project (not yet checked in)
+### 2.2 Required in-app host smoke project (base fixture identified; execution outstanding)
 
-Before accepting native integration, create and retain a minimal AniCraft project fixture containing:
+Use the pinned host's existing fixture as the starting point:
 
-1. One armature with a single named driver bone, stable bone ID `17`, and a controllable keyed rotation.
-2. One action/timeline with a known start/end frame range for Slider mode.
-3. One Asset Warp element with a single existing pin, stable element/pin IDs recorded in the fixture notes.
-4. A neutral pose and authored pin position of `(120, 80)` stage pixels.
-5. A documented host build commit and exact steps to load/run the plugin.
+- Source: [`crates/engine/tests/fixtures/armature-v3-shape.anicraft`](https://github.com/Mujshanan/anicraft/blob/bcfea816478f2a00ab172cefe67f0bd5696b3886/crates/engine/tests/fixtures/armature-v3-shape.anicraft)
+- Host revision: `bcfea816478f2a00ab172cefe67f0bd5696b3886`
+- Stage: 400 × 300 px at 24 fps
+- Armature layer: `102`; bones: `100` and `103`
+- Normal layer: `1` (empty in the source fixture)
+- Existing armature shape element: `10`
 
-Record the actual host-returned values and compare them with the deterministic baseline above. For the Deform Apply check, verify that the target is absolute (not accumulated), that the pin reaches the expected target within the host's documented coordinate precision, and that one undo restores the original pin position. Save the fixture project and a short result log/screenshot alongside the integration evidence; do not invent host IDs or claim this test has passed before running it.
+Prepare the actual smoke project in AniCraft:
+
+1. Open the pinned fixture. Rename bone `100` to `Driver` in the host UI if it has no name, then confirm its name, keyed angle, and swing with `bone.info` using layer `102`.
+2. On normal layer `1`, draw a separate rectangle. Add an Asset Warp mesh and one pin to it. Record the actual element ID, pin ID, and the pin's current stage-pixel `at` position from `warp.info`. Do not reuse the synthetic IDs from the core test.
+3. Build the Smart Controller module with `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`, then install that exact WASM module in the pinned host.
+4. Slider check: use driver layer `102`, bone name `Driver`, action layer `1`, rotation range `-45°…+45°`, and frame range `0…20`. Set the bone to `22.5°`; expect normalized input `0.75` and Exclusive preview frame `15`. Confirm the plugin only logs a preview and does not change the timeline. The action-layer ID is currently validated but not queried or driven.
+5. Deform check: use bone ID `100`, the recorded element/pin IDs, the actual pin `at` position as the neutral position, neutral angle `0°`, gains `(0.5, -0.25)` px/degree, and spring swing disabled. At a keyed bone angle of `10°`, expect the absolute pin target to be `(neutral_x + 5, neutral_y - 2.5)` px. Preview first, then Apply.
+6. Confirm the pin moves to the reported target, one Undo restores its original position, and repeating evaluation from the same authored neutral values yields the same target without drift.
+7. Save the modified project as `smart-controller-smoke.anicraft`; record the actual bone/element/pin IDs, host-returned values, plugin logs, and a screenshot.
+
+This base fixture does not already contain an Asset Warp mesh. The added rectangle and pin, actual IDs, and result log must be produced by the in-app run. The source fixture and static host-source review do not count as a passed smoke test.
 
 ## 3. Acceptance criteria
 
 ### Must-have for an integration decision
 
-- [ ] The target AniCraft commit and plugin ABI are pinned and reproducible.
+- [x] The target AniCraft commit and plugin ABI are pinned and reproducible.
 - [ ] Plugin loads and executes on the target host without crashing or corrupting the project.
 - [ ] Bone and Asset Warp responses are decoded from the real host; missing, malformed, or stale references fail explicitly rather than silently defaulting.
 - [ ] Slider produces the documented deterministic frame preview, including endpoint and reversed-range behavior, without claiming to drive the timeline.
@@ -112,6 +126,6 @@ A wishlist item being unavailable is not, by itself, a kill condition. It become
 - The adapter currently performs on-demand bone and warp queries. Deform Apply uses the undoable `warp.pin_move` command.
 - The current host contract does **not** establish continuous playback/scrubbing evaluation, durable arbitrary plugin metadata, or a verified command to set a nested symbol instance's displayed frame.
 - Weighted mesh skinning exists as a host-independent core foundation. It is not wired to live AniCraft mesh geometry because the required complete geometry, skin weights, and evaluated bone world poses are not exposed by the inspected host responses.
-- The in-app smoke project and exact target host commit are still outstanding.
+- The exact target host commit and ABI are pinned; the in-app smoke project has a pinned base fixture and reproducible preparation steps but has not yet been executed.
 
-**Next decision gate:** pin a specific AniCraft host commit, prepare the minimal in-app smoke project, and execute the real-host checks (P3). The V1 contract and adapter-boundary tests are complete; do not request native integration review until P3 evidence is recorded.
+**Next decision gate:** run the prepared smoke project in the pinned AniCraft build, record actual host IDs/results, and verify Apply/Undo and repeatability (P3). The V1 contract, adapter tests, host commit pin, and static API review are complete; do not request native integration review until the in-app evidence is recorded.
