@@ -195,7 +195,7 @@ fn pack_ptr_len(ptr: usize, len: usize) -> i64 {
 pub fn alloc(size: i32) -> i32 {
     if size < 0 || size as usize > MAX_PLUGIN_PARAMS_BYTES { return 0; }
     let mut bytes = Vec::<u8>::new();
-    if bytes.try_reserve_exact(size as usize).is_err() { return -1; }
+    if bytes.try_reserve_exact(size as usize).is_err() { return 0; }
     bytes.resize(size as usize, 0);
     let raw = Box::into_raw(bytes.into_boxed_slice());
     let ptr = raw as *mut u8 as usize;
@@ -283,7 +283,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn payload_limit_is_fixed_at_sixteen_mib() {
+    fn host_and_payload_limits_match_the_abi_contract() {
         assert_eq!(MAX_MODULE_BYTES, 16 * 1024 * 1024);
         assert_eq!(MAX_MANIFEST_BYTES, 64 * 1024);
         assert_eq!(MAX_PLUGIN_PARAMS_BYTES, 64 * 1024);
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(run(0, -1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
         assert_eq!(run(0, 1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
         assert_eq!(run_bytes(&[0xff], |_| Ok(())), STATUS_INVALID_JSON);
-        assert_eq!(run(1, (MAX_PAYLOAD_BYTES + 1) as i32, |_| Ok(())), STATUS_PAYLOAD_TOO_LARGE);
+        assert_eq!(run(1, (MAX_PLUGIN_PARAMS_BYTES + 1) as i32, |_| Ok(())), STATUS_PAYLOAD_TOO_LARGE);
     }
 
     #[test]
