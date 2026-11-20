@@ -60,7 +60,8 @@ The pure `deform_mesh` linear-blend-skinning API is groundwork only. Current hos
 ```text
 crates/
   smart-controller-core/   # Slider mapping and three-anchor binding math
-  form-deform-core/        # pure bone/pin/mesh deformation math
+  form-deform-core/        # pure bone/pin/mesh deformation math + diagnostics
+  forma-document-core/     # authoritative project document, geometry, and timeline model
   anicraft-plugin-sdk/     # generic host ABI and transport
 plugins/
   bone-query/              # read-only inspection command
@@ -69,7 +70,6 @@ plugins/
 
 ## 7. Verification
 
-- `cargo fmt --all -- --check`
 - `cargo test --workspace`
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin`
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`

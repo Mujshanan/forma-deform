@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn each_mode_ignores_the_other_modes_manifest_fields() {
         let all_fields = json!({
-            "mode":"deform", "driver_layer_id":1, "driver_bone_name":"Head",
+            "mode":"slider", "driver_layer_id":1, "driver_bone_name":"Head",
             "action_layer_id":2, "min_rotation_deg":-45.0, "max_rotation_deg":45.0,
             "action_start_frame":0, "action_end_frame":20, "endpoint_policy":"exclusive",
             "manual_value":null, "bone_id":4, "element_id":8, "pin_id":9,
