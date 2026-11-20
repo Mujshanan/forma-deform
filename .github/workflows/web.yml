@@ -25,3 +25,13 @@ jobs:
         run: |
           cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
           cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+
+      - name: Upload AniCraft plugin modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: anicraft-plugin-modules-${{ github.sha }}
+          path: |
+            target/wasm32-unknown-unknown/release/anicraft_bone_query_plugin.wasm
+            target/wasm32-unknown-unknown/release/anicraft_smart_controller_plugin.wasm
+          if-no-files-found: error
+          retention-days: 30
