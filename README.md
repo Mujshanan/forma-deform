@@ -11,7 +11,7 @@ A Rust deformation library and AniCraft Smart Controller plugin suite. The defor
 | AniCraft Smart Controller | Experimental integration | On-demand Slider preview and Deform pin-target calculation; explicit Deform apply issues an undoable Asset Warp pin edit |
 | ControllerBinding / BindingSet | Experimental core API; excluded from V1 | Three-anchor evaluation and JSON helpers only; not wired into the plugin or persisted in the AniCraft document |
 | Live deformation and playback | Not implemented | No continuous playback/scrubbing evaluation or live mesh-skinning integration |
-| Persistence and authoring UI | Not implemented | Bindings are plugin parameters; arbitrary plugin metadata is not persisted in the AniCraft document |
+| Persistence and authoring UI | Not implemented | Runtime settings are command parameters; there is no binding authoring UI or durable plugin metadata in the AniCraft document |
 
 Treat the AniCraft integration as experimental until the host exposes the data and lifecycle APIs needed for a complete animation controller. The pure cores can be reused independently.
 
