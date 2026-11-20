@@ -58,10 +58,10 @@ fn build_query(params: &Value, playhead_frame: u32) -> Value {
     };
     let include_points = params["points"].as_bool().unwrap_or(false);
     let mut query = json!({"frame": frame, "points": include_points});
-    if params["use_layer"].as_bool().unwrap_or(false) {
-        if let Some(layer) = params["layer"].as_u64() {
-            query["layer"] = json!(layer);
-        }
+    if params["use_layer"].as_bool().unwrap_or(false)
+        && let Some(layer) = params["layer"].as_u64()
+    {
+        query["layer"] = json!(layer);
     }
     query
 }
