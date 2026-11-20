@@ -137,6 +137,7 @@ All four workflows passed after the contract/documentation and test-fixture corr
 - Static source review confirms `bone.info`, `warp.info`, and `warp.pin_move` exist; the host allows the bone/warp command namespaces for command plugins; a successful `plugin.run` is one undo step.
 - Static review found that `warp.info` omits `pins` when `warped:false`. The adapter now models pins as optional, reports an unwarped element explicitly, and rejects a warped response with missing pins.
 - Identified the pinned host's armature fixture and recorded the steps to add a separate warpable shape/pin. The in-app project, actual IDs, and result evidence are still outstanding.
+- The corrected host-response adapter passed Platform, Lint, WebAssembly, and Fuzz Smoke on prototype commit `0ed13f243068392d4a8c649fff5f091f022fe1e3`.
 
 ### Tasks
 1. Pin the exact AniCraft fork commit, plugin ABI version, build configuration, and matching prototype commit in `INTEGRATION.md` (completed).
