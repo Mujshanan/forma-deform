@@ -55,15 +55,7 @@ All host reads and writes stay in the adapter. Missing IDs, malformed required D
 
 The default mode is `slider`. `deform` selects the Deform workflow. `transform` is explicitly rejected by the adapter until verified host transform read/write APIs exist; unknown modes are errors.
 
-## 4. Slider mode
-
-The runtime behavior and limits above are authoritative. The Slider calculation is also independently tested in `smart-controller-core`; the plugin currently logs a preview and does not drive the timeline.
-
-## 5. Deform mode
-
-The runtime behavior and limits above are authoritative. The host-independent mesh LBS API remains groundwork only: current host responses do not expose complete bind mesh data, skin weights, or evaluated bone world transforms, so the adapter must not fabricate inputs or claim to run that solver on live AniCraft geometry.
-
-## 6. Experimental ControllerBinding core API
+## 4. Experimental ControllerBinding core API
 
 `smart-controller-core::legacy` contains a separate three-anchor model with an input range, easing curve, absolute/relative evaluation, and SymbolFrame/GeometryDeform targets. `BindingSet` provides in-memory CRUD helpers and versioned JSON serialization.
 
@@ -75,7 +67,7 @@ This model is retained for future evaluation only:
 
 It is excluded from V1 acceptance. Reconsider it only through a separate product/API decision and after the required host command and persistence contracts are verified.
 
-## 7. Host limitations and non-goals
+## 5. Host limitations and non-goals
 
 - Both modes are on-demand command executions, not playback/scrubbing evaluators.
 - No verified command currently sets a nested symbol instance's displayed frame.
@@ -83,7 +75,7 @@ It is excluded from V1 acceptance. Reconsider it only through a separate product
 - Do not invent timeline, bone-write, geometry-read, or metadata-persistence APIs.
 - Do not silently replace failed host reads with zero or other fallback values.
 
-## 8. Source layout
+## 6. Source layout
 
 ```text
 crates/
@@ -96,10 +88,10 @@ plugins/
   smart-controller/        # unified Slider + Deform command adapter
 ```
 
-## 9. Verification
+## 7. Verification
 
 - `cargo test --workspace`
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin`
 - `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`
 
-Native tests cover each pure core and the unified adapter's mode DTOs, host response decoding, mode-specific field isolation, and command serialization. AniCraft in-app smoke testing is still required for real host behavior.
+Native tests cover each pure core and selected adapter helper/DTO behavior: Slider bone resolution, Deform host-response decoding, mode-specific field isolation, and serialization of the pin-move request DTO. They do not yet execute the plugin mode dispatcher while capturing host commands; that is P2 work. AniCraft in-app smoke testing is still required for real host behavior.
