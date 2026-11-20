@@ -1,230 +1,197 @@
 # AniCraft WebAssembly Plugin ABI v1
 
-**Status:** Normative guest/host contract  
-**ABI version:** `1`  
-**Wire encoding:** UTF-8 JSON  
-**Maximum payload:** 16 MiB (16,777,216 bytes)  
-**Guest target:** `wasm32-unknown-unknown`  
-**SDK implementation:** `crates/anicraft-plugin-sdk`
+**ABI version:** `1` · **Guest target:** `wasm32-unknown-unknown` · **Wire format:** UTF-8 JSON  
+**Guest SDK:** `crates/anicraft-plugin-sdk` · **Host:** AniCraft `anicraft_plugins` / wasmi
 
-This document is the source of truth for the binary boundary between an AniCraft plugin module and the AniCraft plugin runtime. Plugin crates must use `anicraft-plugin-sdk`; they must not independently declare host imports, reproduce export macros, or invent pointer/length conventions.
+This document records the ABI contract consumed by this plugin workspace. The host implementation and its normative public reference live in the AniCraft repository at `docs/plugins.md` and `crates/plugins/src/runtime.rs`. Changes here and in the host contract must be reviewed together; this file must not silently redefine the runtime.
+
+Plugins must use `anicraft-plugin-sdk`. They must not declare their own raw host imports, pointer packing, allocation helpers, or ABI export macros.
 
 ## 1. Versioning and compatibility
 
-Every module exports `ac_abi_version() -> i32`. ABI v1 returns exactly `1`.
+Every module exports `ac_abi_version() -> i32`, which returns exactly `1`.
 
-- The host must read and validate the ABI version before calling any other plugin export.
-- A host that does not support the returned version must reject the module cleanly. It must not guess or attempt a nearby version.
-- ABI version is a major contract identifier, not the plugin's manifest version or the SDK crate's Cargo version.
-- ABI v1 signatures, meanings, status codes, payload encoding, ownership rules, and required imports are immutable.
-- A backward-compatible v1 extension may add an optional export or optional manifest metadata. Hosts must ignore unknown optional exports and unknown optional metadata.
-- A v1 change must not add a required import, change an existing signature, change an existing status meaning, increase a required payload size, or change ownership semantics.
-- Any incompatible change requires ABI version 2 and a separately documented contract. A v2 host may support v1 and v2 side-by-side; it must not reinterpret v1 modules as v2.
-- SDK releases may fix implementation defects while preserving the v1 contract. A plugin's manifest `version` is independent.
+- The host checks the version before reading the manifest or invoking kind-specific exports. Unsupported versions are rejected; the host must not guess.
+- ABI version is independent of the plugin manifest version and the SDK Cargo version.
+- ABI v1 signatures, required exports, import names/signatures, pointer packing, JSON envelopes, status conventions, and ownership rules are stable.
+- Additive optional exports, optional manifest fields, and new request operations may be introduced compatibly. Unknown optional fields/exports are ignored; unknown operations receive an error response.
+- Changing a required export/import, signature, existing field meaning, memory ownership, or response framing is breaking and requires ABI v2.
+- The SDK emits optional `ac_dealloc(ptr, allocation_len)`. Existing ABI v1 hosts may ignore it; the current AniCraft runtime creates a fresh instance per run and reclaims allocations by dropping the instance.
+- Do not add a required import in ABI v1. The host offers two optional imports; plugins may import either, both, or neither.
 
-The host should feature-detect optional exports by export name. In particular, `ac_dealloc` is an optional v1 lifecycle extension. When absent, the host must reclaim the entire module instance after the operation; it must not retain a long-lived instance and repeatedly allocate without a deallocation path.
+The ABI version is the compatibility gate. Plugin and SDK versions do not negotiate ABI features.
 
-## 2. Module kinds and required exports
+## 2. Required exports
 
-All functions use the WebAssembly core ABI and are exported with unmangled names.
-
-### 2.1 Common exports
-
-Every plugin kind must export:
+Every plugin exports the WebAssembly linear memory as `memory`, plus:
 
 | Export | Wasm signature | Meaning |
 |---|---|---|
+| `memory` | memory | Module linear memory; required for every kind. |
 | `ac_abi_version` | `() -> i32` | Returns `1`. |
-| `ac_manifest` | `() -> i64` | Returns a packed pointer/length pair for the UTF-8 manifest JSON. |
+| `ac_manifest` | `() -> i64` | Packed pointer/length of UTF-8 manifest JSON. |
 
-The packed `i64` is a bit field: low 32 bits are the unsigned linear-memory pointer; high 32 bits are the byte length. Treat it as an unsigned 64-bit bit pattern even though the Wasm function type is `i64`. Manifest memory is static, borrowed, and valid for the lifetime of the module instance. The host must copy it before destroying the instance and must never call `ac_dealloc` for it.
+Kind-specific exports:
 
-### 2.2 Command plugins
+| Manifest kind | Required exports |
+|---|---|
+| `command` | `ac_alloc(i32) -> i32`, `ac_run(i32, i32) -> i32` |
+| `frame-script` | `ac_alloc(i32) -> i32`, `ac_run(i32, i32) -> i32` |
+| `exporter` | `ac_alloc(i32) -> i32`, `ac_export(i32, i32) -> i64` |
+| `ease` | `ac_ease(i32, f64) -> f64` |
 
-A command plugin must additionally export:
+The SDK also exports optional `ac_dealloc(ptr: i32, allocation_len: i32) -> ()` for command and exporter modules. It is not required by the current host.
 
-| Export | Wasm signature | Meaning |
-|---|---|---|
-| `ac_alloc` | `(size: i32) -> i32` | Allocates a guest-owned input buffer of exactly `size` bytes. Returns its pointer, or `-1` on failure. |
-| `ac_run` | `(ptr: i32, len: i32) -> i32` | Reads one UTF-8 JSON parameter object and invokes the command handler. |
-| `ac_dealloc` | `(ptr: i32, allocation_len: i32) -> ()` | Optional v1 extension; releases a buffer previously returned by `ac_alloc`. |
+### Pointer/length returns
 
-### 2.3 Exporter plugins
+`ac_manifest` and successful `ac_export` return an `i64` bit pattern: low 32 bits are the unsigned linear-memory pointer; high 32 bits are the byte length. The value is `(length << 32) | pointer`. Unpack with unsigned masks and shifts; signed `i64` interpretation does not change the bits.
 
-An exporter plugin must additionally export:
+Manifest bytes are static, borrowed memory valid for the instance lifetime. The host copies them before dropping the instance and never deallocates them.
 
-| Export | Wasm signature | Meaning |
-|---|---|---|
-| `ac_alloc` | `(size: i32) -> i32` | Allocates a guest-owned options buffer. |
-| `ac_export` | `(ptr: i32, len: i32) -> i64` | Reads options JSON and returns packed pointer/length for the output bytes; `-1` means failure. |
-| `ac_dealloc` | `(ptr: i32, allocation_len: i32) -> ()` | Optional v1 extension; releases an input or output buffer. |
-
-The host must copy the exporter output before releasing it. Exported bytes are opaque file data, not ABI JSON; their format and any endianness are defined by the exporter and the file format it produces.
-
-### 2.4 Ease plugins
-
-An ease plugin must additionally export:
-
-| Export | Wasm signature | Meaning |
-|---|---|---|
-| `ac_ease` | `(index: i32, t: f64) -> f64` | Returns the sampled easing value. |
-
-Ease plugins do not import the AniCraft host API and do not need allocation exports.
-
-A module exports the entry points for its declared kind only. A host must not call an entry point belonging to another kind.
+`ac_alloc(size)` returns a guest-owned buffer the host may write. **Zero means allocation failure.** The host passes the pointer and actual input length to `ac_run` or `ac_export`, and never writes past the allocated size.
 
 ## 3. Host imports
 
-Command and exporter plugins import exactly these functions from the module namespace `anicraft`:
+The host offers these optional imports from module namespace `anicraft`:
 
 | Import | Wasm signature | Meaning |
 |---|---|---|
-| `anicraft.call` | `(ptr: i32, len: i32) -> i32` | Synchronously submits a UTF-8 JSON request. Returns the response byte length; a negative value indicates transport failure. |
-| `anicraft.response` | `(ptr: i32, cap: i32) -> i32` | Copies the response for the immediately preceding call into guest memory. Returns copied byte count; a negative value indicates transport failure. |
+| `anicraft.call` | `(req_ptr: i32, req_len: i32) -> i32` | Submit one JSON request; after handling it, the host resumes the guest with response byte length. |
+| `anicraft.response` | `(dst_ptr: i32, dst_cap: i32) -> i32` | Copy up to `dst_cap` bytes of the last response; returns bytes copied. |
 
-The guest SDK declares `len` and `cap` as `usize`; on `wasm32` their ABI representation is `i32`.
+The SDK uses `usize` for lengths, represented as Wasm `i32` on `wasm32`.
 
-The host must:
-1. Validate the request pointer and length against the current guest memory and payload limit.
-2. Copy or fully consume the request bytes before `anicraft.call` returns. It must not retain a guest pointer.
-3. Produce one response byte sequence for that call.
-4. Make that response available to the immediately following `anicraft.response`.
-5. Reject response sizes above the payload limit.
-6. Return the exact response length from `call`, and copy no more than `cap` bytes in `response`.
+Call/response is synchronous from the guest's perspective:
+1. Guest calls `anicraft.call`; host copies request bytes out of guest memory.
+2. Host handles the request and resumes the guest call with the response length.
+3. Guest allocates a response buffer and calls `anicraft.response`.
+4. Host copies the response and returns the copied byte count.
 
-`anicraft.response` is single-use call state. It is replaced by the next `anicraft.call`. The SDK requires the host to return the full response in one copy; partial response delivery is not supported.
+The runtime uses a resumable Wasm call to handle requests outside the guest invocation. It must not retain guest pointers. The response belongs to the immediately preceding call and is replaced by the next call. The SDK reads the reported response in one copy.
 
-Ease modules must have no imports. WASI imports, clocks, filesystem, ambient randomness, network access, and other host modules are outside ABI v1. The runtime should reject unexpected imports rather than silently provide them.
+Responses use JSON envelopes:
+- success: `{"ok":true,"result":...}`
+- failure: `{"ok":false,"error":"..."}`
 
-## 4. Serialization and wire format
+A refused request is an ordinary error response, not a trap. Ease plugins are sampled at load and do not use host imports.
 
-- Request and response payloads are UTF-8 JSON text, without a byte-order mark.
-- JSON objects, arrays, strings, booleans, numbers, and null follow RFC 8259.
-- Non-finite floating-point values (`NaN`, positive infinity, negative infinity) are not valid JSON and must be rejected before serialization.
-- A command's `ac_run` input is the parameter object itself, not an additional envelope.
-- SDK host requests use an operation object, for example `{"op":"document"}` or `{"op":"command","id":"bone.info","params":{}}`.
-- Host responses use `{"ok":true,"result":...}` for success and `{"ok":false,"error":"..."}` for failure. The `error` field is a human-readable diagnostic, not a stable machine code.
-- JSON object key order is not significant. Consumers must not rely on property order or whitespace.
-- Integer identifiers must remain integers in the JSON model; consumers must not silently round values outside the exact integer range of their numeric representation.
+## 4. Serialization
 
-Binary exporter results are not JSON encoded by the ABI. They are a pointer/length byte slice and must be interpreted only according to the exporter's declared file format.
+- Manifests, entry-point parameters, requests and responses are UTF-8 JSON without a byte-order mark (RFC 8259).
+- Non-finite floating-point values are not valid JSON and must be rejected before serialization.
+- `ac_run` receives the resolved parameter object itself; `ac_export` receives the resolved exporter options object itself.
+- Host requests are operation objects such as `{"op":"document"}` or `{"op":"command","id":"bone.info","params":{}}`.
+- Object key order and insignificant whitespace are not meaningful. Validate required fields and types.
+- Do not serialize Rust structs, enums, pointers, or native memory layouts directly. Use JSON DTOs.
+- Exporter output is opaque binary file data, not JSON; the output file format defines its representation.
 
-## 5. Payload and memory limits
+## 5. Payload and runtime limits
 
-The maximum size of every ABI payload is **16 MiB (16,777,216 bytes)**. This applies to:
-- manifest JSON;
-- command input JSON;
-- host request JSON;
-- host response JSON;
-- exporter options JSON;
-- exporter output bytes.
+The host enforces per-kind limits. These are ceilings, not targets.
 
-The limit is inclusive. A payload of exactly 16 MiB is allowed; a larger payload must be rejected before copying, parsing, or allocating it. The host should also impose a reasonable total linear-memory ceiling and execution/fuel budget; the 16 MiB per-payload limit is not a total-memory or CPU limit.
+| Limit | Command default | Frame script | Exporter |
+|---|---:|---:|---:|
+| Module size | 16 MiB | 16 MiB | 16 MiB |
+| Linear memory per instance | 256 MiB | 256 MiB | 256 MiB |
+| Manifest JSON | 64 KiB | 64 KiB | 64 KiB |
+| Entry-point parameters | 64 KiB | 16 KiB | 64 KiB |
+| One host request | 1 MiB | 64 KiB | 1 MiB |
+| One host response | 8 MiB | 1 MiB | 32 MiB |
+| Total request bytes per run | 64 MiB | 1 MiB | 64 MiB |
+| Host calls per run | 100,000 | 1,000 | 1,000,000 |
+| Export output | n/a | n/a | 64 MiB |
+| Fuel / instructions | 1,000,000,000 | 20,000,000 | 50,000,000,000 |
+| Wall-clock budget | 5 s | 100 ms | 10 min |
+| Log lines retained | 200 | 50 | 200 |
 
-All pointers are offsets into the module's current WebAssembly linear memory, not native process pointers. The host must bounds-check every pointer/length pair against the current memory size before reading or writing.
+Other defaults: 1,024 call frames; log lines are limited to 500 characters. Ease functions are sampled 257 times at load under the loading fuel budget, without host calls.
+
+SDK general ceilings: 1 MiB per serialized host request; 32 MiB response buffer; 64 KiB entry-point parameters/allocation; 64 KiB manifest; 64 MiB exporter output. The host may impose lower per-kind limits. In particular, command responses are capped at 8 MiB although the shared SDK ceiling accommodates 32 MiB exporter responses.
+
+Oversized host requests currently trap; oversized responses become error answers. Fuel, wall-clock, call-count, total-request, memory, and call-depth limits also apply. Command and frame-script runs get a fresh instance; exporters run in a bounded worker invocation.
 
 ## 6. Memory ownership and deallocation
 
-Ownership is explicit:
+ABI v1 uses instance-scoped allocation:
 
-| Data | Owner | Lifetime / release |
+| Memory | Owner | Lifetime |
 |---|---|---|
-| Manifest bytes from `ac_manifest` | Plugin module | Static for the instance lifetime; host copies; never deallocate. |
-| Input buffer from `ac_alloc` | Plugin guest allocator | Host writes before calling `ac_run`/`ac_export`; guest reads synchronously; host calls `ac_dealloc` with the original allocation length when available. |
-| Exporter output from `ac_export` | Plugin guest allocator | Host copies bytes before calling `ac_dealloc` with the exact output length. |
-| Request bytes passed to `anicraft.call` | Plugin guest | Borrowed only for the duration of the synchronous import; host copies before return. |
-| Response bytes copied by `anicraft.response` | Plugin guest | Written into guest-owned memory supplied by the SDK; guest owns and releases it normally. |
+| `ac_manifest` bytes | Plugin module | Static for instance lifetime; host copies; never free. |
+| `ac_alloc` input | Guest allocator | Host writes before entry-point call; plugin reads during it. |
+| `ac_export` output | Guest allocator | Host copies before dropping exporter instance. |
+| Bytes passed to `anicraft.call` | Guest | Borrowed for the import only; host copies before handling. |
+| Destination passed to `anicraft.response` | Guest | Guest-owned buffer supplied for the copy. |
 
-Rules:
+- Current AniCraft creates a fresh instance per run and drops it afterwards. Instance teardown is the authoritative reclamation mechanism for ABI v1 allocations.
+- The host must not retain guest pointers after a call or instance lifetime. It copies manifest and exporter output bytes before dropping the instance.
+- Optional `ac_dealloc(ptr, allocation_len)` permits early release for a host that chooses to use it. It must be called exactly once with the original allocation length, not the shorter used length. The current host does not call it; plugins must not rely on it.
+- Invalid pointers, duplicate frees, and mismatched lengths are ABI violations. Static manifest memory must never be deallocated.
 
-- The host must not write outside the allocation returned by `ac_alloc`.
-- The host must pass the original allocation size to `ac_dealloc`, not a shorter used length.
-- Every allocation may be deallocated exactly once. Duplicate frees, fabricated pointers, or mismatched lengths are ABI violations.
-- The host must not retain guest pointers after an export or host import returns.
-- The host must copy exporter output before deallocation.
-- If `ac_dealloc` is absent, the host must destroy the module instance after the operation to reclaim its memory. It must not repeatedly invoke the module and leak allocations.
-- `ac_manifest` memory is borrowed static memory and is never passed to `ac_dealloc`.
+A future host that retains instances across runs must use the optional deallocator correctly or introduce a separately versioned lifetime protocol.
 
-## 7. Reentrancy, concurrency, and execution
+## 7. Reentrancy and concurrency
 
-ABI v1 is synchronous and single-flight per module instance.
+ABI v1 is synchronous and single-flight per instance.
 
-- The host must not invoke another plugin export on the same instance while an export is active.
-- A host import must not synchronously or asynchronously re-enter the same plugin instance.
-- The host must not call `anicraft.response` except for the response belonging to the immediately preceding `anicraft.call`.
-- The host must not concurrently invoke exports on one instance or share its linear memory between concurrent invocations.
-- A plugin may make sequential host calls during one command. Each call/response pair must complete before the next call begins.
-- No ABI v1 guarantee is made for threads, shared memory, asynchronous imports, callbacks, or retained pointers.
-
-The host should enforce an execution timeout or fuel budget. A timed-out or interrupted instance must be considered unusable and destroyed.
+- Plugins may make sequential host calls during one entry-point invocation.
+- A host call is handled by the runtime, then the same guest invocation resumes. The host must not call another export on that instance.
+- The host must not invoke exports concurrently on one instance or share one instance's linear memory across runs.
+- Response state belongs to the immediately preceding `anicraft.call`.
+- Threads, shared memory, asynchronous callbacks, reentrant exports, and retained guest pointers are not part of ABI v1.
 
 ## 8. Panic and trap behavior
 
-A plugin must not unwind a Rust panic across an exported C ABI boundary. ABI v1 treats an uncaught panic, WebAssembly trap, out-of-fuel termination, or memory trap as a failed invocation.
+A Rust panic must not unwind across an exported C ABI boundary. A panic, Wasm trap, out-of-bounds access, out-of-fuel condition, or wall-clock timeout fails the invocation. The host catches the Wasm failure at the runtime boundary, reports a failed run, and discards the instance. For command plugins, the document is restored to its pre-run state. Expected validation and operational failures must be returned as `Err(String)`, not panics. A trapped instance is not reusable.
 
-- The host must catch the WebAssembly trap at the instance boundary, report a plugin-invocation failure, and discard the affected instance.
-- The host must not assume that plugin state, pending response state, or allocations remain valid after a trap.
-- A trap is not converted into an `ac_run` status code; it terminates the call before a status can be returned.
-- Plugins should return ordinary validation and operational failures as `Err(String)`, not panic.
-- ABI v1 does not promise panic recovery or continuation after a panic.
+## 9. Deterministic status codes
 
-## 9. Deterministic status and failure codes
+The host treats `ac_run == 0` as success and **any non-zero value as failure**. The SDK standardizes these values for guest code and tests:
 
-`ac_run` returns these stable values:
-
-| Code | Name | Meaning |
+| Code | SDK name | Meaning |
 |---:|---|---|
-| `0` | `STATUS_OK` | Handler completed successfully. |
-| `1` | `STATUS_INVALID_ARGUMENT` | Negative length, or a null/non-positive pointer with a non-empty input. |
-| `2` | `STATUS_INVALID_JSON` | Input is not valid UTF-8 JSON. |
-| `3` | `STATUS_HANDLER_ERROR` | Plugin handler returned `Err`. |
-| `4` | `STATUS_PAYLOAD_TOO_LARGE` | Input exceeds 16 MiB. |
+| 0 | `STATUS_OK` | Handler completed successfully. |
+| 1 | `STATUS_INVALID_ARGUMENT` | Invalid pointer/length combination or negative length. |
+| 2 | `STATUS_INVALID_JSON` | Entry-point input is not valid UTF-8 JSON. |
+| 3 | `STATUS_HANDLER_ERROR` | Handler returned `Err`; SDK logs the diagnostic. |
+| 4 | `STATUS_PAYLOAD_TOO_LARGE` | Entry-point input exceeds the SDK parameter ceiling. |
 
-Additional conventions:
+The current host does not interpret non-zero values individually; it reports failure using the last plugin log line when available. Plugins may rely on the values in their own tests and tooling, but must not assume the host exposes distinct user-facing error categories.
 
-- `ac_alloc` returns `-1` for invalid size or allocation failure.
-- `ac_manifest` returns `-1` if the manifest exceeds the payload limit.
-- `ac_export` returns `-1` for invalid input, invalid JSON, handler failure, oversized output, or allocation failure; otherwise it returns a packed pointer/length pair.
-- `anicraft.call` and `anicraft.response` return a negative value for transport failure.
-- A WebAssembly trap is reported by the host as an invocation failure, not as one of the `ac_run` codes.
+Other conventions:
+- `ac_alloc`: pointer on success; `0` on allocation failure.
+- `ac_export`: packed output pointer/length on success; any negative value on failure.
+- Host imports return a byte count on success; negative values indicate transport failure in the guest SDK contract.
+- A trap does not return an `ac_run` status code.
 
-Human-readable logs and host error strings are diagnostic only. They must not be parsed as machine-readable status codes.
+## 10. Endianness and pointer representation
 
-## 10. Pointer/length packing and endianness
+- Pointers are 32-bit offsets into WebAssembly linear memory.
+- Wasm scalar values follow the WebAssembly core calling convention. Scalars stored in linear memory use little-endian byte order.
+- Packed pointer/length values are numeric bit fields, not serialized Rust structs. Extract the low and high 32-bit halves with masks and shifts.
+- JSON is UTF-8 text and has no integer byte order.
+- Exporter output is opaque; its file format defines byte order.
 
-The ABI is a WebAssembly 32-bit ABI:
-
-- Linear-memory pointers and lengths are 32-bit values.
-- Exported pointer/length pairs use an `i64` numeric bit pattern: `(length << 32) | pointer`.
-- The low 32 bits contain the pointer; the high 32 bits contain the length.
-- Hosts must use unsigned extraction/masking when unpacking the `i64`; the signedness of the Wasm `i64` return does not change its bits.
-- Wasm scalar values are passed according to the WebAssembly core calling convention. When scalar values are represented as bytes in linear memory, WebAssembly is little-endian.
-- JSON payloads are UTF-8 text and therefore have no integer byte order.
-- Exporter output is opaque bytes; its own file format defines its byte order.
-
-Do not serialize Rust structs, enums, pointers, or native memory layouts directly across this ABI. Use the documented scalar signatures and JSON DTOs.
+Never rely on host-native pointer width, alignment, endianness, or Rust struct layout.
 
 ## 11. Conformance checklist
 
-A conforming host/runtime must:
-
-- [ ] Check `ac_abi_version() == 1` before other calls.
-- [ ] Validate the module kind and required exports.
-- [ ] Reject unexpected imports and validate required `anicraft` imports.
-- [ ] Bounds-check all guest-memory accesses and enforce the 16 MiB payload limit.
-- [ ] Copy borrowed guest bytes before returning from host imports.
-- [ ] Implement the synchronous `call` then `response` protocol exactly.
-- [ ] Never re-enter or concurrently invoke one module instance.
-- [ ] Call optional `ac_dealloc` with the exact original allocation length when available, or destroy the instance after use.
-- [ ] Copy exporter output before deallocation.
-- [ ] Treat traps as failed invocations and discard the instance.
-- [ ] Unpack pointer/length pairs using the specified low-pointer/high-length layout.
-
-A conforming plugin/SDK must:
-
-- [ ] Export the required entry points for its plugin kind and report ABI version 1.
-- [ ] Use the SDK for host imports, serialization, allocation, and exports.
-- [ ] Reject oversized payloads and invalid JSON.
-- [ ] Return documented `ac_run` status codes.
+Plugin:
+- [ ] Export `memory`, `ac_abi_version`, and `ac_manifest`.
+- [ ] Export the required entry points for its manifest kind and report ABI version 1.
+- [ ] Use SDK allocation, request, serialization, and export helpers.
+- [ ] Stay within per-kind limits; use UTF-8 JSON DTOs.
+- [ ] Return zero only for successful `ac_run`; use stable non-zero SDK status codes for failure.
 - [ ] Never unwind across the ABI boundary or retain host pointers.
-- [ ] Use UTF-8 JSON DTOs rather than native struct layouts.
+- [ ] Treat allocation as invocation-scoped; do not assume the host calls optional `ac_dealloc`.
+
+Host:
+- [ ] Check ABI version before reading the manifest.
+- [ ] Require exported memory and kind-specific exports.
+- [ ] Reject unsupported imports and validate imported function signatures.
+- [ ] Enforce module, memory, manifest, parameter, request, response, output, fuel, time, call-count, and recursion limits.
+- [ ] Bounds-check all pointer/length pairs against current linear memory.
+- [ ] Copy borrowed request, manifest, and exporter output bytes before their memory expires.
+- [ ] Preserve call/response sequencing and response envelopes.
+- [ ] Avoid reentrant or concurrent calls on one instance.
+- [ ] Treat non-zero `ac_run` returns and traps as failed invocations.
+- [ ] Drop each instance after the run under the current ABI v1 lifecycle.
