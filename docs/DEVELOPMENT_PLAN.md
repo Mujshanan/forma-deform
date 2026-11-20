@@ -77,7 +77,7 @@ All runs below tested commit `14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`:
 
 Fixes required during verification included the Bone Query collapsible-if lint, an SDK test identity operation, and correcting cargo-fuzz CLI invocation in the workflow. The fuzz workflow builds both targets and runs each with `-max_total_time=20 -max_len=65536`; this is bounded smoke coverage, not sustained fuzzing.
 
-## P1 — Make the V1 runtime contract explicit
+## P1 — Make the V1 runtime contract explicit (current priority)
 
 **Why second:** The adapter's actual runtime uses mode-specific DTOs and dispatch: `Params` + `preview_slider()` for Slider, and `DeformParams` + `evaluate_deformation()` for Deform. The three-anchor `ControllerBinding` type exists in `smart-controller-core`, but the plugin runtime does not currently use it.
 
@@ -89,7 +89,8 @@ Fixes required during verification included the Bone Query collapsible-if lint, 
 
 ### Exit criteria
 - One authoritative V1 contract describes what users can configure and what the plugin executes.
-- Documentation does not overstate ControllerBinding, timeline driving, persistence, or live mesh deformation.
+- ControllerBinding is explicitly experimental/core-only and excluded from V1 acceptance.
+- Documentation does not overstate timeline driving, persistence, or live mesh deformation.
 - Every advertised V1 mode has explicit success and failure behavior.
 
 ## P2 — Test the real plugin adapter boundary
@@ -166,7 +167,7 @@ Each capability requires its own host contract review, core/adapter boundary, te
 | Platform and WASM CI | Passed on verified P0 baseline |
 | Formatting | Passed on verified P0 baseline |
 | Clippy | Passed with `-D warnings` on verified P0 baseline |
-| ControllerBinding runtime integration | Not wired; P1 decision |
+| ControllerBinding runtime integration | Explicitly excluded from V1; retained as experimental core API |
 | Actual adapter-level integration tests | Incomplete; P2 |
 | Pinned-host smoke project | Outstanding; P3 |
 | Native integration decision | Not accepted; P4 |
