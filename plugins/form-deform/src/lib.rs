@@ -1,7 +1,10 @@
-//! Bone-driven, deterministic AniCraft Asset Warp pin deformation command.
+//! AniCraft host adapter for the typed Form Deform domain model.
 
 use anicraft_plugin_sdk as ac;
-use form_deform_core::{DeformSpec, Vec2, evaluate_pin_position};
+use form_deform_core::{
+    BoneAngle, DeformRequest, DeformSpec, Vec2, evaluate_deformation,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 const MANIFEST: &str = r##"{
@@ -27,87 +30,166 @@ const MANIFEST: &str = r##"{
 
 ac::plugin!(MANIFEST, run);
 
-fn required_id(params: &Value, key: &str) -> Result<u64, String> {
-    let id = params[key].as_u64().ok_or_else(|| format!("'{key}' must be a positive integer"))?;
-    if id == 0 { return Err(format!("'{key}' must be greater than zero")); }
-    Ok(id)
+/// Typed command parameters decoded at the plugin boundary.
+#[derive(Debug, Deserialize)]
+struct PluginParams {
+    bone_id: u64,
+    element_id: u64,
+    pin_id: u64,
+    neutral_angle: f64,
+    neutral_x: f64,
+    neutral_y: f64,
+    gain_x: f64,
+    gain_y: f64,
+    include_spring_swing: bool,
+    apply: bool,
 }
-fn number(params: &Value, key: &str) -> Result<f64, String> {
-    let value = params[key].as_f64().ok_or_else(|| format!("'{key}' must be a number"))?;
-    if !value.is_finite() { return Err(format!("'{key}' must be finite")); }
-    Ok(value)
+
+#[derive(Debug, Deserialize)]
+struct BoneInfoResponse {
+    armatures: Vec<ArmatureDto>,
 }
-fn run(params: &Value) -> Result<(), String> {
-    let bone_id = required_id(params, "bone_id")?;
-    let element_id = required_id(params, "element_id")?;
-    let pin_id = required_id(params, "pin_id")?;
-    let neutral_angle = number(params, "neutral_angle")?;
-    let neutral_x = number(params, "neutral_x")?;
-    let neutral_y = number(params, "neutral_y")?;
-    let gain_x = number(params, "gain_x")?;
-    let gain_y = number(params, "gain_y")?;
-    let include_spring = params["include_spring_swing"].as_bool().unwrap_or(false);
 
-    let bone_data = ac::command("bone.info", json!({}))?;
-    let bone = find_bone(&bone_data, bone_id)
-        .ok_or_else(|| format!("bone {bone_id} is not present in an armature at the playhead"))?;
-    let keyed_angle = bone["angle"].as_f64()
-        .ok_or_else(|| format!("bone {bone_id} has no evaluated angle at the playhead"))?;
-    let swing = bone["swing"].as_f64().unwrap_or(0.0);
-    let input_angle = keyed_angle + if include_spring { swing } else { 0.0 };
+#[derive(Debug, Deserialize)]
+struct ArmatureDto {
+    bones: Vec<BoneDto>,
+}
 
-    let warp = ac::command("warp.info", json!({"element": element_id}))?;
-    if warp["warped"].as_bool() != Some(true) {
-        return Err(format!("element {element_id} has no usable Asset Warp mesh; add a warp and pin first"));
+#[derive(Debug, Deserialize)]
+struct BoneDto {
+    id: u64,
+    angle: f64,
+    swing: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WarpInfoResponse {
+    warped: bool,
+    pins: Vec<WarpPinDto>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WarpPinDto {
+    pin: u64,
+}
+
+/// Explicit host command payload; JSON conversion is confined to this adapter.
+#[derive(Debug, Serialize)]
+struct WarpPinMoveRequest {
+    element: u64,
+    pin: u64,
+    x: f64,
+    y: f64,
+}
+
+fn run(raw_params: &Value) -> Result<(), String> {
+    let params: PluginParams = serde_json::from_value(raw_params.clone())
+        .map_err(|error| format!("invalid Form Deform parameters: {error}"))?;
+    if params.bone_id == 0 || params.element_id == 0 || params.pin_id == 0 {
+        return Err("bone, element, and pin IDs must be positive".to_string());
     }
-    if !find_pin(&warp, pin_id) {
-        return Err(format!("pin {pin_id} does not belong to warped element {element_id}"));
+
+    let bone_value = ac::command("bone.info", json!({}))?;
+    let bone_data: BoneInfoResponse = serde_json::from_value(bone_value)
+        .map_err(|error| format!("invalid bone.info response: {error}"))?;
+    let bone = bone_data.armatures.iter()
+        .flat_map(|armature| armature.bones.iter())
+        .find(|bone| bone.id == params.bone_id)
+        .ok_or_else(|| format!("bone {} is not present in an armature at the playhead", params.bone_id))?;
+
+    let warp_value = ac::command("warp.info", json!({"element": params.element_id}))?;
+    let warp: WarpInfoResponse = serde_json::from_value(warp_value)
+        .map_err(|error| format!("invalid warp.info response: {error}"))?;
+    if !warp.warped {
+        return Err(format!("element {} has no usable Asset Warp mesh; add a warp and pin first", params.element_id));
+    }
+    if !warp.pins.iter().any(|pin| pin.pin == params.pin_id) {
+        return Err(format!("pin {} does not belong to warped element {}", params.pin_id, params.element_id));
     }
 
-    let target = evaluate_pin_position(DeformSpec {
-        neutral_position: Vec2 { x: neutral_x, y: neutral_y },
-        neutral_angle_degrees: neutral_angle,
-        gain_per_degree: Vec2 { x: gain_x, y: gain_y },
-    }, input_angle).map_err(|error| error.to_string())?;
+    let result = evaluate_deformation(DeformRequest {
+        spec: DeformSpec {
+            neutral_position: Vec2 { x: params.neutral_x, y: params.neutral_y },
+            neutral_angle_degrees: params.neutral_angle,
+            gain_per_degree: Vec2 { x: params.gain_x, y: params.gain_y },
+        },
+        bone_angle: BoneAngle {
+            keyed_degrees: bone.angle,
+            spring_swing_degrees: bone.swing,
+        },
+        include_spring_swing: params.include_spring_swing,
+    }).map_err(|error| error.to_string())?;
 
-    ac::log(&format!("Form Deform — bone {bone_id}: keyed angle {keyed_angle:.3}°, spring swing {swing:.3}°, input {input_angle:.3}°"));
-    ac::log(&format!("Pin {pin_id} on element {element_id}: neutral ({neutral_x:.2}, {neutral_y:.2}) → target ({:.2}, {:.2}) stage px", target.x, target.y));
+    ac::log(&format!(
+        "Form Deform — bone {}: keyed angle {:.3}°, spring swing {}, effective angle {:.3}°",
+        params.bone_id,
+        result.keyed_angle_degrees,
+        result.spring_swing_degrees.map(|value| format!("{value:.3}°")).unwrap_or_else(|| "unavailable".to_string()),
+        result.effective_angle_degrees,
+    ));
+    ac::log(&format!(
+        "Pin {} on element {}: neutral ({:.2}, {:.2}) → target ({:.2}, {:.2}) stage px",
+        params.pin_id, params.element_id, params.neutral_x, params.neutral_y,
+        result.target_position.x, result.target_position.y,
+    ));
 
-    if params["apply"].as_bool().unwrap_or(false) {
-        let result = ac::command("warp.pin_move", json!({"element": element_id, "pin": pin_id, "x": target.x, "y": target.y}))?;
-        ac::log(&format!("Applied deformation at {:?}. This edit is undoable.", result["at"]));
+    if params.apply {
+        let command = WarpPinMoveRequest {
+            element: params.element_id,
+            pin: params.pin_id,
+            x: result.target_position.x,
+            y: result.target_position.y,
+        };
+        let command_params = serde_json::to_value(command)
+            .map_err(|error| format!("could not encode warp.pin_move request: {error}"))?;
+        ac::command("warp.pin_move", command_params)?;
+        ac::log("Applied deformation. This document edit is undoable.");
     } else {
         ac::log("Calculation only. Enable Apply pin position to write the result to the document.");
     }
     Ok(())
 }
-fn find_bone(result: &Value, id: u64) -> Option<&Value> {
-    result["armatures"].as_array()?.iter()
-        .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
-        .find(|bone| bone["id"].as_u64() == Some(id))
-}
-fn find_pin(result: &Value, id: u64) -> bool {
-    result["pins"].as_array().is_some_and(|pins| pins.iter().any(|pin| pin["pin"].as_u64() == Some(id)))
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn bone_lookup_uses_stable_host_id_not_array_index() {
-        let data = json!({"armatures":[{"bones":[{"id":42,"angle":12.5},{"id":91,"angle":-3.0}]}]});
-        assert_eq!(find_bone(&data, 91).unwrap()["angle"], -3.0);
-        assert!(find_bone(&data, 0).is_none());
+    fn parses_typed_bone_info_and_finds_stable_host_id() {
+        let data: BoneInfoResponse = serde_json::from_value(json!({
+            "armatures": [{"bones": [{"id": 42, "angle": 12.5, "swing": 1.5}, {"id": 91, "angle": -3.0, "swing": 0.0}]}]
+        })).unwrap();
+        assert_eq!(data.armatures[0].bones.iter().find(|bone| bone.id == 91).unwrap().angle, -3.0);
     }
+
     #[test]
-    fn pin_lookup_checks_warp_response() {
-        let data = json!({"warped":true,"pins":[{"pin":7},{"pin":19}]});
-        assert!(find_pin(&data, 19));
-        assert!(!find_pin(&data, 2));
+    fn absent_spring_value_is_preserved_as_absent() {
+        let data: BoneInfoResponse = serde_json::from_value(json!({
+            "armatures": [{"bones": [{"id": 42, "angle": 12.5}]}]
+        })).unwrap();
+        assert_eq!(data.armatures[0].bones[0].swing, None);
     }
+
     #[test]
-    fn malformed_host_responses_are_safe() {
-        assert!(find_bone(&json!({"armatures":null}), 1).is_none());
-        assert!(!find_pin(&json!({"pins":null}), 1));
+    fn parses_typed_warp_info_and_pin_membership() {
+        let data: WarpInfoResponse = serde_json::from_value(json!({
+            "warped": true, "pins": [{"pin": 7}, {"pin": 19}]
+        })).unwrap();
+        assert!(data.warped);
+        assert!(data.pins.iter().any(|pin| pin.pin == 19));
+        assert!(!data.pins.iter().any(|pin| pin.pin == 2));
+    }
+
+    #[test]
+    fn malformed_host_responses_are_rejected() {
+        assert!(serde_json::from_value::<BoneInfoResponse>(json!({"armatures": null})).is_err());
+        assert!(serde_json::from_value::<WarpInfoResponse>(json!({"warped": true})).is_err());
+        assert!(serde_json::from_value::<PluginParams>(json!({"bone_id": 1})).is_err());
+    }
+
+    #[test]
+    fn pin_move_request_has_explicit_fields() {
+        let value = serde_json::to_value(WarpPinMoveRequest { element: 2, pin: 3, x: 4.0, y: 5.0 }).unwrap();
+        assert_eq!(value, json!({"element": 2, "pin": 3, "x": 4.0, "y": 5.0}));
     }
 }
