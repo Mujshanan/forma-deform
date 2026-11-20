@@ -295,7 +295,8 @@ mod tests {
     #[test]
     fn run_returns_stable_invalid_input_and_json_codes() {
         assert_eq!(run(0, -1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
-        assert_eq!(run(0, 1, |_| Ok(())), STATUS_INVALID_JSON);
+        assert_eq!(run(0, 1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
+        assert_eq!(run_bytes(&[0xff], |_| Ok(())), STATUS_INVALID_JSON);
         assert_eq!(run(1, (MAX_PAYLOAD_BYTES + 1) as i32, |_| Ok(())), STATUS_PAYLOAD_TOO_LARGE);
     }
 
