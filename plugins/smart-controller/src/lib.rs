@@ -283,6 +283,7 @@ fn run_with_host(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::collections::VecDeque;
 
     #[test]
     fn slider_bone_resolution_uses_bone_info_response_shape() {
@@ -375,8 +376,6 @@ mod tests {
         assert_eq!(value, json!({"element":2,"pin":3,"x":4.0,"y":5.0}));
     }
 
-    use std::collections::VecDeque;
-
     #[derive(Default)]
     struct FakeHost {
         responses: VecDeque<Result<Value, String>>,
@@ -464,8 +463,8 @@ mod tests {
         run_with_host(&raw, &mut host).unwrap();
 
         assert!(host.commands.is_empty());
-        assert!(host.logs.iter().any(|line| line.contains("\\"normalized\\":0.75")));
-        assert!(host.logs.iter().any(|line| line.contains("\\"output_frame\\":15")));
+        assert!(host.logs.iter().any(|line| line.contains("\"normalized\":0.75")));
+        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":15")));
         assert!(host.logs.iter().any(|line| line.contains("preview-only")));
     }
 
@@ -477,7 +476,7 @@ mod tests {
         run_with_host(&slider_params(None), &mut host).unwrap();
 
         assert_eq!(host.commands, vec![("bone.info".into(), json!({"layer":5}))]);
-        assert!(host.logs.iter().any(|line| line.contains("\\"output_frame\\":19")));
+        assert!(host.logs.iter().any(|line| line.contains("\"output_frame\":19")));
         assert!(host.logs.iter().any(|line| line.contains("no timeline command")));
     }
 
