@@ -663,13 +663,12 @@ mod tests {
             .contains("rotation range"));
         assert!(slider_host.commands.is_empty());
 
-        let mut deform = json!({"mode":"deform","bone_id":4});
+        let deform = json!({"mode":"deform","bone_id":4});
         let mut deform_host = FakeHost::default();
         assert!(run_with_host(&deform, &mut deform_host)
             .unwrap_err()
             .contains("invalid Deform parameters"));
         assert!(deform_host.commands.is_empty());
-        deform["mode"] = json!("deform");
     }
 
     #[test]
