@@ -114,4 +114,4 @@ A wishlist item being unavailable is not, by itself, a kill condition. It become
 - Weighted mesh skinning exists as a host-independent core foundation. It is not wired to live AniCraft mesh geometry because the required complete geometry, skin weights, and evaluated bone world poses are not exposed by the inspected host responses.
 - The in-app smoke project and exact target host commit are still outstanding.
 
-**Next decision gates:** verify the adapter-boundary test suite in CI (P2), then pin the AniCraft host commit and run the minimal in-app smoke project (P3). The V1 runtime contract is documented; do not request native integration review before P2 and P3 evidence is complete.
+**Next decision gate:** pin a specific AniCraft host commit, prepare the minimal in-app smoke project, and execute the real-host checks (P3). The V1 contract and adapter-boundary tests are complete; do not request native integration review until P3 evidence is recorded.
