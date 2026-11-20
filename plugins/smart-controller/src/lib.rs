@@ -163,7 +163,7 @@ struct BoneDto {
 #[derive(Debug, Deserialize)]
 struct WarpInfoResponse {
     warped: bool,
-    pins: Vec<WarpPinDto>,
+    pins: Option<Vec<WarpPinDto>>,
 }
 #[derive(Debug, Deserialize)]
 struct WarpPinDto {
@@ -214,7 +214,11 @@ fn run_deform(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
             params.element_id
         ));
     }
-    if !warp.pins.iter().any(|pin| pin.pin == params.pin_id) {
+    let pins = warp
+        .pins
+        .as_deref()
+        .ok_or_else(|| "invalid warp.info response: missing pins for a warped element".to_owned())?;
+    if !pins.iter().any(|pin| pin.pin == params.pin_id) {
         return Err(format!(
             "pin {} was not returned for element {}",
             params.pin_id, params.element_id
@@ -354,13 +358,19 @@ mod tests {
             "warped":true,"pins":[{"pin":9}]
         }))
         .unwrap();
-        assert!(warp.warped && warp.pins[0].pin == 9);
+        assert!(warp.warped && warp.pins.as_ref().unwrap()[0].pin == 9);
+        let unwarped: WarpInfoResponse =
+            serde_json::from_value(json!({"warped":false})).unwrap();
+        assert!(!unwarped.warped && unwarped.pins.is_none());
     }
 
     #[test]
     fn malformed_deform_host_data_is_rejected() {
         assert!(serde_json::from_value::<BoneInfoResponse>(json!({"armatures":null})).is_err());
-        assert!(serde_json::from_value::<WarpInfoResponse>(json!({"warped":true})).is_err());
+        assert!(
+            serde_json::from_value::<WarpInfoResponse>(json!({"warped":true,"pins":"bad"}))
+                .is_err()
+        );
         assert!(serde_json::from_value::<DeformParams>(json!({"bone_id":1})).is_err());
     }
 
@@ -449,10 +459,15 @@ mod tests {
     }
 
     fn warp_response(warped: bool, pin_ids: &[u64]) -> Value {
-        json!({
-            "warped": warped,
-            "pins": pin_ids.iter().map(|pin| json!({"pin": pin})).collect::<Vec<_>>()
-        })
+        if warped {
+            json!({
+                "warped": true,
+                "pins": pin_ids.iter().map(|pin| json!({"pin": pin})).collect::<Vec<_>>()
+            })
+        } else {
+            // AniCraft's real warp.info response omits pins when warped is false.
+            json!({"warped": false})
+        }
     }
 
     #[test]
