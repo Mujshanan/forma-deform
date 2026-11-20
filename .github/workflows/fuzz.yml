@@ -1,0 +1,27 @@
+name: Fuzz Smoke
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build --manifest-path fuzz/Cargo.toml
+      - name: Smoke test JSON payload target
+        run: cargo fuzz run --manifest-path fuzz/Cargo.toml payload_json -- -max_total_time=20 -max_len=65536
+      - name: Smoke test mesh geometry target
+        run: cargo fuzz run --manifest-path fuzz/Cargo.toml mesh_geometry -- -max_total_time=20 -max_len=65536
