@@ -214,10 +214,9 @@ fn run_deform(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
             params.element_id
         ));
     }
-    let pins = warp
-        .pins
-        .as_deref()
-        .ok_or_else(|| "invalid warp.info response: missing pins for a warped element".to_owned())?;
+    let pins = warp.pins.as_deref().ok_or_else(|| {
+        "invalid warp.info response: missing pins for a warped element".to_owned()
+    })?;
     if !pins.iter().any(|pin| pin.pin == params.pin_id) {
         return Err(format!(
             "pin {} was not returned for element {}",
@@ -359,8 +358,7 @@ mod tests {
         }))
         .unwrap();
         assert!(warp.warped && warp.pins.as_ref().unwrap()[0].pin == 9);
-        let unwarped: WarpInfoResponse =
-            serde_json::from_value(json!({"warped":false})).unwrap();
+        let unwarped: WarpInfoResponse = serde_json::from_value(json!({"warped":false})).unwrap();
         assert!(!unwarped.warped && unwarped.pins.is_none());
     }
 
