@@ -1,6 +1,6 @@
 //! Host-independent Smart Controller calculation crate.
-//! New Slider/Transform mapping is split into focused modules. The legacy
-//! three-anchor binding API remains available for the Form Deform contract.
+//! Slider mapping and the three-anchor binding model remain pure here;
+//! Asset Warp pin deformation math is owned by the separate form-deform-core crate.
 pub mod legacy;
 pub mod mapping;
 pub mod model;
