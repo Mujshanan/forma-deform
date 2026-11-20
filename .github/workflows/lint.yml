@@ -9,17 +9,28 @@ permissions:
   contents: read
 
 jobs:
-  rust:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          key: lint
+          key: lint-format
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: lint-clippy
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
