@@ -45,9 +45,9 @@ File: [tools/v4_mcp_slider.py](../tools/v4_mcp_slider.py)
 The script:
 - starts `anicraft-cli mcp --bridge PORT` as an MCP stdio child process;
 - performs MCP initialize and tools/call requests;
-- discovers `bone.info`, `timeline.goto`, and `bone.pose` from the live command registry;
+- discovers `bone.info`, `timeline.goto`, and `bone.pose` from the live command registry and writes the returned metadata to `v4_mcp_discovery.json`;
 - uses the V1 endpoint semantics (Exclusive by default, Inclusive optional);
-- writes UTC timestamps and per-call/round-trip durations to CSV;
+- writes UTC timestamps and per-call/round-trip durations to `v4_mcp_latency.csv`;
 - never writes the driver bone pose and never changes authored keyframes.
 
 Example one-shot run:
