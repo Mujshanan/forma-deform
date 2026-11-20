@@ -8,4 +8,4 @@ pub mod preview;
 pub mod validation;
 pub use legacy::*;
 pub use model::{EndpointPolicy, Mode, Params};
-pub use preview::{PreviewOutput, preview_slider, preview_transform};
+pub use preview::{preview_slider, preview_transform, PreviewOutput};
