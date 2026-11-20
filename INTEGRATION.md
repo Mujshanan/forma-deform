@@ -15,7 +15,7 @@ This document is the maintainer's review entry point. The prototype demonstrates
 | Target host commit for an integration run | **TBD — pin before host smoke testing or proposing a merge** | Do not substitute the moving default branch |
 | Prototype repository | [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform) | This prototype and reusable calculation cores |
 | Prototype branch | `feat/smart-controller-v1` | Current development branch |
-| Prototype baseline commit | [`ed7e8cd84e4b365bfd912edeac5f1682842116fd`](https://github.com/Mujshanan/forma-deform/commit/ed7e8cd84e4b365bfd912edeac5f1682842116fd) | Exact source revision reviewed for this record |
+| Prototype baseline commit | [`14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`](https://github.com/Mujshanan/forma-deform/commit/14e5f3f27f1f7b1ace65b714c93b920b5229a3b8) | Exact source revision reviewed for this record |
 | Vendored AniCraft guest SDK source | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | SDK source pin recorded in `crates/anicraft-plugin-sdk/UPSTREAM.md`; **not** the target host commit |
 
 Before any host integration test, record the exact AniCraft commit SHA, build configuration, plugin ABI version, and prototype commit SHA used together. The SDK source pin must not be misrepresented as the host fork revision.
@@ -24,14 +24,14 @@ Before any host integration test, record the exact AniCraft commit SHA, build co
 
 ### 2.1 Deterministic calculation baseline (automated)
 
-The current reproducible baseline is the integration test in `plugins/smart-controller/tests/plugin_suite.rs`. It uses a small synthetic host response with the same stable-ID, keyed-angle, and spring-swing fields expected from `bone.info`.
+The current automated fixture is `plugins/smart-controller/tests/core_composition.rs`. It is a **core-to-core composition test only**: it does not invoke the Smart Controller adapter, dispatch either plugin mode, issue an AniCraft command, or verify a host response. The synthetic JSON resembles a small subset of `bone.info`; the test extracts its keyed angle for the experimental three-anchor `ControllerBinding` evaluator. A separate `DeformRequest` then uses explicitly supplied test values.
 
 **Fixture inputs**
 
 - Bone ID: `17`
 - Evaluated keyed angle: `22.5°`
 - Spring swing reported: `2.0°`
-- Slider range: `-45°` to `+45°`, neutral `0°`
+- Experimental `ControllerBinding` input range: `-45°` to `+45°`, neutral `0°`
 - Linear relative-delta geometry target:
   - negative offset: `(-12, 4)`
   - neutral offset: `(0, 0)`
@@ -44,14 +44,14 @@ The current reproducible baseline is the integration test in `plugins/smart-cont
 
 | Check | Expected |
 |---|---:|
-| Slider/controller normalized input | `0.75` |
+| Experimental binding normalized input | `0.5` |
 | Controller geometry offset | `(6, -2)` |
 | Deformation base position after offset | `(126, 78)` |
 | Effective deformation angle | `10°` |
 | Absolute target pin position | `(131, 75.5)` |
 | Repeated evaluation | Exactly the same result for the same inputs |
 
-The test asserts the geometry offset, absolute target, and repeatability. This is a calculation/adapter-composition baseline, **not** a real AniCraft project or proof of host behavior.
+The test asserts the experimental binding's geometry offset, the separate deformation core's absolute target, and repeatability. It does **not** test Slider frame preview, plugin mode dispatch, DTO translation, host commands, or adapter behavior. Slider mapping has separate pure-core tests. This fixture is **not** an adapter integration test, real AniCraft project, or proof of host behavior.
 
 ### 2.2 Required in-app host smoke project (not yet checked in)
 
@@ -108,10 +108,10 @@ A wishlist item being unavailable is not, by itself, a kill condition. It become
 
 ## 5. Current evidence and next decision
 
-- The pure Rust cores and command adapter have automated tests; see `cargo test --workspace`.
+- Pure Rust cores and selected adapter helper/DTO behavior have automated tests; see `cargo test --workspace`. The current suite does not execute the real plugin command path with a simulated host-command boundary; that is P2 work.
 - The adapter currently performs on-demand bone and warp queries. Deform Apply uses the undoable `warp.pin_move` command.
 - The current host contract does **not** establish continuous playback/scrubbing evaluation, durable arbitrary plugin metadata, or a verified command to set a nested symbol instance's displayed frame.
 - Weighted mesh skinning exists as a host-independent core foundation. It is not wired to live AniCraft mesh geometry because the required complete geometry, skin weights, and evaluated bone world poses are not exposed by the inspected host responses.
 - The in-app smoke project and exact target host commit are still outstanding.
 
-**Next decision gate:** pin the AniCraft host commit, build the minimal smoke project, run the real-host checks, and update this record with evidence before requesting native integration review.
+**Next decision gates:** finalize the V1 runtime contract (P1), add adapter-boundary tests that capture host commands (P2), then pin the AniCraft host commit and run the minimal in-app smoke project (P3). Do not request native integration review before those gates are satisfied.
