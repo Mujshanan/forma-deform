@@ -254,8 +254,15 @@ pub fn alloc(size: i32) -> i32 {
     ptr as i32
 }
 
-/// Releases exactly the slice previously returned by `ac_alloc` or `ac_export`.
-/// The host must pass the original allocation length, not the number of bytes it used.
+/// Releases exactly one allocation previously returned by `ac_alloc` or `ac_export`.
+///
+/// # Host allocation contract
+/// The host must retain the exact guest pointer and original allocation length returned by
+/// the corresponding export, then call `ac_dealloc(ptr, original_len)` exactly once.
+/// It must not pass a host-owned pointer, an interior pointer, a truncated/expanded length,
+/// or a pointer from another plugin instance. The pointer addresses guest linear memory;
+/// this API never exposes a host-memory pointer. The guest cannot safely validate arbitrary
+/// foreign pointers, so violating this contract is an ABI violation and may trap.
 #[doc(hidden)]
 pub fn dealloc(ptr: i32, len: i32) {
     if ptr <= 0 || len < 0 || len as usize > MAX_EXPORT_OUTPUT_BYTES {

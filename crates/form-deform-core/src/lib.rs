@@ -42,6 +42,19 @@ pub struct MeshVertex { pub bind_position: Vec2, pub influences: Vec<BoneWeight>
 pub struct MeshPin { pub id: u64, pub vertex_index: usize, pub target: Vec2 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeformMesh { pub vertices: Vec<MeshVertex>, pub pins: Vec<MeshPin> }
+
+/// Hard upper bounds applied before the core allocates output or diagnostic buffers.
+pub const MAX_MESH_VERTICES: usize = 250_000;
+pub const MAX_MESH_BONES: usize = 16_384;
+pub const MAX_MESH_INFLUENCES: usize = 1_000_000;
+pub const MAX_MESH_PINS: usize = 250_000;
+pub const MAX_DIAGNOSTIC_TRIANGLES: usize = 500_000;
+pub const MAX_DIAGNOSTIC_BONE_SEGMENTS: usize = 16_384;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeformResource {
+    Vertices, Bones, Influences, Pins, Triangles, BoneSegments,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct MeshDeformResult { pub vertices: Vec<Vec2>, pub pins: Vec<MeshPin> }
 
@@ -65,12 +78,15 @@ pub enum DeformError {
     NonFiniteInput, MissingSpringSwing, MissingBone(u64), MissingPin(u64), MissingVertex(usize),
     MissingInfluences, MissingInfluenceBone(u64), InvalidWeight, InvalidWeightSum,
     InvalidTriangleIndex { triangle: usize, vertex: usize }, ArithmeticOverflow,
+    ResourceLimitExceeded { resource: DeformResource, actual: usize, limit: usize },
+    DuplicateBone(u64), DuplicatePin(u64), AllocationFailed,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeformErrorCode {
     NonFiniteInput, MissingSpringSwing, MissingBone, MissingPin, MissingVertex,
     MissingInfluences, MissingInfluenceBone, InvalidWeight, InvalidWeightSum,
-    InvalidTriangleIndex, ArithmeticOverflow,
+    InvalidTriangleIndex, ArithmeticOverflow, ResourceLimitExceeded, DuplicateBone,
+    DuplicatePin, AllocationFailed,
 }
 impl DeformError {
     pub fn code(self) -> DeformErrorCode {
@@ -86,6 +102,10 @@ impl DeformError {
             Self::InvalidWeightSum => DeformErrorCode::InvalidWeightSum,
             Self::InvalidTriangleIndex { .. } => DeformErrorCode::InvalidTriangleIndex,
             Self::ArithmeticOverflow => DeformErrorCode::ArithmeticOverflow,
+            Self::ResourceLimitExceeded { .. } => DeformErrorCode::ResourceLimitExceeded,
+            Self::DuplicateBone(_) => DeformErrorCode::DuplicateBone,
+            Self::DuplicatePin(_) => DeformErrorCode::DuplicatePin,
+            Self::AllocationFailed => DeformErrorCode::AllocationFailed,
         }
     }
 }
@@ -103,6 +123,11 @@ impl fmt::Display for DeformError {
             Self::InvalidWeightSum => write!(f, "skin weights must sum to 1 within tolerance"),
             Self::InvalidTriangleIndex { triangle, vertex } => write!(f, "triangle {triangle} references missing vertex {vertex}"),
             Self::ArithmeticOverflow => write!(f, "deformation result is not finite"),
+            Self::ResourceLimitExceeded { resource, actual, limit } =>
+                write!(f, "{resource:?} count {actual} exceeds configured limit {limit}"),
+            Self::DuplicateBone(id) => write!(f, "bone ID {id} is duplicated"),
+            Self::DuplicatePin(id) => write!(f, "pin ID {id} is duplicated"),
+            Self::AllocationFailed => write!(f, "could not reserve bounded deformation output memory"),
         }
     }
 }
@@ -193,10 +218,35 @@ pub fn deform_mesh_with_diagnostics(
     bones: &[BonePose],
     options: DeformDiagnosticsOptions<'_>,
 ) -> Result<DeformExecution, DeformDiagnosticError> {
+    // Validate caller-controlled collection sizes before any output/warning allocation.
+    check_limit(DeformResource::Vertices, mesh.vertices.len(), MAX_MESH_VERTICES)?;
+    check_limit(DeformResource::Bones, bones.len(), MAX_MESH_BONES)?;
+    check_limit(DeformResource::Pins, mesh.pins.len(), MAX_MESH_PINS)?;
+    check_limit(DeformResource::Triangles, options.triangles.len(), MAX_DIAGNOSTIC_TRIANGLES)?;
+    check_limit(DeformResource::BoneSegments, options.bone_segments.len(), MAX_DIAGNOSTIC_BONE_SEGMENTS)?;
+    let influence_count = mesh.vertices.iter().try_fold(0usize, |count, vertex| {
+        count.checked_add(vertex.influences.len())
+    }).ok_or(DeformError::ArithmeticOverflow)?;
+    check_limit(DeformResource::Influences, influence_count, MAX_MESH_INFLUENCES)?;
+
+    let mut bone_ids = std::collections::HashSet::new();
+    bone_ids.try_reserve(bones.len()).map_err(|_| DeformError::AllocationFailed)?;
+    for bone in bones {
+        if !bone_ids.insert(bone.id) { return Err(DeformError::DuplicateBone(bone.id).into()); }
+    }
+    let mut pin_ids = std::collections::HashSet::new();
+    pin_ids.try_reserve(mesh.pins.len()).map_err(|_| DeformError::AllocationFailed)?;
+    for pin in &mesh.pins {
+        if !pin_ids.insert(pin.id) { return Err(DeformError::DuplicatePin(pin.id).into()); }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     let started = if options.collect_metrics { Some(std::time::Instant::now()) } else { None };
 
+    let warning_capacity = options.triangles.len().checked_add(options.bone_segments.len())
+        .ok_or(DeformError::ArithmeticOverflow)?;
     let mut warnings = Vec::new();
+    warnings.try_reserve_exact(warning_capacity).map_err(|_| DeformError::AllocationFailed)?;
     for (triangle_index, triangle) in options.triangles.iter().enumerate() {
         for vertex in triangle {
             if *vertex >= mesh.vertices.len() {
@@ -219,7 +269,8 @@ pub fn deform_mesh_with_diagnostics(
         }
     }
 
-    let mut positions = Vec::with_capacity(mesh.vertices.len());
+    let mut positions = Vec::new();
+    positions.try_reserve_exact(mesh.vertices.len()).map_err(|_| DeformError::AllocationFailed)?;
     for vertex in &mesh.vertices {
         if !vertex.bind_position.is_finite() { return Err(DeformError::NonFiniteInput.into()); }
         if vertex.influences.is_empty() { return Err(DeformError::MissingInfluences.into()); }
@@ -258,6 +309,14 @@ pub fn deform_mesh_with_diagnostics(
         result: MeshDeformResult { vertices: positions, pins: mesh.pins.clone() },
         diagnostics: DeformDiagnostics { metrics, warnings },
     })
+}
+
+fn check_limit(resource: DeformResource, actual: usize, limit: usize) -> Result<(), DeformError> {
+    if actual > limit {
+        Err(DeformError::ResourceLimitExceeded { resource, actual, limit })
+    } else {
+        Ok(())
+    }
 }
 
 pub fn find_bone<'a>(bones: &'a [BonePose], id: u64) -> Result<&'a BonePose, DeformError> {

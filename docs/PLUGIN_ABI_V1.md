@@ -195,3 +195,14 @@ Host:
 - [ ] Avoid reentrant or concurrent calls on one instance.
 - [ ] Treat non-zero `ac_run` returns and traps as failed invocations.
 - [ ] Drop each instance after the run under the current ABI v1 lifecycle.
+
+
+## Allocation and payload safety contract
+
+- ABI v1 command parameters are capped at 64 KiB before JSON deserialization. Host requests are capped at 1 MiB; host responses at 32 MiB; exported output at 64 MiB.
+- `ac_alloc` returns a guest-linear-memory allocation only. The host must pass that guest pointer and the actual initialized byte length to `ac_run`; it must never pass a host-process pointer.
+- For `ac_dealloc`, the host must return the exact pointer and original allocation length from `ac_alloc` or `ac_export`, exactly once. Interior pointers, modified lengths, foreign pointers, cross-instance pointers, and duplicate frees violate the ABI contract. The guest cannot safely probe arbitrary pointers.
+- All byte lengths are checked against the applicable cap before creating a slice or allocating a response buffer. The host must keep the guest allocation alive for the complete synchronous call and must not re-enter the same plugin instance.
+- The deformation core applies independent limits to mesh vertices, bones, aggregate influences, pins, diagnostic triangles, and diagnostic bone segments before reserving output or warning buffers. Counts are checked with overflow-safe arithmetic; bounded reservations use fallible allocation APIs.
+- Limits are defensive defaults, not a substitute for host-side limits. Host adapters should reject oversized JSON and geometry before deserialization where possible.
+- Bone IDs and pin IDs must be unique within one input; missing influence-bone references and out-of-range pin/triangle vertex references fail closed.
