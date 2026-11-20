@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Pure, deterministic Smart Controller binding evaluation for Forma Deform"
 license = "MIT"
+repository.workspace = true
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
