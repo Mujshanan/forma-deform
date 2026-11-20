@@ -3,7 +3,7 @@
 **Status:** Prototype and integration investigation; not accepted for native integration  
 **Authoritative implementation:** Rust workspace  
 **Development branch:** `feat/smart-controller-v1`  
-**Reviewed baseline:** `d24dea1b2ed08ecd5d730bcc8de55c5080d0d176`
+**Reviewed baseline:** `72098241fac93c5b4eff86384f9c12fa3a0906a3`
 
 This plan supersedes the original TypeScript/browser-canvas rectangle-editor roadmap previously stored in this file. The former demo has been retired; document geometry and timeline primitives now live in `forma-document-core`. Do not restart the TypeScript prototype unless the architecture is explicitly reconsidered.
 
@@ -153,8 +153,9 @@ Each capability requires its own host contract review, core/adapter boundary, te
 | Generic SDK and WASM packaging | Implemented |
 | Document geometry/timeline core | Implemented; not binding persistence |
 | Mesh/payload resource limits and fuzz targets | Implemented; fuzz execution evidence outstanding |
-| Platform and WASM CI | Passed in latest reviewed run |
-| Formatting and Clippy | Failed in latest reviewed run; P0 |
+| Platform and WASM CI | Passed in the previous reviewed run; post-change rerun not yet confirmed |
+| Formatting | `cargo fmt --all` applied across the workspace; post-change CI check not yet confirmed |
+| Clippy | Three previously reported core warnings corrected; post-change CI check not yet confirmed |
 | ControllerBinding runtime integration | Not wired; P1 decision |
 | Actual adapter-level integration tests | Incomplete; P2 |
 | Pinned-host smoke project | Outstanding; P3 |
