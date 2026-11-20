@@ -229,10 +229,12 @@ pub fn deform_mesh_with_diagnostics(
     }).ok_or(DeformError::ArithmeticOverflow)?;
     check_limit(DeformResource::Influences, influence_count, MAX_MESH_INFLUENCES)?;
 
-    let mut bone_ids = std::collections::HashSet::new();
-    bone_ids.try_reserve(bones.len()).map_err(|_| DeformError::AllocationFailed)?;
+    let mut bone_lookup = std::collections::HashMap::new();
+    bone_lookup.try_reserve(bones.len()).map_err(|_| DeformError::AllocationFailed)?;
     for bone in bones {
-        if !bone_ids.insert(bone.id) { return Err(DeformError::DuplicateBone(bone.id).into()); }
+        if bone_lookup.insert(bone.id, bone).is_some() {
+            return Err(DeformError::DuplicateBone(bone.id).into());
+        }
     }
     let mut pin_ids = std::collections::HashSet::new();
     pin_ids.try_reserve(mesh.pins.len()).map_err(|_| DeformError::AllocationFailed)?;
@@ -278,8 +280,8 @@ pub fn deform_mesh_with_diagnostics(
         let mut position = Vec2::default();
         for influence in &vertex.influences {
             if !influence.weight.is_finite() || influence.weight < 0.0 { return Err(DeformError::InvalidWeight.into()); }
-            let bone = bones.iter().find(|bone| bone.id == influence.bone_id)
-                .ok_or(DeformError::MissingInfluenceBone(influence.bone_id))?;
+            let bone = bone_lookup.get(&influence.bone_id)
+                .copied().ok_or(DeformError::MissingInfluenceBone(influence.bone_id))?;
             let transformed = bone.world.transform_point(vertex.bind_position)?;
             position = position.add(transformed.scale(influence.weight));
             sum += influence.weight;
@@ -305,8 +307,11 @@ pub fn deform_mesh_with_diagnostics(
         interpolation_mode: InterpolationMode::LinearBlendSkinning,
         solver: None,
     });
+    let mut pins = Vec::new();
+    pins.try_reserve_exact(mesh.pins.len()).map_err(|_| DeformError::AllocationFailed)?;
+    pins.extend_from_slice(&mesh.pins);
     Ok(DeformExecution {
-        result: MeshDeformResult { vertices: positions, pins: mesh.pins.clone() },
+        result: MeshDeformResult { vertices: positions, pins },
         diagnostics: DeformDiagnostics { metrics, warnings },
     })
 }
@@ -402,6 +407,34 @@ mod tests {
         assert_eq!(error.code, DeformErrorCode::MissingInfluences);
         assert_eq!(error.source, DeformError::MissingInfluences);
     }
+    #[test]
+    fn oversized_counts_are_rejected_before_output_allocation() {
+        assert_eq!(
+            check_limit(DeformResource::Vertices, MAX_MESH_VERTICES + 1, MAX_MESH_VERTICES),
+            Err(DeformError::ResourceLimitExceeded {
+                resource: DeformResource::Vertices,
+                actual: MAX_MESH_VERTICES + 1,
+                limit: MAX_MESH_VERTICES,
+            })
+        );
+    }
+    #[test]
+    fn duplicate_bone_and_pin_ids_fail_closed() {
+        let mesh = DeformMesh {
+            vertices: vec![MeshVertex {
+                bind_position: Vec2::default(),
+                influences: vec![BoneWeight { bone_id: 1, weight: 1.0 }],
+            }],
+            pins: vec![
+                MeshPin { id: 7, vertex_index: 0, target: Vec2::default() },
+                MeshPin { id: 7, vertex_index: 0, target: Vec2::default() },
+            ],
+        };
+        assert_eq!(deform_mesh(&mesh, &[bone(1, 0.0)]), Err(DeformError::DuplicatePin(7)));
+        let valid_mesh = DeformMesh { pins: vec![], ..mesh };
+        assert_eq!(deform_mesh(&valid_mesh, &[bone(1, 0.0), bone(1, 1.0)]), Err(DeformError::DuplicateBone(1)));
+    }
+
     #[test] fn metrics_are_absent_when_not_requested() {
         let mesh = DeformMesh { vertices: vec![MeshVertex { bind_position: Vec2::default(), influences: vec![BoneWeight { bone_id: 1, weight: 1.0 }] }], pins: vec![] };
         let output = deform_mesh_with_diagnostics(&mesh, &[bone(1, 0.0)], DeformDiagnosticsOptions::default()).unwrap();
