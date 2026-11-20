@@ -20,6 +20,8 @@ V4 adds an external Python experiment that connects to an open AniCraft window t
 
 - Prototype: [tools/v4_mcp_slider.py](tools/v4_mcp_slider.py)
 - Findings and limitations: [docs/V4_MCP_FINDINGS.md](docs/V4_MCP_FINDINGS.md)
+- Runtime command discovery: writes `v4_mcp_discovery.json`
+- Latency measurements: writes `v4_mcp_latency.csv`
 - Mapping tests: `python -m unittest discover -s tests -p "test_v4_mcp_slider.py" -v`
 
 Start AniCraft with remote control enabled, then run the prototype from this repository:
