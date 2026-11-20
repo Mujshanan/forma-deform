@@ -191,9 +191,13 @@ pub fn alloc(size: i32) -> i32 {
     let mut bytes = Vec::<u8>::new();
     if bytes.try_reserve_exact(size as usize).is_err() { return -1; }
     bytes.resize(size as usize, 0);
-    let boxed = bytes.into_boxed_slice();
-    let ptr = Box::into_raw(boxed) as *mut u8 as usize;
-    if ptr > i32::MAX as usize { return -1; }
+    let raw = Box::into_raw(bytes.into_boxed_slice());
+    let ptr = raw as *mut u8 as usize;
+    if ptr > i32::MAX as usize {
+        // SAFETY: raw is the allocation just created above and has not been transferred.
+        unsafe { drop(Box::from_raw(raw)); }
+        return -1;
+    }
     ptr as i32
 }
 
@@ -212,15 +216,17 @@ pub fn dealloc(ptr: i32, len: i32) {
 
 #[doc(hidden)]
 pub fn run(ptr: i32, len: i32, handler: fn(&Value) -> Result<(), String>) -> i32 {
-    if len < 0 || len as usize > MAX_PAYLOAD_BYTES || (len > 0 && ptr <= 0) {
-        return STATUS_INVALID_ARGUMENT;
-    }
-    let bytes: &[u8] = if len == 0 {
-        &[]
-    } else {
+    if len < 0 || (len > 0 && ptr <= 0) { return STATUS_INVALID_ARGUMENT; }
+    if len as usize > MAX_PAYLOAD_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
+    let bytes: &[u8] = if len == 0 { &[] } else {
         // SAFETY: the host must pass a live guest allocation from ac_alloc with at least len bytes.
         unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) }
     };
+    run_bytes(bytes, handler)
+}
+
+fn run_bytes(bytes: &[u8], handler: fn(&Value) -> Result<(), String>) -> i32 {
+    if bytes.len() > MAX_PAYLOAD_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
     let params: Value = match serde_json::from_slice(bytes) {
         Ok(value) => value,
         Err(_) => return STATUS_INVALID_JSON,
@@ -249,8 +255,13 @@ pub fn export(ptr: i32, len: i32, handler: fn(&Value) -> Result<Vec<u8>, String>
         Ok(output) if output.len() <= MAX_PAYLOAD_BYTES => {
             let boxed = output.into_boxed_slice();
             let len = boxed.len();
-            let ptr = Box::into_raw(boxed) as *mut u8 as usize;
-            if ptr > i32::MAX as usize { return -1; }
+            let raw = Box::into_raw(boxed);
+            let ptr = raw as *mut u8 as usize;
+            if ptr > i32::MAX as usize {
+                // SAFETY: raw is the output allocation just created above.
+                unsafe { drop(Box::from_raw(raw)); }
+                return -1;
+            }
             pack_ptr_len(ptr, len)
         }
         Ok(_) => -1,
@@ -285,12 +296,12 @@ mod tests {
     fn run_returns_stable_invalid_input_and_json_codes() {
         assert_eq!(run(0, -1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
         assert_eq!(run(0, 1, |_| Ok(())), STATUS_INVALID_JSON);
+        assert_eq!(run(1, (MAX_PAYLOAD_BYTES + 1) as i32, |_| Ok(())), STATUS_PAYLOAD_TOO_LARGE);
     }
 
     #[test]
     fn handler_error_has_stable_status_code() {
-        let bytes = br#"{}"#;
-        let ptr = bytes.as_ptr() as usize as i32;
-        assert_eq!(run(ptr, bytes.len() as i32, |_| Err("no".into())), STATUS_HANDLER_ERROR);
+        assert_eq!(run_bytes(br#"{}"#, |_| Err("no".into())), STATUS_HANDLER_ERROR);
+        assert_eq!(run_bytes(br#"{}"#, |_| Ok(())), STATUS_OK);
     }
 }
