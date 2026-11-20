@@ -106,7 +106,13 @@ All four workflows passed after the contract/documentation and test-fixture corr
 
 ## P2 — Test the real plugin adapter boundary (current priority)
 
-**Why third:** Existing `core_composition.rs` is a core-composition test. It verifies a synthetic ControllerBinding-to-deformation calculation, not the actual plugin adapter, command dispatch, or Slider frame preview.
+**Why third:** The former `core_composition.rs` test was only a core-to-core calculation. P2 now adds a private host-command seam used by the production adapter and a fake host in tests, so the actual mode dispatcher and command translation can be exercised deterministically.
+
+### Implementation in progress
+- Production `run()` now delegates through `run_with_host()`; both Slider and Deform use the same `HostApi` command/log boundary.
+- Adapter tests capture host requests and assert the exact `warp.pin_move` payload, plus the absence of writes in Slider and Deform preview.
+- Coverage includes manual override, bone lookup, exclusive/inclusive endpoints, reversed ranges, spring swing, missing/malformed bone and warp data, missing pins, host command failures, repeated absolute evaluation, malformed parameters, and unsupported modes.
+- The SDK's existing tests cover malformed JSON and the 64 KiB plugin-parameter cap. Full CI validation of this new adapter seam is pending.
 
 ### Tasks
 1. Add a testable host-command boundary (or equivalent deterministic seam) so tests can provide host responses and capture commands without a running AniCraft process.
