@@ -4,6 +4,20 @@
 
 Form Deform drives one AniCraft Asset Warp pin from one armature bone angle. It is a focused deformation tool, separate from the general-purpose Smart Controller.
 
+## API boundaries
+
+The deformation API is an explicit, host-independent Rust data model in `form-deform-core`:
+
+- `DeformSpec` — authored neutral pin position, neutral bone angle, and per-degree displacement gains.
+- `BoneAngle` — keyed angle and an optional, separately reported spring swing.
+- `DeformRequest` — complete evaluation input, including the explicit spring-inclusion choice.
+- `DeformResult` — keyed angle, reported spring value, effective angle, angle delta, and absolute target position.
+- `DeformError` — explicit invalid-input, unavailable-spring, and arithmetic-overflow failures.
+
+The core crate has no Serde, JSON, AniCraft SDK, or WASM dependency. The plugin adapter owns Serde DTOs for manifest parameters and the `bone.info` / `warp.info` host responses. It serializes a typed `warp.pin_move` command payload at the host boundary. Host response JSON is never returned as the deformation result.
+
+Missing spring swing is not treated as zero when spring inclusion is requested. Missing required response fields or malformed host data produce an adapter error. The core result is a typed `DeformResult`, not an undocumented JSON object.
+
 ## Workflow
 
 1. Create an armature and pose its controller bone.
@@ -14,11 +28,11 @@ Form Deform drives one AniCraft Asset Warp pin from one armature bone angle. It 
 6. Run Form Deform with Apply pin position disabled to inspect the calculated target.
 7. Enable Apply pin position to write the absolute pin position through the host's warp.pin_move command. The host command is undoable.
 
-The calculation is non-accumulating: every run derives an absolute target from the authored neutral pin position, not from the pin's current displayed position. Configure the neutral position and gains as part of the deformation setup.
+The calculation is non-accumulating: every run derives an absolute target from the authored neutral pin position, not from the pin's current displayed position.
 
 ## Spring policy
 
-By default, the input uses the constrained keyed bone angle. Include spring swing explicitly adds the separately reported spring swing. Head/tail coordinates are not used as pose inputs.
+By default, the input uses the constrained keyed bone angle. Include spring swing explicitly adds the separately reported spring swing. If spring swing is requested but absent from the host response, evaluation fails explicitly rather than assuming zero. Head/tail coordinates are not used as pose inputs.
 
 ## Limits
 
@@ -32,6 +46,7 @@ By default, the input uses the constrained keyed bone angle. Include spring swin
 ## Build
 
 ```sh
+cargo test -p form-deform-core
 cargo test -p anicraft-form-deform-plugin
 cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
 ```
