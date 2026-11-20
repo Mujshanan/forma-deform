@@ -1,6 +1,6 @@
 # AniCraft Smart Controller development plan
 
-**Status:** V1 command modes and runtime contract implemented; adapter-boundary test seam added; CI validation pending  
+**Status:** V1 command modes, runtime contract, and adapter-boundary tests implemented and CI-verified  
 **Host:** Mujshanan/AniCraft  
 **Plugin identity:** AniCraft Smart Controller (`org.mujshanan.smart-controller`)
 
