@@ -1,0 +1,27 @@
+name: WebAssembly
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32
+      - name: Build all workspace crates for WebAssembly
+        run: cargo build --workspace --target wasm32-unknown-unknown
+      - name: Build release plugin modules
+        run: |
+          cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
+          cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
