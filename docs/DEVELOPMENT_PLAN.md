@@ -77,7 +77,7 @@ All runs below tested commit `14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`:
 
 Fixes required during verification included the Bone Query collapsible-if lint, an SDK test identity operation, and correcting cargo-fuzz CLI invocation in the workflow. The fuzz workflow builds both targets and runs each with `-max_total_time=20 -max_len=65536`; this is bounded smoke coverage, not sustained fuzzing.
 
-## P1 — Make the V1 runtime contract explicit (current priority)
+## P1 — Make the V1 runtime contract explicit (completed)
 
 **Why second:** The adapter's actual runtime uses mode-specific DTOs and dispatch: `Params` + `preview_slider()` for Slider, and `DeformParams` + `evaluate_deformation()` for Deform. The three-anchor `ControllerBinding` type exists in `smart-controller-core`, but the plugin runtime does not currently use it.
 
@@ -97,7 +97,14 @@ Keep `ControllerBinding` / `BindingSet` as an experimental, host-independent cor
 - Documentation does not overstate timeline driving, persistence, or live mesh deformation.
 - Every advertised V1 mode has explicit success and failure behavior.
 
-## P2 — Test the real plugin adapter boundary
+### Verification evidence
+All four workflows passed after the contract/documentation and test-fixture corrections on commit `98890ad007e4b5f048c389806316e97c93705504`:
+- [Platform — Ubuntu and Windows](https://github.com/Mujshanan/forma-deform/actions/runs/44699173046)
+- [Lint — formatting and Clippy](https://github.com/Mujshanan/forma-deform/actions/runs/44699172805)
+- [WebAssembly — workspace and both plugin release builds](https://github.com/Mujshanan/forma-deform/actions/runs/44699172929)
+- [Fuzz Smoke — both targets](https://github.com/Mujshanan/forma-deform/actions/runs/44699172802)
+
+## P2 — Test the real plugin adapter boundary (current priority)
 
 **Why third:** Existing `core_composition.rs` is a core-composition test. It verifies a synthetic ControllerBinding-to-deformation calculation, not the actual plugin adapter, command dispatch, or Slider frame preview.
 
