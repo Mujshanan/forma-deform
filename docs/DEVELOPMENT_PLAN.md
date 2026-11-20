@@ -132,8 +132,14 @@ All four workflows passed after the contract/documentation and test-fixture corr
 
 **Why fourth:** Unit and simulated-host tests cannot establish actual host compatibility.
 
+### Current P3 progress
+- Pinned `Mujshanan/AniCraft` main-head commit `bcfea816478f2a00ab172cefe67f0bd5696b3886` (checked 2026-11-20), plugin ABI v1, host Rust minimum 1.95 / edition 2024, plugin release-WASM build configuration, and prototype baseline.
+- Static source review confirms `bone.info`, `warp.info`, and `warp.pin_move` exist; the host allows the bone/warp command namespaces for command plugins; a successful `plugin.run` is one undo step.
+- Static review found that `warp.info` omits `pins` when `warped:false`. The adapter now models pins as optional, reports an unwarped element explicitly, and rejects a warped response with missing pins.
+- Identified the pinned host's armature fixture and recorded the steps to add a separate warpable shape/pin. The in-app project, actual IDs, and result evidence are still outstanding.
+
 ### Tasks
-1. Pin the exact AniCraft fork commit, plugin ABI version, build configuration, and matching prototype commit in `INTEGRATION.md`.
+1. Pin the exact AniCraft fork commit, plugin ABI version, build configuration, and matching prototype commit in `INTEGRATION.md` (completed).
 2. Create the minimal in-app smoke project described there: one driver bone, one action/timeline, one Asset Warp element, and one existing pin.
 3. Verify plugin loading, real `bone.info` and `warp.info` decoding, Slider preview values, Deform absolute target, Apply, and one-step undo.
 4. Repeat Deform evaluation and verify no accumulation or unintended edits.
@@ -186,7 +192,7 @@ Each capability requires its own host contract review, core/adapter boundary, te
 | Clippy | Passed with `-D warnings` on verified P0 baseline |
 | ControllerBinding runtime integration | Explicitly excluded from V1; retained as experimental core API |
 | Actual adapter-level integration tests | Implemented and CI-verified; P2 complete |
-| Pinned-host smoke project | Outstanding; P3 |
+| Pinned-host smoke project | Host revision and base fixture pinned; in-app run and evidence outstanding; P3 |
 | Native integration decision | Not accepted; P4 |
 | Durable bindings and continuous playback | Unsupported by currently verified host surface; P5 |
 
