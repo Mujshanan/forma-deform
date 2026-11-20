@@ -2,7 +2,7 @@
 name = "smart-controller-core"
 version = "0.1.0"
 edition = "2021"
-description = "Pure, deterministic Smart Controller binding evaluation for Forma Deform"
+description = "Pure, deterministic Slider and three-anchor Smart Controller evaluation"
 license = "MIT"
 repository.workspace = true
 
