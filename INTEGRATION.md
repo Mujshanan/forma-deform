@@ -90,7 +90,8 @@ This base fixture does not already contain an Asset Warp mesh. The added rectang
 - [ ] Deform computes an absolute target from authored neutral values; optional spring swing is used only when explicitly enabled and actually available.
 - [ ] Explicit Apply changes only the selected existing Asset Warp pin, is undoable, and does not accumulate drift across repeated evaluations.
 - [ ] Coordinate conventions, units, ID lifetime, error behavior, and ABI allocation/ownership rules are documented and verified.
-- [ ] Core tests, plugin tests, WASM build, and the real-host smoke project pass on the pinned revisions.
+- [x] Core tests, adapter tests, strict lint, WASM builds, and bounded fuzz smoke runs pass on the pinned prototype revision.
+- [ ] The real-host smoke project passes on the pinned AniCraft revision.
 - [ ] The integration has a clear maintenance owner and a bounded compatibility/update procedure.
 
 ### Native-tool wishlist (not a V1 blocker)
@@ -123,7 +124,9 @@ A wishlist item being unavailable is not, by itself, a kill condition. It become
 ## 5. Current evidence and next decision
 
 - Pure Rust cores and the actual Smart Controller `run_with_host` mode dispatcher have automated tests; a fake host captures the same command/log boundary used by production `run()`. Coverage includes Slider manual/bone input and endpoint behavior, Deform preview/Apply and exact `warp.pin_move` payload, optional spring swing, malformed/missing host data, command failures, and repeated absolute evaluation. SDK tests cover malformed JSON and oversized plugin parameters. See `cargo test --workspace`.
-- The adapter currently performs on-demand bone and warp queries. Deform Apply uses the undoable `warp.pin_move` command.
+- Static source review at host commit `bcfea816478f2a00ab172cefe67f0bd5696b3886` confirms ABI v1; `plugin_may_call` permits the `bone.*` and `warp.*` command namespaces; `bone.info` accepts a layer filter and returns bone IDs, names, keyed angles, and spring swing; `warp.info` returns `warped:false` without a `pins` field or, when warped, a pin list containing IDs and stage-pixel positions; and `warp.pin_move` accepts element/pin IDs and stage-pixel X/Y coordinates.
+- The host's command-plugin contract makes a successful `plugin.run` one undo step. This is confirmed from source/docs, not yet from the in-app smoke run.
+- The adapter was corrected to match the actual `warp.info` response variants: absent pins are accepted for an unwarped element, but are an error when `warped:true`.
 - The current host contract does **not** establish continuous playback/scrubbing evaluation, durable arbitrary plugin metadata, or a verified command to set a nested symbol instance's displayed frame.
 - Weighted mesh skinning exists as a host-independent core foundation. It is not wired to live AniCraft mesh geometry because the required complete geometry, skin weights, and evaluated bone world poses are not exposed by the inspected host responses.
 - The exact target host commit and ABI are pinned; the in-app smoke project has a pinned base fixture and reproducible preparation steps but has not yet been executed.
