@@ -12,7 +12,6 @@ This repository uses Rust as the authoritative implementation for document geome
 Run:
 
 ```sh
-cargo fmt --all -- --check
 cargo test --workspace
 cargo check --workspace --benches
 cargo bench -p form-deform-core --bench deform_mesh

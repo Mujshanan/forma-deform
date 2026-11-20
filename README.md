@@ -37,8 +37,6 @@ The current AniCraft command-plugin API supports on-demand bone and warp queries
 Run the complete Rust suite and build both WASM plugins:
 
 ```sh
-rustup target add wasm32-unknown-unknown
-cargo fmt --all -- --check
 cargo test --workspace
 cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
 cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
