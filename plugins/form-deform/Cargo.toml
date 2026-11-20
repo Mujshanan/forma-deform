@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anicraft-plugin-sdk = { path = "../../crates/anicraft-plugin-sdk" }
 form-deform-core = { path = "../../crates/form-deform-core" }
+serde = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]
