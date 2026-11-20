@@ -26,8 +26,6 @@ proptest! {
 
     #[test]
     fn deformation_is_deterministic(
-        x in -1.0e6f64..1.0e6,
-        y in -1.0e6f64..1.0e6,
         angle in -1.0e6f64..1.0e6,
         gain_x in -1.0e3f64..1.0e3,
         gain_y in -1.0e3f64..1.0e3,
@@ -44,7 +42,6 @@ proptest! {
         let first = evaluate_deformation(request);
         let second = evaluate_deformation(request);
         prop_assert_eq!(first, second);
-        prop_assert!(x.is_finite() && y.is_finite());
     }
 
     #[test]
