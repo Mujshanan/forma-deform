@@ -44,7 +44,7 @@ The manifest accepts `driver_layer_id`, `driver_bone_name`, `action_layer_id`, `
 The manifest accepts `bone_id`, `element_id`, `pin_id`, `neutral_angle`, `neutral_x`, `neutral_y`, `gain_x`, and `gain_y`; `include_spring_swing` and `apply` default to false.
 
 1. Query `bone.info`, decode the typed armature/bone response, and resolve the requested bone ID and keyed angle. Spring swing is optional.
-2. Query `warp.info` for the requested element; require an Asset Warp mesh and the requested existing pin.
+2. Query `warp.info` for the requested element. When `warped` is false, AniCraft omits the `pins` field and the adapter returns a no-mesh error. When `warped` is true, `pins` must be present and contain the requested existing pin.
 3. Evaluate the absolute target from the authored neutral position and angle plus the per-degree gain. Spring swing contributes only when explicitly enabled and present.
 4. Log the effective angle and absolute stage-pixel target.
 5. If `apply` is false, perform calculation only. If true, send `warp.pin_move` with exactly the selected element, pin, and calculated X/Y target. The host edit is undoable.
