@@ -9,8 +9,14 @@
 
 use serde_json::{Value, json};
 
-/// ABI v1 maximum for any guest↔host payload, including JSON requests and responses.
-pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
+/// AniCraft host default limits. Per-kind limits may be lower (see PLUGIN_ABI_V1.md).
+pub const MAX_MODULE_BYTES: usize = 16 * 1024 * 1024;
+pub const MAX_LINEAR_MEMORY_BYTES: usize = 256 * 1024 * 1024;
+pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
+pub const MAX_PLUGIN_PARAMS_BYTES: usize = 64 * 1024;
+pub const MAX_HOST_REQUEST_BYTES: usize = 1 * 1024 * 1024;
+pub const MAX_HOST_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_EXPORT_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
 /// Stable status returned by command exports.
 pub const STATUS_OK: i32 = 0;
 pub const STATUS_INVALID_ARGUMENT: i32 = 1;
@@ -43,8 +49,8 @@ unsafe fn host_response(_: *mut u8, _: usize) -> i32 { -1 }
 /// from `anicraft.call`; the response remains available only until the next host call.
 pub fn request(req: &Value) -> Result<Value, String> {
     let bytes = serde_json::to_vec(req).map_err(|e| format!("request serialization failed: {e}"))?;
-    if bytes.len() > MAX_PAYLOAD_BYTES {
-        return Err(format!("request exceeds ABI v1 payload limit ({MAX_PAYLOAD_BYTES} bytes)"));
+    if bytes.len() > MAX_HOST_REQUEST_BYTES {
+        return Err(format!("request exceeds ABI v1 host request limit ({MAX_HOST_REQUEST_BYTES} bytes)"));
     }
 
     // SAFETY: bytes remains alive and immutable for the full synchronous host call.
@@ -53,8 +59,8 @@ pub fn request(req: &Value) -> Result<Value, String> {
         return Err("AniCraft host call failed".into());
     }
     let response_len = response_len as usize;
-    if response_len > MAX_PAYLOAD_BYTES {
-        return Err("AniCraft response exceeds ABI v1 payload limit".into());
+    if response_len > MAX_HOST_RESPONSE_BYTES {
+        return Err("AniCraft response exceeds ABI v1 host response limit".into());
     }
 
     let mut response = vec![0u8; response_len];
@@ -177,7 +183,7 @@ macro_rules! ease {
 
 #[doc(hidden)]
 pub fn manifest_ptr(manifest: &'static str) -> i64 {
-    if manifest.len() > MAX_PAYLOAD_BYTES { return -1; }
+    if manifest.len() > MAX_MANIFEST_BYTES { return -1; }
     pack_ptr_len(manifest.as_ptr() as usize, manifest.len())
 }
 
@@ -187,16 +193,16 @@ fn pack_ptr_len(ptr: usize, len: usize) -> i64 {
 
 #[doc(hidden)]
 pub fn alloc(size: i32) -> i32 {
-    if size < 0 || size as usize > MAX_PAYLOAD_BYTES { return -1; }
+    if size < 0 || size as usize > MAX_PLUGIN_PARAMS_BYTES { return 0; }
     let mut bytes = Vec::<u8>::new();
     if bytes.try_reserve_exact(size as usize).is_err() { return -1; }
     bytes.resize(size as usize, 0);
     let raw = Box::into_raw(bytes.into_boxed_slice());
     let ptr = raw as *mut u8 as usize;
-    if ptr > i32::MAX as usize {
+    if ptr == 0 || ptr > i32::MAX as usize {
         // SAFETY: raw is the allocation just created above and has not been transferred.
         unsafe { drop(Box::from_raw(raw)); }
-        return -1;
+        return 0;
     }
     ptr as i32
 }
@@ -205,7 +211,7 @@ pub fn alloc(size: i32) -> i32 {
 /// The host must pass the original allocation length, not the number of bytes it used.
 #[doc(hidden)]
 pub fn dealloc(ptr: i32, len: i32) {
-    if ptr <= 0 || len < 0 || len as usize > MAX_PAYLOAD_BYTES { return; }
+    if ptr <= 0 || len < 0 || len as usize > MAX_EXPORT_OUTPUT_BYTES { return; }
     // SAFETY: the ABI contract requires the host to return the original pointer and allocation
     // length exactly once. Invalid or duplicate deallocation is a host ABI violation.
     unsafe {
@@ -217,7 +223,7 @@ pub fn dealloc(ptr: i32, len: i32) {
 #[doc(hidden)]
 pub fn run(ptr: i32, len: i32, handler: fn(&Value) -> Result<(), String>) -> i32 {
     if len < 0 || (len > 0 && ptr <= 0) { return STATUS_INVALID_ARGUMENT; }
-    if len as usize > MAX_PAYLOAD_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
+    if len as usize > MAX_PLUGIN_PARAMS_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
     let bytes: &[u8] = if len == 0 { &[] } else {
         // SAFETY: the host must pass a live guest allocation from ac_alloc with at least len bytes.
         unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) }
@@ -226,7 +232,7 @@ pub fn run(ptr: i32, len: i32, handler: fn(&Value) -> Result<(), String>) -> i32
 }
 
 fn run_bytes(bytes: &[u8], handler: fn(&Value) -> Result<(), String>) -> i32 {
-    if bytes.len() > MAX_PAYLOAD_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
+    if bytes.len() > MAX_PLUGIN_PARAMS_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
     let params: Value = match serde_json::from_slice(bytes) {
         Ok(value) => value,
         Err(_) => return STATUS_INVALID_JSON,
@@ -242,7 +248,7 @@ fn run_bytes(bytes: &[u8], handler: fn(&Value) -> Result<(), String>) -> i32 {
 
 #[doc(hidden)]
 pub fn export(ptr: i32, len: i32, handler: fn(&Value) -> Result<Vec<u8>, String>) -> i64 {
-    if len < 0 || len as usize > MAX_PAYLOAD_BYTES || (len > 0 && ptr <= 0) { return -1; }
+    if len < 0 || len as usize > MAX_PLUGIN_PARAMS_BYTES || (len > 0 && ptr <= 0) { return -1; }
     let bytes: &[u8] = if len == 0 { &[] } else {
         // SAFETY: the host must pass a live guest allocation from ac_alloc with at least len bytes.
         unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) }
@@ -252,12 +258,12 @@ pub fn export(ptr: i32, len: i32, handler: fn(&Value) -> Result<Vec<u8>, String>
         Err(_) => return -1,
     };
     match handler(&options) {
-        Ok(output) if output.len() <= MAX_PAYLOAD_BYTES => {
+        Ok(output) if output.len() <= MAX_EXPORT_OUTPUT_BYTES => {
             let boxed = output.into_boxed_slice();
             let len = boxed.len();
             let raw = Box::into_raw(boxed);
             let ptr = raw as *mut u8 as usize;
-            if ptr > i32::MAX as usize {
+            if ptr == 0 || ptr > i32::MAX as usize {
                 // SAFETY: raw is the output allocation just created above.
                 unsafe { drop(Box::from_raw(raw)); }
                 return -1;
@@ -278,7 +284,12 @@ mod tests {
 
     #[test]
     fn payload_limit_is_fixed_at_sixteen_mib() {
-        assert_eq!(MAX_PAYLOAD_BYTES, 16 * 1024 * 1024);
+        assert_eq!(MAX_MODULE_BYTES, 16 * 1024 * 1024);
+        assert_eq!(MAX_MANIFEST_BYTES, 64 * 1024);
+        assert_eq!(MAX_PLUGIN_PARAMS_BYTES, 64 * 1024);
+        assert_eq!(MAX_HOST_REQUEST_BYTES, 1 * 1024 * 1024);
+        assert_eq!(MAX_HOST_RESPONSE_BYTES, 32 * 1024 * 1024);
+        assert_eq!(MAX_EXPORT_OUTPUT_BYTES, 64 * 1024 * 1024);
     }
 
     #[test]
@@ -288,8 +299,8 @@ mod tests {
 
     #[test]
     fn allocation_rejects_negative_and_oversized_requests() {
-        assert_eq!(alloc(-1), -1);
-        assert_eq!(alloc((MAX_PAYLOAD_BYTES + 1) as i32), -1);
+        assert_eq!(alloc(-1), 0);
+        assert_eq!(alloc((MAX_PLUGIN_PARAMS_BYTES + 1) as i32), 0);
     }
 
     #[test]
