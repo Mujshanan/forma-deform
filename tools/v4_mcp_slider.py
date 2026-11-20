@@ -217,8 +217,14 @@ def main() -> int:
     if args.port <= 0 or args.layer < 0 or args.bone < 0:
         print("port must be positive; layer and bone IDs must be non-negative", file=sys.stderr)
         return 2
-    if args.watch and (args.source_frame is None or args.source_frame < 0):
-        print("--watch requires a non-negative --source-frame", file=sys.stderr)
+    if args.source_frame is not None and args.source_frame < 0:
+        print("--source-frame must be non-negative", file=sys.stderr)
+        return 2
+    if args.watch and args.source_frame is None:
+        print("--watch requires --source-frame", file=sys.stderr)
+        return 2
+    if args.cycles < 0:
+        print("--cycles must be non-negative", file=sys.stderr)
         return 2
     if args.interval < 0.2 or args.interval > 5:
         print("--interval must be between 0.2 and 5 seconds", file=sys.stderr)
