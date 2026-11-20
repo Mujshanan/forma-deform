@@ -11,6 +11,8 @@ The branch `feat/smart-controller-v1` contains two command plugins:
 
 The former standalone Form Deform plugin has been consolidated into Smart Controller. The independent `form-deform-core` crate remains responsible for pure deformation math; `smart-controller-core` remains responsible for Slider mapping. The Smart Controller adapter composes both with the generic AniCraft SDK.
 
+The guest SDK and host runtime boundary is specified in the versioned [AniCraft Plugin ABI v1](docs/PLUGIN_ABI_V1.md). The SDK implementation is in `crates/anicraft-plugin-sdk`; plugins must use it rather than declaring raw imports or exports themselves.
+
 See [plugin overview](plugins/README.md), the [build and smoke-test guide](plugins/INSTALL.md), [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md), and [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md).
 
 ## Important host boundaries
