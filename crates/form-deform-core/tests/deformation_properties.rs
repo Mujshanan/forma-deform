@@ -1,6 +1,6 @@
 use form_deform_core::{
-    deform_mesh, evaluate_deformation, BoneAngle, BonePose, BoneTransform, BoneWeight,
-    DeformError, DeformMesh, DeformRequest, DeformSpec, MeshPin, MeshVertex, Vec2,
+    BoneAngle, BonePose, BoneTransform, BoneWeight, DeformError, DeformMesh, DeformRequest,
+    DeformSpec, MeshPin, MeshVertex, Vec2, deform_mesh, evaluate_deformation,
 };
 use proptest::prelude::*;
 
@@ -112,9 +112,19 @@ fn mesh_identity_preserves_closed_vertex_loop_and_pin_indices() {
         Vec2 { x: 0.0, y: 0.0 },
     ];
     let mesh = DeformMesh {
-        vertices: vertices.iter().map(|p| vertex(
-            p.x, p.y, vec![BoneWeight { bone_id: 1, weight: 1.0 }]
-        )).collect(),
+        vertices: vertices
+            .iter()
+            .map(|p| {
+                vertex(
+                    p.x,
+                    p.y,
+                    vec![BoneWeight {
+                        bone_id: 1,
+                        weight: 1.0,
+                    }],
+                )
+            })
+            .collect(),
         pins: vec![MeshPin {
             id: 99,
             vertex_index: 2,
@@ -129,16 +139,36 @@ fn mesh_identity_preserves_closed_vertex_loop_and_pin_indices() {
 #[test]
 fn malformed_weights_and_missing_bones_are_rejected() {
     let bad_weight = DeformMesh {
-        vertices: vec![vertex(0.0, 0.0, vec![BoneWeight { bone_id: 1, weight: f64::NAN }])],
+        vertices: vec![vertex(
+            0.0,
+            0.0,
+            vec![BoneWeight {
+                bone_id: 1,
+                weight: f64::NAN,
+            }],
+        )],
         pins: vec![],
     };
-    assert_eq!(deform_mesh(&bad_weight, &[pose(1, 0.0, 0.0, 0.0)]), Err(DeformError::InvalidWeight));
+    assert_eq!(
+        deform_mesh(&bad_weight, &[pose(1, 0.0, 0.0, 0.0)]),
+        Err(DeformError::InvalidWeight)
+    );
 
     let missing_bone = DeformMesh {
-        vertices: vec![vertex(0.0, 0.0, vec![BoneWeight { bone_id: 2, weight: 1.0 }])],
+        vertices: vec![vertex(
+            0.0,
+            0.0,
+            vec![BoneWeight {
+                bone_id: 2,
+                weight: 1.0,
+            }],
+        )],
         pins: vec![],
     };
-    assert_eq!(deform_mesh(&missing_bone, &[pose(1, 0.0, 0.0, 0.0)]), Err(DeformError::MissingInfluenceBone(2)));
+    assert_eq!(
+        deform_mesh(&missing_bone, &[pose(1, 0.0, 0.0, 0.0)]),
+        Err(DeformError::MissingInfluenceBone(2))
+    );
 }
 
 #[test]
@@ -147,7 +177,10 @@ fn arithmetic_overflow_is_an_error_not_a_non_finite_result() {
         vertices: vec![vertex(
             f64::MAX,
             f64::MAX,
-            vec![BoneWeight { bone_id: 1, weight: 1.0 }],
+            vec![BoneWeight {
+                bone_id: 1,
+                weight: 1.0,
+            }],
         )],
         pins: vec![],
     };

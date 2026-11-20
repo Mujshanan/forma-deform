@@ -1,26 +1,46 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use form_deform_core::{deform_mesh, BonePose, BoneTransform, BoneWeight, DeformMesh, MeshVertex, Vec2};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use form_deform_core::{
+    BonePose, BoneTransform, BoneWeight, DeformMesh, MeshVertex, Vec2, deform_mesh,
+};
 
 fn mesh(vertex_count: usize, bone_count: usize) -> (DeformMesh, Vec<BonePose>) {
     let bones: Vec<_> = (0..bone_count)
         .map(|id| BonePose {
             id: id as u64,
             world: BoneTransform {
-                translation: Vec2 { x: id as f64 * 0.1, y: -(id as f64) * 0.05 },
+                translation: Vec2 {
+                    x: id as f64 * 0.1,
+                    y: -(id as f64) * 0.05,
+                },
                 rotation_degrees: id as f64 * 0.25,
             },
         })
         .collect();
     let vertices = (0..vertex_count)
         .map(|i| MeshVertex {
-            bind_position: Vec2 { x: i as f64 * 0.01, y: (i % 97) as f64 * 0.02 },
+            bind_position: Vec2 {
+                x: i as f64 * 0.01,
+                y: (i % 97) as f64 * 0.02,
+            },
             influences: vec![
-                BoneWeight { bone_id: 0, weight: 0.5 },
-                BoneWeight { bone_id: (bone_count - 1) as u64, weight: 0.5 },
+                BoneWeight {
+                    bone_id: 0,
+                    weight: 0.5,
+                },
+                BoneWeight {
+                    bone_id: (bone_count - 1) as u64,
+                    weight: 0.5,
+                },
             ],
         })
         .collect();
-    (DeformMesh { vertices, pins: vec![] }, bones)
+    (
+        DeformMesh {
+            vertices,
+            pins: vec![],
+        },
+        bones,
+    )
 }
 
 fn bench_mesh_deformation(c: &mut Criterion) {

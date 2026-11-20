@@ -12,9 +12,14 @@ const MAX_FPS: f64 = 240.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Point { pub x: f64, pub y: f64 }
+pub struct Point {
+    pub x: f64,
+    pub y: f64,
+}
 impl Point {
-    pub fn is_finite(self) -> bool { self.x.is_finite() && self.y.is_finite() }
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -65,14 +70,25 @@ impl fmt::Display for DocumentError {
         match self {
             Self::EmptyRectangleId => write!(f, "rectangle ID must not be empty"),
             Self::NonFinitePoint => write!(f, "point coordinates must be finite"),
-            Self::RectangleTooSmall => write!(f, "rectangle must be at least 1 document unit wide and high"),
+            Self::RectangleTooSmall => write!(
+                f,
+                "rectangle must be at least 1 document unit wide and high"
+            ),
             Self::InvalidCornerIndex(index) => write!(f, "corner index {index} is outside 0–3"),
-            Self::RectangleIdentityMismatch => write!(f, "cannot interpolate different rectangle identities"),
+            Self::RectangleIdentityMismatch => {
+                write!(f, "cannot interpolate different rectangle identities")
+            }
             Self::NonFiniteInterpolation => write!(f, "interpolation amount must be finite"),
             Self::InvalidFrame => write!(f, "frame must be a non-negative finite value"),
-            Self::InvalidFrameRate => write!(f, "FPS must be greater than 0 and no greater than 240"),
-            Self::UnsortedOrDuplicateKeyframes => write!(f, "keyframes must be unique and sorted by frame"),
-            Self::UnsupportedVersion(version) => write!(f, "unsupported project version: {version}"),
+            Self::InvalidFrameRate => {
+                write!(f, "FPS must be greater than 0 and no greater than 240")
+            }
+            Self::UnsortedOrDuplicateKeyframes => {
+                write!(f, "keyframes must be unique and sorted by frame")
+            }
+            Self::UnsupportedVersion(version) => {
+                write!(f, "unsupported project version: {version}")
+            }
             Self::Serialization(message) => write!(f, "project serialization failed: {message}"),
         }
     }
@@ -93,8 +109,13 @@ impl Rectangle {
         let rectangle = Self {
             id: id.into(),
             points: [
-                Point { x: left, y: top }, Point { x: right, y: top },
-                Point { x: right, y: bottom }, Point { x: left, y: bottom },
+                Point { x: left, y: top },
+                Point { x: right, y: top },
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+                Point { x: left, y: bottom },
             ],
         };
         rectangle.validate()?;
@@ -102,8 +123,12 @@ impl Rectangle {
     }
 
     pub fn validate(&self) -> Result<(), DocumentError> {
-        if self.id.is_empty() { return Err(DocumentError::EmptyRectangleId); }
-        for point in self.points { validate_point(point)?; }
+        if self.id.is_empty() {
+            return Err(DocumentError::EmptyRectangleId);
+        }
+        for point in self.points {
+            validate_point(point)?;
+        }
         Ok(())
     }
 
@@ -122,7 +147,9 @@ impl Rectangle {
     pub fn with_corner(&self, corner: usize, point: Point) -> Result<Self, DocumentError> {
         self.validate()?;
         validate_point(point)?;
-        if corner >= 4 { return Err(DocumentError::InvalidCornerIndex(corner)); }
+        if corner >= 4 {
+            return Err(DocumentError::InvalidCornerIndex(corner));
+        }
         let mut result = self.clone();
         result.points[corner] = point;
         Ok(result)
@@ -131,8 +158,12 @@ impl Rectangle {
     pub fn interpolate(&self, other: &Self, amount: f64) -> Result<Self, DocumentError> {
         self.validate()?;
         other.validate()?;
-        if self.id != other.id { return Err(DocumentError::RectangleIdentityMismatch); }
-        if !amount.is_finite() { return Err(DocumentError::NonFiniteInterpolation); }
+        if self.id != other.id {
+            return Err(DocumentError::RectangleIdentityMismatch);
+        }
+        if !amount.is_finite() {
+            return Err(DocumentError::NonFiniteInterpolation);
+        }
         let t = amount.clamp(0.0, 1.0);
         let mut result = self.clone();
         for (index, point) in result.points.iter_mut().enumerate() {
@@ -154,7 +185,9 @@ impl Rectangle {
             let b = self.points[j];
             let crosses = (a.y > point.y) != (b.y > point.y)
                 && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
-            if crosses { inside = !inside; }
+            if crosses {
+                inside = !inside;
+            }
             j = i;
         }
         Ok(inside)
@@ -164,7 +197,10 @@ impl Rectangle {
 impl Timeline {
     pub fn new(fps: f64) -> Result<Self, DocumentError> {
         validate_fps(fps)?;
-        Ok(Self { fps, keyframes: Vec::new() })
+        Ok(Self {
+            fps,
+            keyframes: Vec::new(),
+        })
     }
 
     pub fn validate(&self) -> Result<(), DocumentError> {
@@ -186,7 +222,10 @@ impl Timeline {
         rectangle.validate()?;
         let mut result = self.clone();
         result.keyframes.retain(|key| key.frame != frame);
-        result.keyframes.push(Keyframe { frame, rectangle: rectangle.clone() });
+        result.keyframes.push(Keyframe {
+            frame,
+            rectangle: rectangle.clone(),
+        });
         result.keyframes.sort_by_key(|key| key.frame);
         Ok(result)
     }
@@ -201,16 +240,26 @@ impl Timeline {
     /// Hold endpoint poses and linearly interpolate corresponding rectangle points.
     pub fn evaluate(&self, frame: f64) -> Result<Option<Rectangle>, DocumentError> {
         self.validate()?;
-        if !frame.is_finite() || frame < 0.0 { return Err(DocumentError::InvalidFrame); }
+        if !frame.is_finite() || frame < 0.0 {
+            return Err(DocumentError::InvalidFrame);
+        }
         let keys = &self.keyframes;
-        let Some(first) = keys.first() else { return Ok(None); };
-        if frame <= first.frame as f64 { return Ok(Some(first.rectangle.clone())); }
+        let Some(first) = keys.first() else {
+            return Ok(None);
+        };
+        if frame <= first.frame as f64 {
+            return Ok(Some(first.rectangle.clone()));
+        }
         let last = keys.last().expect("first key guarantees last key");
-        if frame >= last.frame as f64 { return Ok(Some(last.rectangle.clone())); }
+        if frame >= last.frame as f64 {
+            return Ok(Some(last.rectangle.clone()));
+        }
         for pair in keys.windows(2) {
             let left = &pair[0];
             let right = &pair[1];
-            if frame == left.frame as f64 { return Ok(Some(left.rectangle.clone())); }
+            if frame == left.frame as f64 {
+                return Ok(Some(left.rectangle.clone()));
+            }
             if frame <= right.frame as f64 {
                 return Ok(Some(left.rectangle.interpolate(
                     &right.rectangle,
@@ -224,19 +273,28 @@ impl Timeline {
 
 impl DeformDocument {
     pub fn new(fps: f64) -> Result<Self, DocumentError> {
-        Ok(Self { version: DOCUMENT_VERSION, timeline: Timeline::new(fps)?, rectangle: None })
+        Ok(Self {
+            version: DOCUMENT_VERSION,
+            timeline: Timeline::new(fps)?,
+            rectangle: None,
+        })
     }
 
     pub fn validate(&self) -> Result<(), DocumentError> {
-        if self.version != DOCUMENT_VERSION { return Err(DocumentError::UnsupportedVersion(self.version)); }
+        if self.version != DOCUMENT_VERSION {
+            return Err(DocumentError::UnsupportedVersion(self.version));
+        }
         self.timeline.validate()?;
-        if let Some(rectangle) = &self.rectangle { rectangle.validate()?; }
+        if let Some(rectangle) = &self.rectangle {
+            rectangle.validate()?;
+        }
         Ok(())
     }
 
     pub fn to_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
-        serde_json::to_string_pretty(self).map_err(|error| DocumentError::Serialization(error.to_string()))
+        serde_json::to_string_pretty(self)
+            .map_err(|error| DocumentError::Serialization(error.to_string()))
     }
 
     pub fn from_json(source: &str) -> Result<Self, DocumentError> {
@@ -248,7 +306,11 @@ impl DeformDocument {
 }
 
 fn validate_point(point: Point) -> Result<(), DocumentError> {
-    if point.is_finite() { Ok(()) } else { Err(DocumentError::NonFinitePoint) }
+    if point.is_finite() {
+        Ok(())
+    } else {
+        Err(DocumentError::NonFinitePoint)
+    }
 }
 fn validate_fps(fps: f64) -> Result<(), DocumentError> {
     if fps.is_finite() && fps > 0.0 && fps <= MAX_FPS {
@@ -273,7 +335,10 @@ mod tests {
         let edited = rect.with_corner(1, Point { x: 30.0, y: 4.0 }).unwrap();
         assert_eq!(edited.points[1], Point { x: 30.0, y: 4.0 });
         assert_eq!(rect.points[1], Point { x: 90.0, y: 20.0 });
-        assert_eq!(rect.with_corner(4, Point::default()), Err(DocumentError::InvalidCornerIndex(4)));
+        assert_eq!(
+            rect.with_corner(4, Point::default()),
+            Err(DocumentError::InvalidCornerIndex(4))
+        );
     }
 
     #[test]
@@ -289,13 +354,24 @@ mod tests {
     fn timeline_holds_endpoints_interpolates_and_replaces() {
         let a = rectangle("s", Point { x: 0.0, y: 0.0 }, Point { x: 20.0, y: 20.0 });
         let b = rectangle("s", Point { x: 40.0, y: 20.0 }, Point { x: 60.0, y: 40.0 });
-        let timeline = Timeline::new(24.0).unwrap().set_keyframe(0, &a).unwrap()
-            .set_keyframe(20, &b).unwrap();
+        let timeline = Timeline::new(24.0)
+            .unwrap()
+            .set_keyframe(0, &a)
+            .unwrap()
+            .set_keyframe(20, &b)
+            .unwrap();
         let mid = timeline.evaluate(10.0).unwrap().unwrap();
         assert_eq!(mid.points[0], Point { x: 20.0, y: 10.0 });
         assert_eq!(timeline.evaluate(30.0).unwrap().unwrap(), b);
         let replacement = rectangle("s", Point { x: 0.0, y: 0.0 }, Point { x: 30.0, y: 30.0 });
-        assert_eq!(timeline.set_keyframe(0, &replacement).unwrap().keyframes.len(), 2);
+        assert_eq!(
+            timeline
+                .set_keyframe(0, &replacement)
+                .unwrap()
+                .keyframes
+                .len(),
+            2
+        );
         assert_eq!(timeline.remove_keyframe(20).unwrap().keyframes.len(), 1);
     }
 
@@ -311,13 +387,29 @@ mod tests {
         assert_eq!(DeformDocument::from_json(&json).unwrap(), document);
         let mut invalid = document;
         invalid.version = 9;
-        assert_eq!(invalid.validate(), Err(DocumentError::UnsupportedVersion(9)));
+        assert_eq!(
+            invalid.validate(),
+            Err(DocumentError::UnsupportedVersion(9))
+        );
     }
 
     #[test]
     fn rejects_invalid_geometry_and_frame_rate() {
-        assert_eq!(Rectangle::new("s", Point { x: 0.0, y: 0.0 }, Point { x: 0.5, y: 2.0 }), Err(DocumentError::RectangleTooSmall));
+        assert_eq!(
+            Rectangle::new("s", Point { x: 0.0, y: 0.0 }, Point { x: 0.5, y: 2.0 }),
+            Err(DocumentError::RectangleTooSmall)
+        );
         assert_eq!(Timeline::new(0.0), Err(DocumentError::InvalidFrameRate));
-        assert_eq!(Rectangle::new("s", Point { x: f64::NAN, y: 0.0 }, Point { x: 2.0, y: 2.0 }), Err(DocumentError::NonFinitePoint));
+        assert_eq!(
+            Rectangle::new(
+                "s",
+                Point {
+                    x: f64::NAN,
+                    y: 0.0
+                },
+                Point { x: 2.0, y: 2.0 }
+            ),
+            Err(DocumentError::NonFinitePoint)
+        );
     }
 }

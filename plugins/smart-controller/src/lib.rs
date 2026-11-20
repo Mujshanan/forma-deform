@@ -43,7 +43,9 @@ const MANIFEST: &str = r##"{
 ac::plugin!(MANIFEST, run);
 
 fn select_fields(raw: &Value, fields: &[&str]) -> Value {
-    let Some(source) = raw.as_object() else { return Value::Null; };
+    let Some(source) = raw.as_object() else {
+        return Value::Null;
+    };
     let mut selected = Map::new();
     for field in fields {
         if let Some(value) = source.get(*field) {
@@ -54,15 +56,22 @@ fn select_fields(raw: &Value, fields: &[&str]) -> Value {
 }
 
 fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
-    result["armatures"].as_array()?.iter()
+    result["armatures"]
+        .as_array()?
+        .iter()
         .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
         .find(|bone| bone["name"].as_str() == Some(name))
         .and_then(|bone| bone["angle"].as_f64())
 }
 
 fn query_slider_driver(params: &Params) -> Result<f64, String> {
-    let layer_id = params.driver_layer_id.ok_or("driver_layer_id is required for Slider mode bone input")?;
-    let name = params.driver_bone_name.as_deref().ok_or("driver_bone_name is required for Slider mode bone input")?;
+    let layer_id = params
+        .driver_layer_id
+        .ok_or("driver_layer_id is required for Slider mode bone input")?;
+    let name = params
+        .driver_bone_name
+        .as_deref()
+        .ok_or("driver_bone_name is required for Slider mode bone input")?;
     let response = ac::command("bone.info", json!({"layer": layer_id}))?;
     find_driver_bone(&response, name)
         .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
@@ -70,9 +79,16 @@ fn query_slider_driver(params: &Params) -> Result<f64, String> {
 
 fn run_slider(raw: &Value) -> Result<(), String> {
     const FIELDS: &[&str] = &[
-        "mode", "driver_layer_id", "driver_bone_name", "action_layer_id",
-        "min_rotation_deg", "max_rotation_deg", "action_start_frame",
-        "action_end_frame", "endpoint_policy", "manual_value",
+        "mode",
+        "driver_layer_id",
+        "driver_bone_name",
+        "action_layer_id",
+        "min_rotation_deg",
+        "max_rotation_deg",
+        "action_start_frame",
+        "action_end_frame",
+        "endpoint_policy",
+        "manual_value",
     ];
     let payload = select_fields(raw, FIELDS);
     let params: Params = serde_json::from_value(payload)
@@ -88,7 +104,9 @@ fn run_slider(raw: &Value) -> Result<(), String> {
     let output = preview_slider(&params, driver_value)?;
     let serialized = serde_json::to_string(&output)
         .map_err(|error| format!("could not serialize Slider preview: {error}"))?;
-    ac::log(&format!("AniCraft Smart Controller — Slider preview: {serialized}"));
+    ac::log(&format!(
+        "AniCraft Smart Controller — Slider preview: {serialized}"
+    ));
     ac::log("Slider mode is preview-only: no timeline command or document mutation was issued.");
     Ok(())
 }
@@ -111,22 +129,48 @@ struct DeformParams {
 }
 
 #[derive(Debug, Deserialize)]
-struct BoneInfoResponse { armatures: Vec<ArmatureDto> }
+struct BoneInfoResponse {
+    armatures: Vec<ArmatureDto>,
+}
 #[derive(Debug, Deserialize)]
-struct ArmatureDto { bones: Vec<BoneDto> }
+struct ArmatureDto {
+    bones: Vec<BoneDto>,
+}
 #[derive(Debug, Deserialize)]
-struct BoneDto { id: u64, angle: f64, swing: Option<f64> }
+struct BoneDto {
+    id: u64,
+    angle: f64,
+    swing: Option<f64>,
+}
 #[derive(Debug, Deserialize)]
-struct WarpInfoResponse { warped: bool, pins: Vec<WarpPinDto> }
+struct WarpInfoResponse {
+    warped: bool,
+    pins: Vec<WarpPinDto>,
+}
 #[derive(Debug, Deserialize)]
-struct WarpPinDto { pin: u64 }
+struct WarpPinDto {
+    pin: u64,
+}
 #[derive(Debug, serde::Serialize)]
-struct WarpPinMoveRequest { element: u64, pin: u64, x: f64, y: f64 }
+struct WarpPinMoveRequest {
+    element: u64,
+    pin: u64,
+    x: f64,
+    y: f64,
+}
 
 fn run_deform(raw: &Value) -> Result<(), String> {
     const FIELDS: &[&str] = &[
-        "bone_id", "element_id", "pin_id", "neutral_angle", "neutral_x",
-        "neutral_y", "gain_x", "gain_y", "include_spring_swing", "apply",
+        "bone_id",
+        "element_id",
+        "pin_id",
+        "neutral_angle",
+        "neutral_x",
+        "neutral_y",
+        "gain_x",
+        "gain_y",
+        "include_spring_swing",
+        "apply",
     ];
     let payload = select_fields(raw, FIELDS);
     let params: DeformParams = serde_json::from_value(payload)
@@ -136,7 +180,10 @@ fn run_deform(raw: &Value) -> Result<(), String> {
     let bone_value = ac::command("bone.info", json!({}))?;
     let bone_data: BoneInfoResponse = serde_json::from_value(bone_value)
         .map_err(|error| format!("invalid bone.info response: {error}"))?;
-    let bone = bone_data.armatures.iter().flat_map(|armature| armature.bones.iter())
+    let bone = bone_data
+        .armatures
+        .iter()
+        .flat_map(|armature| armature.bones.iter())
         .find(|bone| bone.id == params.bone_id)
         .ok_or_else(|| format!("bone {} was not returned by bone.info", params.bone_id))?;
 
@@ -144,24 +191,37 @@ fn run_deform(raw: &Value) -> Result<(), String> {
     let warp: WarpInfoResponse = serde_json::from_value(warp_value)
         .map_err(|error| format!("invalid warp.info response: {error}"))?;
     if !warp.warped {
-        return Err(format!("element {} has no Asset Warp mesh", params.element_id));
+        return Err(format!(
+            "element {} has no Asset Warp mesh",
+            params.element_id
+        ));
     }
     if !warp.pins.iter().any(|pin| pin.pin == params.pin_id) {
-        return Err(format!("pin {} was not returned for element {}", params.pin_id, params.element_id));
+        return Err(format!(
+            "pin {} was not returned for element {}",
+            params.pin_id, params.element_id
+        ));
     }
 
     let result = evaluate_deformation(DeformRequest {
         spec: DeformSpec {
-            neutral_position: Vec2 { x: params.neutral_x, y: params.neutral_y },
+            neutral_position: Vec2 {
+                x: params.neutral_x,
+                y: params.neutral_y,
+            },
             neutral_angle_degrees: params.neutral_angle,
-            gain_per_degree: Vec2 { x: params.gain_x, y: params.gain_y },
+            gain_per_degree: Vec2 {
+                x: params.gain_x,
+                y: params.gain_y,
+            },
         },
         bone_angle: BoneAngle {
             keyed_degrees: bone.angle,
             spring_swing_degrees: bone.swing,
         },
         include_spring_swing: params.include_spring_swing,
-    }).map_err(|error| error.to_string())?;
+    })
+    .map_err(|error| error.to_string())?;
 
     ac::log(&format!(
         "AniCraft Smart Controller — Deform mode: bone {} effective angle {:.3}°",
@@ -223,16 +283,39 @@ mod tests {
             "neutral_angle":0.0, "neutral_x":10.0, "neutral_y":20.0,
             "gain_x":0.5, "gain_y":-0.25, "include_spring_swing":false, "apply":false
         });
-        let deform: DeformParams = serde_json::from_value(select_fields(&all_fields, &[
-            "bone_id","element_id","pin_id","neutral_angle","neutral_x","neutral_y",
-            "gain_x","gain_y","include_spring_swing","apply"
-        ])).unwrap();
+        let deform: DeformParams = serde_json::from_value(select_fields(
+            &all_fields,
+            &[
+                "bone_id",
+                "element_id",
+                "pin_id",
+                "neutral_angle",
+                "neutral_x",
+                "neutral_y",
+                "gain_x",
+                "gain_y",
+                "include_spring_swing",
+                "apply",
+            ],
+        ))
+        .unwrap();
         assert_eq!(deform.bone_id, 4);
-        let slider: Params = serde_json::from_value(select_fields(&all_fields, &[
-            "mode","driver_layer_id","driver_bone_name","action_layer_id",
-            "min_rotation_deg","max_rotation_deg","action_start_frame",
-            "action_end_frame","endpoint_policy","manual_value"
-        ])).unwrap();
+        let slider: Params = serde_json::from_value(select_fields(
+            &all_fields,
+            &[
+                "mode",
+                "driver_layer_id",
+                "driver_bone_name",
+                "action_layer_id",
+                "min_rotation_deg",
+                "max_rotation_deg",
+                "action_start_frame",
+                "action_end_frame",
+                "endpoint_policy",
+                "manual_value",
+            ],
+        ))
+        .unwrap();
         assert_eq!(slider.mode, Mode::Slider);
     }
 
@@ -240,11 +323,13 @@ mod tests {
     fn deform_host_dtos_decode_and_keep_missing_optional_values() {
         let data: BoneInfoResponse = serde_json::from_value(json!({
             "armatures":[{"bones":[{"id":4,"angle":8.0}]}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(data.armatures[0].bones[0].swing, None);
         let warp: WarpInfoResponse = serde_json::from_value(json!({
             "warped":true,"pins":[{"pin":9}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert!(warp.warped && warp.pins[0].pin == 9);
     }
 
@@ -257,13 +342,23 @@ mod tests {
 
     #[test]
     fn pin_move_dto_serializes_only_host_fields() {
-        let value = serde_json::to_value(WarpPinMoveRequest { element: 2, pin: 3, x: 4.0, y: 5.0 }).unwrap();
+        let value = serde_json::to_value(WarpPinMoveRequest {
+            element: 2,
+            pin: 3,
+            x: 4.0,
+            y: 5.0,
+        })
+        .unwrap();
         assert_eq!(value, json!({"element":2,"pin":3,"x":4.0,"y":5.0}));
     }
 
     #[test]
     fn unknown_modes_are_rejected() {
         let raw = json!({"mode":"not-a-mode"});
-        assert!(run(&raw).unwrap_err().contains("unsupported Smart Controller mode"));
+        assert!(
+            run(&raw)
+                .unwrap_err()
+                .contains("unsupported Smart Controller mode")
+        );
     }
 }
