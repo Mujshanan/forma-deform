@@ -30,7 +30,7 @@ The current automated fixture is `plugins/smart-controller/tests/core_compositio
 
 - Bone ID: `17`
 - Evaluated keyed angle: `22.5°`
-- Spring swing reported: `2.0°`
+- Spring swing present in the synthetic fixture: `2.0°` (not used by the separate DeformRequest; spring contribution is disabled)
 - Experimental `ControllerBinding` input range: `-45°` to `+45°`, neutral `0°`
 - Linear relative-delta geometry target:
   - negative offset: `(-12, 4)`
