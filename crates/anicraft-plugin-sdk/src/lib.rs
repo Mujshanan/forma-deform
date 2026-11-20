@@ -41,18 +41,25 @@ unsafe extern "C" {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-unsafe fn host_call(_: *const u8, _: usize) -> i32 { -1 }
+unsafe fn host_call(_: *const u8, _: usize) -> i32 {
+    -1
+}
 #[cfg(not(target_arch = "wasm32"))]
-unsafe fn host_response(_: *mut u8, _: usize) -> i32 { -1 }
+unsafe fn host_response(_: *mut u8, _: usize) -> i32 {
+    -1
+}
 
 /// Sends one request and returns its result or a diagnostic string.
 ///
 /// Calls are synchronous and single-flight. The host must copy request bytes before returning
 /// from `anicraft.call`; the response remains available only until the next host call.
 pub fn request(req: &Value) -> Result<Value, String> {
-    let bytes = serde_json::to_vec(req).map_err(|e| format!("request serialization failed: {e}"))?;
+    let bytes =
+        serde_json::to_vec(req).map_err(|e| format!("request serialization failed: {e}"))?;
     if bytes.len() > MAX_HOST_REQUEST_BYTES {
-        return Err(format!("request exceeds ABI v1 host request limit ({MAX_HOST_REQUEST_BYTES} bytes)"));
+        return Err(format!(
+            "request exceeds ABI v1 host request limit ({MAX_HOST_REQUEST_BYTES} bytes)"
+        ));
     }
 
     // SAFETY: bytes remains alive and immutable for the full synchronous host call.
@@ -78,14 +85,16 @@ pub fn request(req: &Value) -> Result<Value, String> {
     if value["ok"] == true {
         Ok(value["result"].clone())
     } else {
-        Err(value["error"].as_str().unwrap_or("the host refused the request").to_owned())
+        Err(value["error"]
+            .as_str()
+            .unwrap_or("the host refused the request")
+            .to_owned())
     }
 }
 
 /// Runs an AniCraft command by id.
 pub fn command(id: &str, params: Value) -> Result<Value, String> {
-    request(&json!({"op": "command", "id": id, "params": params}))
-        .map_err(|e| format!("{id}: {e}"))
+    request(&json!({"op": "command", "id": id, "params": params})).map_err(|e| format!("{id}: {e}"))
 }
 
 /// The compact document view: stage, scene, frame, layers and selection.
@@ -118,7 +127,9 @@ pub fn frame(index: u64) -> Result<Value, String> {
 pub struct Rng(u64);
 
 impl Rng {
-    pub fn new(seed: u64) -> Rng { Rng(seed ^ 0x9e37_79b9_7f4a_7c15) }
+    pub fn new(seed: u64) -> Rng {
+        Rng(seed ^ 0x9e37_79b9_7f4a_7c15)
+    }
     pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
         let mut z = self.0;
@@ -126,8 +137,12 @@ impl Rng {
         z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         z ^ (z >> 31)
     }
-    pub fn unit(&mut self) -> f64 { (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64 }
-    pub fn signed(&mut self) -> f64 { self.unit() * 2.0 - 1.0 }
+    pub fn unit(&mut self) -> f64 {
+        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
+    }
+    pub fn signed(&mut self) -> f64 {
+        self.unit() * 2.0 - 1.0
+    }
 }
 
 /// Exports ABI v1 command entry points. Handler signature:
@@ -136,15 +151,25 @@ impl Rng {
 macro_rules! plugin {
     ($manifest:expr, $run:path) => {
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_abi_version() -> i32 { 1 }
+        pub extern "C" fn ac_abi_version() -> i32 {
+            1
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_manifest() -> i64 { $crate::manifest_ptr($manifest) }
+        pub extern "C" fn ac_manifest() -> i64 {
+            $crate::manifest_ptr($manifest)
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_alloc(size: i32) -> i32 { $crate::alloc(size) }
+        pub extern "C" fn ac_alloc(size: i32) -> i32 {
+            $crate::alloc(size)
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_dealloc(ptr: i32, len: i32) { $crate::dealloc(ptr, len) }
+        pub extern "C" fn ac_dealloc(ptr: i32, len: i32) {
+            $crate::dealloc(ptr, len)
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_run(ptr: i32, len: i32) -> i32 { $crate::run(ptr, len, $run) }
+        pub extern "C" fn ac_run(ptr: i32, len: i32) -> i32 {
+            $crate::run(ptr, len, $run)
+        }
     };
 }
 
@@ -154,13 +179,21 @@ macro_rules! plugin {
 macro_rules! exporter {
     ($manifest:expr, $export:path) => {
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_abi_version() -> i32 { 1 }
+        pub extern "C" fn ac_abi_version() -> i32 {
+            1
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_manifest() -> i64 { $crate::manifest_ptr($manifest) }
+        pub extern "C" fn ac_manifest() -> i64 {
+            $crate::manifest_ptr($manifest)
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_alloc(size: i32) -> i32 { $crate::alloc(size) }
+        pub extern "C" fn ac_alloc(size: i32) -> i32 {
+            $crate::alloc(size)
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_dealloc(ptr: i32, len: i32) { $crate::dealloc(ptr, len) }
+        pub extern "C" fn ac_dealloc(ptr: i32, len: i32) {
+            $crate::dealloc(ptr, len)
+        }
         #[unsafe(no_mangle)]
         pub extern "C" fn ac_export(ptr: i32, len: i32) -> i64 {
             $crate::export(ptr, len, $export)
@@ -173,9 +206,13 @@ macro_rules! exporter {
 macro_rules! ease {
     ($manifest:expr, $ease:path) => {
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_abi_version() -> i32 { 1 }
+        pub extern "C" fn ac_abi_version() -> i32 {
+            1
+        }
         #[unsafe(no_mangle)]
-        pub extern "C" fn ac_manifest() -> i64 { $crate::manifest_ptr($manifest) }
+        pub extern "C" fn ac_manifest() -> i64 {
+            $crate::manifest_ptr($manifest)
+        }
         #[unsafe(no_mangle)]
         pub extern "C" fn ac_ease(index: i32, t: f64) -> f64 {
             $ease(index.max(0) as usize, t)
@@ -185,7 +222,9 @@ macro_rules! ease {
 
 #[doc(hidden)]
 pub fn manifest_ptr(manifest: &'static str) -> i64 {
-    if manifest.len() > MAX_MANIFEST_BYTES { return -1; }
+    if manifest.len() > MAX_MANIFEST_BYTES {
+        return -1;
+    }
     pack_ptr_len(manifest.as_ptr() as usize, manifest.len())
 }
 
@@ -195,15 +234,21 @@ fn pack_ptr_len(ptr: usize, len: usize) -> i64 {
 
 #[doc(hidden)]
 pub fn alloc(size: i32) -> i32 {
-    if size < 0 || size as usize > MAX_PLUGIN_PARAMS_BYTES { return 0; }
+    if size < 0 || size as usize > MAX_PLUGIN_PARAMS_BYTES {
+        return 0;
+    }
     let mut bytes = Vec::<u8>::new();
-    if bytes.try_reserve_exact(size as usize).is_err() { return 0; }
+    if bytes.try_reserve_exact(size as usize).is_err() {
+        return 0;
+    }
     bytes.resize(size as usize, 0);
     let raw = Box::into_raw(bytes.into_boxed_slice());
     let ptr = raw as *mut u8 as usize;
     if ptr == 0 || ptr > i32::MAX as usize {
         // SAFETY: raw is the allocation just created above and has not been transferred.
-        unsafe { drop(Box::from_raw(raw)); }
+        unsafe {
+            drop(Box::from_raw(raw));
+        }
         return 0;
     }
     ptr as i32
@@ -213,7 +258,9 @@ pub fn alloc(size: i32) -> i32 {
 /// The host must pass the original allocation length, not the number of bytes it used.
 #[doc(hidden)]
 pub fn dealloc(ptr: i32, len: i32) {
-    if ptr <= 0 || len < 0 || len as usize > MAX_EXPORT_OUTPUT_BYTES { return; }
+    if ptr <= 0 || len < 0 || len as usize > MAX_EXPORT_OUTPUT_BYTES {
+        return;
+    }
     // SAFETY: the ABI contract requires the host to return the original pointer and allocation
     // length exactly once. Invalid or duplicate deallocation is a host ABI violation.
     unsafe {
@@ -224,9 +271,15 @@ pub fn dealloc(ptr: i32, len: i32) {
 
 #[doc(hidden)]
 pub fn run(ptr: i32, len: i32, handler: fn(&Value) -> Result<(), String>) -> i32 {
-    if len < 0 || (len > 0 && ptr <= 0) { return STATUS_INVALID_ARGUMENT; }
-    if len as usize > MAX_PLUGIN_PARAMS_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
-    let bytes: &[u8] = if len == 0 { &[] } else {
+    if len < 0 || (len > 0 && ptr <= 0) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if len as usize > MAX_PLUGIN_PARAMS_BYTES {
+        return STATUS_PAYLOAD_TOO_LARGE;
+    }
+    let bytes: &[u8] = if len == 0 {
+        &[]
+    } else {
         // SAFETY: the host must pass a live guest allocation from ac_alloc with at least len bytes.
         unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) }
     };
@@ -234,7 +287,9 @@ pub fn run(ptr: i32, len: i32, handler: fn(&Value) -> Result<(), String>) -> i32
 }
 
 fn run_bytes(bytes: &[u8], handler: fn(&Value) -> Result<(), String>) -> i32 {
-    if bytes.len() > MAX_PLUGIN_PARAMS_BYTES { return STATUS_PAYLOAD_TOO_LARGE; }
+    if bytes.len() > MAX_PLUGIN_PARAMS_BYTES {
+        return STATUS_PAYLOAD_TOO_LARGE;
+    }
     let params: Value = match serde_json::from_slice(bytes) {
         Ok(value) => value,
         Err(_) => return STATUS_INVALID_JSON,
@@ -250,8 +305,12 @@ fn run_bytes(bytes: &[u8], handler: fn(&Value) -> Result<(), String>) -> i32 {
 
 #[doc(hidden)]
 pub fn export(ptr: i32, len: i32, handler: fn(&Value) -> Result<Vec<u8>, String>) -> i64 {
-    if len < 0 || len as usize > MAX_PLUGIN_PARAMS_BYTES || (len > 0 && ptr <= 0) { return -1; }
-    let bytes: &[u8] = if len == 0 { &[] } else {
+    if len < 0 || len as usize > MAX_PLUGIN_PARAMS_BYTES || (len > 0 && ptr <= 0) {
+        return -1;
+    }
+    let bytes: &[u8] = if len == 0 {
+        &[]
+    } else {
         // SAFETY: the host must pass a live guest allocation from ac_alloc with at least len bytes.
         unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) }
     };
@@ -267,7 +326,9 @@ pub fn export(ptr: i32, len: i32, handler: fn(&Value) -> Result<Vec<u8>, String>
             let ptr = raw as *mut u8 as usize;
             if ptr == 0 || ptr > i32::MAX as usize {
                 // SAFETY: raw is the output allocation just created above.
-                unsafe { drop(Box::from_raw(raw)); }
+                unsafe {
+                    drop(Box::from_raw(raw));
+                }
                 return -1;
             }
             pack_ptr_len(ptr, len)
@@ -310,12 +371,18 @@ mod tests {
         assert_eq!(run(0, -1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
         assert_eq!(run(0, 1, |_| Ok(())), STATUS_INVALID_ARGUMENT);
         assert_eq!(run_bytes(&[0xff], |_| Ok(())), STATUS_INVALID_JSON);
-        assert_eq!(run(1, (MAX_PLUGIN_PARAMS_BYTES + 1) as i32, |_| Ok(())), STATUS_PAYLOAD_TOO_LARGE);
+        assert_eq!(
+            run(1, (MAX_PLUGIN_PARAMS_BYTES + 1) as i32, |_| Ok(())),
+            STATUS_PAYLOAD_TOO_LARGE
+        );
     }
 
     #[test]
     fn handler_error_has_stable_status_code() {
-        assert_eq!(run_bytes(br#"{}"#, |_| Err("no".into())), STATUS_HANDLER_ERROR);
+        assert_eq!(
+            run_bytes(br#"{}"#, |_| Err("no".into())),
+            STATUS_HANDLER_ERROR
+        );
         assert_eq!(run_bytes(br#"{}"#, |_| Ok(())), STATUS_OK);
     }
 }
