@@ -1,65 +1,77 @@
-# Smart Controller development plan
+# AniCraft Smart Controller development plan
 
-**Status:** Active plan, revised 2026-11-19  
+**Status:** Unified plugin architecture, implementation in progress  
 **Host:** Mujshanan/AniCraft  
-**V1 objective:** Slider mapping plus deterministic, on-demand preview.
+**Plugin identity:** AniCraft Smart Controller (`org.mujshanan.smart-controller`)
 
-## 1. Architecture boundary
+## 1. Product scope
 
-- smart-controller-core owns host-independent Rust model, validation, normalization, endpoint-aware frame mapping, transform-value calculation, and preview output. It has no AniCraft, WASM, browser, or UI dependency.
-- plugins/smart-controller is a thin AniCraft command-plugin adapter. It deserializes JSON parameters, validates them through the core, reads a driver bone through the verified bone.info command when manual input is absent, invokes pure preview calculation, and logs JSON output.
+One installed AniCraft command plugin exposes distinct controller modes:
 
-The verified SDK entry point is ac::plugin!(MANIFEST, run) with fn run(p: &serde_json::Value) -> Result<(), String>. No speculative prelude, context object, or plugin error type is used.
+- **Slider:** maps a driver bone's evaluated angle to an action-frame preview.
+- **Deform:** calculates an absolute Asset Warp pin target from an authored neutral angle/position and per-degree gains, with optional spring swing and explicit undoable Apply.
 
-The former single-file core remains in legacy.rs to preserve the three-anchor binding API used by the Form Deform integration test. New logic is split into model.rs, validation.rs, mapping.rs, and preview.rs.
+These are mode-specific workflows inside one plugin, not separate installed plugins. Each mode has a separate typed parameter DTO and dispatch path.
 
-## 2. V1 scope — Slider + deterministic preview
+## 2. Architecture boundaries
 
-- Read an evaluated driver angle on demand with bone.info, or accept manual_value as a first-class deterministic input.
-- Normalize between two finite rotation endpoints. Reversed endpoints are valid and reverse the mapping direction.
+- `smart-controller-core` owns host-independent Slider mapping, validation, normalization, endpoint handling, and preview calculations.
+- `form-deform-core` owns host-independent deformation domain types, bone transforms, weighted mesh deformation, pin references, validation, and mathematical evaluation.
+- `plugins/smart-controller` composes both pure cores and owns the AniCraft manifest, ABI entry point, host calls, DTOs, and host/core translation.
+- `anicraft-plugin-sdk` owns generic JSON/WASM ABI transport and host communication. It contains no Smart Controller policy or deformation math.
+
+Runtime data flow is calculation in the selected pure core → plugin adapter serialization/ABI through the SDK → AniCraft plugin runtime. Cargo dependency direction remains plugin → each core and plugin → SDK. Neither core depends on the SDK, host, or the other core.
+
+The former standalone Form Deform command adapter has been retired. Its pure calculation crate remains independent and is now consumed by the unified Smart Controller plugin.
+
+## 3. Slider mode
+
+- Read an evaluated driver angle on demand with `bone.info`, or accept `manual_value` as a deterministic input.
+- Normalize between two finite rotation endpoints. Reversed endpoints are valid.
 - Map normalized input to an action frame with explicit endpoint semantics.
-- Default to Exclusive [start, end), where the end frame is never selected because cyclic actions commonly duplicate the first pose at the end.
+- Default to Exclusive [start, end), where the end frame is not selected.
 - Support Inclusive [start, end] when the last pose is distinct.
 - Emit a JSON preview record through the plugin log.
 - Do not change the timeline, modify bones, or write document data.
 
-### Endpoint policy
+Transform mode remains deferred until verified host transform read/write commands and semantics are available.
 
-For a non-degenerate frame interval:
-- Exclusive: start + min(floor(normalized × span), span - 1).
-- Inclusive: start + round(normalized × span).
+## 4. Deform mode
 
-Both clamp normalized input to [0, 1]. A degenerate mapping helper returns start; Slider validation rejects end <= start.
+- Read the selected bone's evaluated angle and optional spring swing from `bone.info`.
+- Verify the selected element and pin through `warp.info`.
+- Evaluate the absolute pin target using `form-deform-core::evaluate_deformation`.
+- Keep spring swing opt-in; requesting unavailable swing is an error.
+- Default to calculation-only. Apply explicitly sends `warp.pin_move`, producing an undoable document edit.
+- Always calculate from authored neutral values; never accumulate from the currently deformed pin position.
 
-## 3. Deferred scope
+The pure `deform_mesh` linear-blend-skinning API is groundwork only. Current host responses do not expose complete bind mesh data, skin weights, or evaluated bone world transforms, so the adapter must not fabricate inputs or claim to run that solver on live AniCraft geometry.
 
-- V2 — Transform: expose the core transform mapping through an adapter only after host transform read/write commands and semantics are verified.
-- V3 — Presets: define versioned preset/binding persistence only after a supported storage boundary is established.
-- V4 — MCP-driven interactive updates: investigate authenticated external-control updates. This is not a claim that the current command-plugin ABI can run continuously during playback.
-- Continuous playback evaluation and durable document-owned bindings remain host-extension decisions unless the host contract changes.
+## 5. Host limitations and non-goals
 
-## 4. Source layout
+- Both modes are on-demand command executions, not playback/scrubbing evaluators.
+- No verified command currently sets a nested symbol instance's displayed frame.
+- Bindings are not durably persisted in the AniCraft document.
+- Do not invent timeline, bone-write, geometry-read, or metadata-persistence APIs.
+- Do not silently replace failed host reads with zero or other fallback values.
 
-    crates/smart-controller-core/
-      src/lib.rs          # public re-exports
-      src/legacy.rs       # compatibility API for Form Deform contract
-      src/model.rs        # Params, Mode, EndpointPolicy
-      src/validation.rs   # mode-aware validation
-      src/mapping.rs      # normalization and mapping
-      src/preview.rs      # PreviewOutput and pure preview functions
-      tests/mapping_tests.rs
-      tests/validation_tests.rs
-    plugins/smart-controller/src/lib.rs  # SDK entry point and thin adapter
+## 6. Source layout
 
-## 5. Verification criteria
+```text
+crates/
+  smart-controller-core/   # Slider mapping and three-anchor binding math
+  form-deform-core/        # pure bone/pin/mesh deformation math
+  anicraft-plugin-sdk/     # generic host ABI and transport
+plugins/
+  bone-query/              # read-only inspection command
+  smart-controller/        # unified Slider + Deform command adapter
+```
 
-- cargo test -p smart-controller-core
-- cargo test -p anicraft-smart-controller-plugin
-- cargo test -p smart-controller-core -p anicraft-smart-controller-plugin
-- cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+## 7. Verification
 
-Native tests cover endpoint policy, reversed angle ranges, mode-aware validation, explicit manual input, and the retained legacy cross-plugin math contract. An AniCraft in-app smoke test is still required to verify the installed plugin and real bone.info response.
+- `cargo fmt --all -- --check`
+- `cargo test --workspace`
+- `cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin`
+- `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`
 
-## 6. Non-goals
-
-Do not invent timeline or bone-write commands. Do not interpret guessed JSON document paths as an API. Do not silently substitute zero for a failed bone query. Do not claim live playback, durable binding storage, or in-app success before those capabilities are verified.
+Native tests cover each pure core and the unified adapter's mode DTOs, host response decoding, mode-specific field isolation, and command serialization. AniCraft in-app smoke testing is still required for real host behavior.
