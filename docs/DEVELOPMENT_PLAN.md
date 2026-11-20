@@ -3,7 +3,7 @@
 **Status:** Prototype and integration investigation; not accepted for native integration  
 **Authoritative implementation:** Rust workspace  
 **Development branch:** `feat/smart-controller-v1`  
-**Reviewed baseline:** `72098241fac93c5b4eff86384f9c12fa3a0906a3`
+**P0 verified code baseline:** `14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`
 
 This plan supersedes the original TypeScript/browser-canvas rectangle-editor roadmap previously stored in this file. The former demo has been retired; document geometry and timeline primitives now live in `forma-document-core`. Do not restart the TypeScript prototype unless the architecture is explicitly reconsidered.
 
@@ -45,9 +45,9 @@ Do not invent workarounds or claim these capabilities. Slider is preview-only. W
 
 Work strictly in this order. A later milestone must not conceal or bypass a failed earlier gate.
 
-## P0 — Stabilize correctness and CI (current priority)
+## P0 — Stabilize correctness and CI (completed)
 
-**Why first:** The latest reviewed Platform and WebAssembly workflows passed, but the Lint workflow failed. A non-green quality gate makes subsequent adapter and host evidence less trustworthy.
+**Result:** All required quality, platform, WebAssembly, and bounded fuzz-smoke workflows passed against the verified code baseline above. Strict linting remained enabled; newly exposed warnings were fixed rather than suppressed.
 
 ### Tasks
 1. Fix all Clippy warnings under `cargo clippy --workspace --all-targets -- -D warnings`. Known failures from the last reviewed run:
@@ -59,13 +59,23 @@ Work strictly in this order. A later milestone must not conceal or bypass a fail
 3. Require native tests and workspace builds on Ubuntu and Windows.
 4. Require the WebAssembly workspace build and release builds for both plugin crates.
 5. Verify the separate cargo-fuzz package builds. Run bounded smoke sessions for both JSON-payload and mesh-geometry fuzz targets; record commands, duration, and findings. A successful build is not evidence of sustained fuzzing.
-6. Re-run all CI workflows and record exact run links and statuses.
+6. Re-run all CI workflows and record exact run links and statuses. **Completed:** Platform, Lint, WebAssembly, and Fuzz Smoke all passed.
 
 ### Exit criteria
 - Format, Clippy, workspace tests, and workspace builds pass.
 - Both plugin WASM release builds pass.
 - Fuzz targets compile and bounded smoke runs complete without crashes; discovered issues are fixed and regression-tested.
-- No unrelated product or architecture changes are mixed into stabilization.
+- No unrelated product or architecture changes were mixed into stabilization.
+
+### Verified CI evidence
+
+All runs below tested commit `14e5f3f27f1f7b1ace65b714c93b920b5229a3b8`:
+- [Platform — Ubuntu and Windows tests/builds](https://github.com/Mujshanan/forma-deform/actions/runs/44698534176): passed.
+- [Lint — rustfmt and Clippy with warnings denied](https://github.com/Mujshanan/forma-deform/actions/runs/44698534235): passed.
+- [WebAssembly — workspace and both release plugin builds](https://github.com/Mujshanan/forma-deform/actions/runs/44698534175): passed.
+- [Fuzz Smoke — cargo-fuzz build plus 20-second JSON and mesh targets](https://github.com/Mujshanan/forma-deform/actions/runs/44698534143): passed.
+
+Fixes required during verification included the Bone Query collapsible-if lint, an SDK test identity operation, and correcting cargo-fuzz CLI invocation in the workflow. The fuzz workflow builds both targets and runs each with `-max_total_time=20 -max_len=65536`; this is bounded smoke coverage, not sustained fuzzing.
 
 ## P1 — Make the V1 runtime contract explicit
 
@@ -152,10 +162,10 @@ Each capability requires its own host contract review, core/adapter boundary, te
 | Separate Bone Query plugin | Implemented |
 | Generic SDK and WASM packaging | Implemented |
 | Document geometry/timeline core | Implemented; not binding persistence |
-| Mesh/payload resource limits and fuzz targets | Implemented; fuzz execution evidence outstanding |
-| Platform and WASM CI | Passed in the previous reviewed run; post-change rerun not yet confirmed |
-| Formatting | `cargo fmt --all` applied across the workspace; post-change CI check not yet confirmed |
-| Clippy | Three previously reported core warnings corrected; post-change CI check not yet confirmed |
+| Mesh/payload resource limits and fuzz targets | Implemented; both fuzz targets built and passed bounded smoke runs |
+| Platform and WASM CI | Passed on verified P0 baseline |
+| Formatting | Passed on verified P0 baseline |
+| Clippy | Passed with `-D warnings` on verified P0 baseline |
 | ControllerBinding runtime integration | Not wired; P1 decision |
 | Actual adapter-level integration tests | Incomplete; P2 |
 | Pinned-host smoke project | Outstanding; P3 |
