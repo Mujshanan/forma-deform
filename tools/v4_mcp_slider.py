@@ -240,7 +240,7 @@ def main() -> int:
         commands = discover(client)
         args.discovery_log.parent.mkdir(parents=True, exist_ok=True)
         args.discovery_log.write_text(
-            json.dumps([commands[key] for key in sorted(commands)], indent=2) + "\\n",
+            json.dumps([commands[key] for key in sorted(commands)], indent=2) + "\n",
             encoding="utf-8",
         )
         print(f"Discovered command metadata saved to {args.discovery_log}")
