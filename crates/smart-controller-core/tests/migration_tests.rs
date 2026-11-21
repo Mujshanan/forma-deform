@@ -171,3 +171,21 @@ fn migration_dispatch_rejects_unsupported_binding_schema_versions() {
     value["schema_version"] = serde_json::json!(2);
     assert!(migrate_json(&serde_json::to_string(&value).unwrap()).is_err());
 }
+
+#[test]
+fn binding_set_canonical_migration_and_export_round_trip_losslessly() {
+    let original = BindingSet::new(vec![legacy_geometry()]).unwrap();
+    let migrated = migrate_binding_set_v1(&original).unwrap();
+    let exported = smart_controller_core::migration::export_binding_set_v1(&migrated.document).unwrap();
+    assert!(exported.report.is_lossless());
+    assert_eq!(exported.binding_set, original);
+    let migrated_again = migrate_binding_set_v1(&exported.binding_set).unwrap();
+    assert_eq!(migrated_again.document, migrated.document);
+}
+
+#[test]
+fn canonical_export_rejects_unrepresentable_mapping_instead_of_dropping_it() {
+    let mut migrated = migrate_binding_set_v1(&BindingSet::new(vec![legacy_geometry()]).unwrap()).unwrap();
+    migrated.document.controllers[0].mapping = MappingConfig::DirectedRange1D { start: 0.0, end: 1.0 };
+    assert!(smart_controller_core::migration::export_binding_set_v1(&migrated.document).is_err());
+}
