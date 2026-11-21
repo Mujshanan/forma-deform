@@ -1,12 +1,12 @@
 # Unified Smart Controllers — Architecture and Implementation Plan
 
-**Status:** Phase 4 complete; Phase 5 adapter integration started  
+**Status:** Phase 5 merged; Phase 6A core mapping extensions in progress  
 **Target repository:** `Mujshanan/forma-deform`  
-**Branch:** `feat/smart-controller-phase3-evaluator`  
+**Branch:** `feat/smart-controller-phase6a-mapping`  
 **Core:** `smart-controller-core`  
 **Host adapter:** `plugins/smart-controller`  
 **Scope:** Architecture, implementation sequence and file-level build order  
-**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI. Phase 4 composition is complete and verified at `f08185f043141ac3f476bd2301dbcabd72d9bebb`; final CI run: https://github.com/Mujshanan/forma-deform/actions/runs/44931731464. Phase 5 host-adapter foundations are now being implemented on the branch above.
+**Execution status:** Phases 1–5 are merged to `main` (Phase 5 merge: `9003088254d7301522eef474ff560db2eca81860`). Phase 6A implementation is underway on the branch above; verification is pending.
 
 ---
 
@@ -690,3 +690,42 @@ The Phase 5 adapter now has an end-to-end read-only request path:
 **Phase 5 implementation scope is complete, pending verification.** The concrete Pose2D/joystick mapper remains a separate Phase 2/core prerequisite and is deliberately injected rather than fabricated here. Host application remains limited by verified capabilities: geometry pin mutation requires the host preview/undo transaction; symbol-frame and generic property setters are not established. No playback/scrubbing hook, durable host metadata API, or Smart Controller/Form Deform composition has been added. Existing V1 Slider execution is unchanged.
 
 **Verification required on the latest Phase 5 commit:** workspace Rust tests, plugin tests, Bun checks/build and all three release WASM builds. AniCraft in-app smoke testing remains external. Rustfmt/Clippy are not claimed unless separately executed.
+
+
+## 18. Phase 6A implementation — in progress
+
+Phase 6A adds two host-independent implementations behind a shared `PoseMapping2D` contract. Both consume explicit 2D driver coordinates and return complete `Pose2D` values. They do not read host state, mutate targets, alter Form Deform, or introduce a new host API.
+
+### Triangulated mapping
+
+- Uses explicit authored triangle connectivity over an indexed vertex array; it does not silently generate or reorder topology.
+- Validates vertex identity/position uniqueness, triangle indices, duplicate triangles, non-degenerate geometry and compatible typed pose schemas.
+- Uses barycentric interpolation with deterministic vertex-index ordering.
+- Shared-edge candidates are ordered by canonical triangle index. If overlapping triangles yield different poses at the query point, mapping returns an explicit ambiguity error.
+- Boundary policy is explicit: `Reject` or `ClampToMesh` (nearest point on an authored mesh edge, with deterministic edge tie-breaking).
+
+### Grid mapping
+
+- Uses a rectilinear grid with strictly increasing finite X/Y coordinate axes.
+- Pose storage is explicitly row-major: `y_index * x_count + x_index`.
+- Uses bilinear interpolation in fixed X-then-Y order, including non-uniformly spaced axes.
+- Boundary policy is explicit: `Reject` or `Clamp` to the grid rectangle.
+- Grid dimensions, pose count, coordinate intervals and complete pose-schema compatibility are validated before evaluation.
+
+### Typed pose interpolation
+
+- Interpolation matches values by `BindingId`, not vector position.
+- Missing bindings, mismatched value types, and wrapped/unwrapped angle mismatches remain typed errors.
+- Scalar and Vector2 values interpolate component-wise; Angle values delegate to the established wrapped-shortest-path / unwrapped-linear semantics and deterministic antipodal tie rule.
+- Weight and intermediate arithmetic validity is checked; no implicit neutral, zero or last-value fallback is introduced.
+
+### Current implementation status
+
+Implemented on `feat/smart-controller-phase6a-mapping`:
+- `mapping/advanced/interpolation.rs`
+- `mapping/advanced/triangulated.rs`
+- `mapping/advanced/grid.rs`
+- `mapping/advanced/mod.rs` with the common `PoseMapping2D` trait
+- `tests/advanced_pose_tests.rs` with coverage for barycentric interpolation, boundary handling, degenerate meshes, overlap ambiguity, bilinear interpolation, grid validation, and wrapped angles.
+
+**Not yet verified:** Rust compilation/tests, workspace tests, WASM builds, and CI. The new mapping types are pure reusable core APIs; they are not yet selected by a concrete production `ControllerMapper` or serialized as new canonical `MappingConfig` variants. That integration is intentionally not smuggled into schema v1. Any serialized mapping representation requires an explicit schema/version compatibility decision. Phase 6B host authoring remains deferred pending a separate verified host-capability audit.
