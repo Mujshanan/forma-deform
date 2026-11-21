@@ -83,13 +83,25 @@ pub struct InputDefinition {
 
 impl InputDefinition {
     pub fn validate(&self) -> Result<(), CoreError> {
-        match &self.source {
-            InputSource::BoneTransform { bone_id, .. } if bone_id.trim().is_empty() => {
+        if let InputSource::BoneTransform { bone_id, channel } = &self.source {
+            if bone_id.trim().is_empty() {
                 return Err(CoreError::InvalidModel(
                     "bone transform input requires a non-empty bone_id".into(),
                 ));
             }
-            _ => {}
+            let expected = match channel {
+                BoneTransformChannel::Rotation => InputDimension::Angle,
+                BoneTransformChannel::Translation | BoneTransformChannel::Scale => {
+                    InputDimension::Vector2
+                }
+            };
+            if self.dimension != expected {
+                return Err(CoreError::InputValueTypeMismatch {
+                    input_id: self.id.to_string(),
+                    expected: expected.name(),
+                    actual: self.dimension.name(),
+                });
+            }
         }
 
         if let FallbackPolicy::UseValue(value) = &self.fallback {
