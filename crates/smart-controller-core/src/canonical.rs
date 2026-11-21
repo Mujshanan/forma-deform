@@ -1,5 +1,10 @@
 //! Canonical, host-independent controller configuration.
-use crate::{contribution::Contribution, error::CoreError, ids::{ControllerId, InputId}, value::TypedValue};
+use crate::{
+    error::CoreError,
+    ids::{BindingId, ControllerId, InputId, TargetId},
+    legacy::{ControllerMode, EaseCurve, InputRange},
+    value::TypedValue,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -10,14 +15,29 @@ pub enum MappingConfig {
     PoseSet1D { pose_ids: Vec<String> },
     JoystickFivePose { center: String, up: String, right: String, down: String, left: String },
     Discrete { values: Vec<TypedValue> },
+    /// Exact scalar/frame mapping semantics retained while importing legacy V1 bindings.
+    LegacyThreeAnchor { input_range: InputRange, easing: EaseCurve },
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum TargetMapping {
+    SymbolFrame { symbol_instance_id: String, negative_frame: u32, neutral_frame: u32, positive_frame: u32 },
+    GeometryDeform { element_id: String, pin_id: String, negative_offset: [f64; 2], neutral_offset: [f64; 2], positive_offset: [f64; 2] },
+    Property { target_id: String, property: String, scale: f64, additive: bool },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingMode { AbsolutePose, RelativeDelta }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ControllerBinding {
-    pub id: crate::ids::BindingId,
-    pub target_id: crate::ids::TargetId,
-    pub mode: crate::contribution::CompositionMode,
+    pub id: BindingId,
+    pub target_id: TargetId,
+    pub target: TargetMapping,
+    pub mode: BindingMode,
     pub base_value: Option<TypedValue>,
 }
 
@@ -48,11 +68,24 @@ impl Controller {
             if !ids.insert(binding.id.clone()) {
                 return Err(CoreError::InvalidModel(format!("duplicate binding ID {}", binding.id)));
             }
-            if binding.mode == crate::contribution::CompositionMode::Additive && binding.base_value.is_none() {
-                return Err(CoreError::InvalidModel(format!("additive binding {} requires an explicit base value", binding.id)));
+            if binding.mode == BindingMode::RelativeDelta && binding.base_value.is_none() {
+                return Err(CoreError::InvalidModel(format!("relative binding {} requires an explicit base value", binding.id)));
             }
-            if binding.mode != crate::contribution::CompositionMode::Additive && binding.base_value.is_some() {
-                return Err(CoreError::InvalidModel(format!("base value is only valid for additive binding {}", binding.id)));
+            if binding.mode == BindingMode::AbsolutePose && binding.base_value.is_some() {
+                return Err(CoreError::InvalidModel(format!("base value is only valid for relative binding {}", binding.id)));
+            }
+            match &binding.target {
+                TargetMapping::SymbolFrame { symbol_instance_id, .. } if symbol_instance_id.trim().is_empty() =>
+                    return Err(CoreError::InvalidModel("symbol frame target requires an identity".into())),
+                TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, neutral_offset, positive_offset } => {
+                    if element_id.trim().is_empty() || pin_id.trim().is_empty() ||
+                        [negative_offset, neutral_offset, positive_offset].iter().flatten().any(|v| !v.is_finite()) {
+                        return Err(CoreError::InvalidModel("geometry target identity and anchors must be valid".into()));
+                    }
+                }
+                TargetMapping::Property { target_id, property, scale, .. } if target_id.trim().is_empty() || property.trim().is_empty() || !scale.is_finite() =>
+                    return Err(CoreError::InvalidModel("property target identity, property and scale must be valid".into())),
+                _ => {}
             }
         }
         match &self.mapping {
@@ -74,6 +107,7 @@ impl Controller {
                 }
             }
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
+            MappingConfig::LegacyThreeAnchor { input_range, .. } => input_range.validate().map_err(|e| CoreError::InvalidMapping(e.to_string()))?,
         }
         Ok(())
     }
