@@ -3,7 +3,7 @@
 **Status:** Prototype / integration investigation  
 **Decision:** Not accepted for native integration  
 **Owner:** Maintainer  
-**Last reviewed:** 2026-11-20
+**Last reviewed:** 2026-11-21
 
 This document is the maintainer's review entry point. The prototype demonstrates isolated calculations and a command-plugin adapter; it is not evidence that AniCraft currently supports a complete animation-controller lifecycle.
 
@@ -14,8 +14,8 @@ This document is the maintainer's review entry point. The prototype demonstrates
 | Target host repository | [Mujshanan/AniCraft](https://github.com/Mujshanan/anicraft) | Intended host fork |
 | Target host commit (main head checked 2026-11-20) | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | Pinned P3 candidate; source reviewed, in-app smoke still pending |
 | Prototype repository | [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform) | This prototype and reusable calculation cores |
-| Prototype branch | `feat/smart-controller-v1` | Current development branch |
-| Prototype baseline commit | [`0ed13f243068392d4a8c649fff5f091f022fe1e3`](https://github.com/Mujshanan/forma-deform/commit/0ed13f243068392d4a8c649fff5f091f022fe1e3) | Host-response compatibility fix; P0/P2 CI verified |
+| Current plugin-fix branch | `fix/smart-controller-manifest-ids` | Manifest schema and stable driver-bone identity corrections; validation pending |
+| Previous verified prototype baseline | [`0ed13f243068392d4a8c649fff5f091f022fe1e3`](https://github.com/Mujshanan/forma-deform/commit/0ed13f243068392d4a8c649fff5f091f022fe1e3) | Host-response compatibility fix; P0/P2 CI verified before the current manifest/ID corrections |
 | Vendored AniCraft guest SDK source | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | SDK source pin recorded in `crates/anicraft-plugin-sdk/UPSTREAM.md`; independently checked against host `main` head, which happens to be the same SHA |
 | Host plugin ABI | v1 | Confirmed in `docs/plugins.md` at the pinned host commit |
 | Host build baseline | Rust 1.95 minimum; Cargo edition 2024 | `cargo run` from the pinned AniCraft repository root |
@@ -122,6 +122,9 @@ Stop the integration effort (while retaining reusable host-independent cores) if
 A wishlist item being unavailable is not, by itself, a kill condition. It becomes one only if the product's agreed must-have workflow depends on it.
 
 ## 5. Current evidence and next decision
+
+- On 2026-11-21, branch `fix/smart-controller-manifest-ids` was created from `feat/smart-controller-v1`. It changes unsupported manifest string parameters to ABI v1 choices, supplies required numeric bounds/defaults, adds an explicit manual-input toggle, and resolves Slider drivers by stable bone ID. The current branch has not yet been validated by a completed CI run or in-app smoke test.
+- Bone Query's current response-field mapping was compared with `bone.info` at the pinned host commit; its fields already match the host response, so no speculative adapter rewrite was made.
 
 - Pure Rust cores and the actual Smart Controller `run_with_host` mode dispatcher have automated tests; a fake host captures the same command/log boundary used by production `run()`. Coverage includes Slider manual/bone input and endpoint behavior, Deform preview/Apply and exact `warp.pin_move` payload, optional spring swing, malformed/missing host data, command failures, and repeated absolute evaluation. SDK tests cover malformed JSON and oversized plugin parameters. See `cargo test --workspace`.
 - Static source review at host commit `bcfea816478f2a00ab172cefe67f0bd5696b3886` confirms ABI v1; `plugin_may_call` permits the `bone.*` and `warp.*` command namespaces; `bone.info` accepts a layer filter and returns bone IDs, names, keyed angles, and spring swing; `warp.info` returns `warped:false` without a `pins` field or, when warped, a pin list containing IDs and stage-pixel positions; and `warp.pin_move` accepts element/pin IDs and stage-pixel X/Y coordinates.
