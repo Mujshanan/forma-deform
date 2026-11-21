@@ -609,3 +609,18 @@ The composition layer's final review identified and corrected a target-type gate
 An end-to-end evaluator-plus-composition test now verifies Angle property output. Its first run caught a +π normalization boundary issue in wrapped weighted-angle composition; the output is now normalized to [-π, π).
 
 Final verified commit: `f08185f043141ac3f476bd2301dbcabd72d9bebb`. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44931731464 passed: 153 workspace Rust tests; Bun typecheck, tests (9/9), build; and release WASM builds for bone-query, form-deform and smart-controller. Rustfmt and Clippy were not run. Phase 4 remains a pure core post-pass, with no host mutation and no composition with Form Deform pin outputs. No PR or merge has been created.
+
+
+---
+
+## 16. Phase 5 adapter implementation update
+
+The following adapter foundations are now present on `feat/smart-controller-phase3-evaluator`:
+
+- `plugins/smart-controller/src/adapter.rs` consumes a previously fetched `bone.info` JSON response, identifies a bone by its numeric stable ID, reads its degree-valued keyed angle, and optionally adds the separately reported spring swing. The caller must explicitly choose whether spring swing is included and whether the resulting Angle is wrapped or unwrapped. Missing IDs, malformed responses, absent angles, and absent requested swing fail closed.
+- Input snapshots use a zero age tick only for samples queried in the same invocation; the adapter does not read a clock or claim freshness across invocations.
+- `plugins/smart-controller/src/targets.rs` records capability status without issuing commands. Geometry pin read/move commands are marked preview-transaction-only; symbol-frame, frame-range and generic property application remain unverified/calculation-only.
+- `plugins/smart-controller/src/compatibility.rs` delegates legacy JSON decoding and migration to the core migration API; migration notices and losses remain available to callers.
+- `plugins/smart-controller/src/lib.rs` exports these modules. Existing V1 Slider preview execution is unchanged.
+
+This is the start of Phase 5, not its exit. Full evaluator orchestration, mapping integration, target preview transaction handling, end-to-end adapter compatibility tests and user-facing documentation reconciliation remain outstanding. No mutating command is invoked by the new modules. No playback/scrubbing, persistence or Smart Controller/Form Deform composition capability is claimed.
