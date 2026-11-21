@@ -17,24 +17,25 @@ const MANIFEST: &str = r##"{
   "author": "Mujshanan",
   "description": "On-demand bone-driven animation and geometry controller with Slider and Deform modes.",
   "params": {
-    "mode": {"type": "string", "default": "slider", "label": "Controller mode: slider or deform"},
+    "mode": {"type": "choice", "options": ["slider", "deform"], "default": "slider", "label": "Controller mode"},
     "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID (Slider mode)"},
-    "driver_bone_name": {"type": "string", "default": "Head", "label": "Driver bone name (Slider mode)"},
-    "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID (Slider mode)"},
-    "min_rotation_deg": {"type": "number", "default": -45, "label": "Minimum driver angle (Slider mode)"},
-    "max_rotation_deg": {"type": "number", "default": 45, "label": "Maximum driver angle (Slider mode)"},
+    "driver_bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver bone ID (Slider mode)"},
+    "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID (Slider preview context)"},
+    "min_rotation_deg": {"type": "number", "min": -23040, "max": 23040, "default": -45, "label": "Minimum driver angle (Slider mode)"},
+    "max_rotation_deg": {"type": "number", "min": -23040, "max": 23040, "default": 45, "label": "Maximum driver angle (Slider mode)"},
     "action_start_frame": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Action start frame (Slider mode)"},
     "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Action end frame (Slider mode)"},
-    "endpoint_policy": {"type": "string", "default": "exclusive", "label": "Endpoint policy: exclusive or inclusive"},
-    "manual_value": {"type": "number", "label": "Manual driver angle (Slider mode; overrides bone query)"},
+    "endpoint_policy": {"type": "choice", "options": ["exclusive", "inclusive"], "default": "exclusive", "label": "Endpoint policy"},
+    "use_manual_value": {"type": "bool", "default": false, "label": "Use manual driver angle instead of bone query"},
+    "manual_value": {"type": "number", "min": -23040, "max": 23040, "default": 0, "label": "Manual driver angle (degrees)"},
     "bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Controller bone ID (Deform mode)"},
     "element_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warped shape element ID (Deform mode)"},
     "pin_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warp pin ID (Deform mode)"},
-    "neutral_angle": {"type": "number", "default": 0, "label": "Neutral bone angle (degrees)"},
-    "neutral_x": {"type": "number", "default": 0, "label": "Neutral pin X (stage px)"},
-    "neutral_y": {"type": "number", "default": 0, "label": "Neutral pin Y (stage px)"},
-    "gain_x": {"type": "number", "default": 0, "label": "X displacement per degree (px/degree)"},
-    "gain_y": {"type": "number", "default": 0, "label": "Y displacement per degree (px/degree)"},
+    "neutral_angle": {"type": "number", "min": -23040, "max": 23040, "default": 0, "label": "Neutral bone angle (degrees)"},
+    "neutral_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral pin X (stage px)"},
+    "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral pin Y (stage px)"},
+    "gain_x": {"type": "number", "min": -10000, "max": 10000, "default": 0, "label": "X displacement per degree (px/degree)"},
+    "gain_y": {"type": "number", "min": -10000, "max": 10000, "default": 0, "label": "Y displacement per degree (px/degree)"},
     "include_spring_swing": {"type": "bool", "default": false, "label": "Include spring swing in bone angle"},
     "apply": {"type": "bool", "default": false, "label": "Apply pin position (creates an undoable document edit)"}
   }
@@ -73,33 +74,34 @@ fn select_fields(raw: &Value, fields: &[&str]) -> Value {
     Value::Object(selected)
 }
 
-fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
+fn find_driver_bone(result: &Value, bone_id: u64) -> Option<f64> {
     result["armatures"]
         .as_array()?
         .iter()
         .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
-        .find(|bone| bone["name"].as_str() == Some(name))
+        .find(|bone| bone["id"].as_u64() == Some(bone_id))
         .and_then(|bone| bone["angle"].as_f64())
 }
 
 fn query_slider_driver(params: &Params, host: &mut impl HostApi) -> Result<f64, String> {
     let layer_id = params
         .driver_layer_id
-        .ok_or("driver_layer_id is required for Slider mode bone input")?;
-    let name = params
-        .driver_bone_name
-        .as_deref()
-        .ok_or("driver_bone_name is required for Slider mode bone input")?;
+        .filter(|id| *id > 0)
+        .ok_or("a positive driver_layer_id is required for Slider mode bone input")?;
+    let bone_id = params
+        .driver_bone_id
+        .filter(|id| *id > 0)
+        .ok_or("a positive driver_bone_id is required for Slider mode bone input")?;
     let response = host.command("bone.info", json!({"layer": layer_id}))?;
-    find_driver_bone(&response, name)
-        .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
+    find_driver_bone(&response, bone_id)
+        .ok_or_else(|| format!("driver bone ID {bone_id} was not returned by bone.info or has no evaluated angle"))
 }
 
 fn run_slider(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
     const FIELDS: &[&str] = &[
         "mode",
         "driver_layer_id",
-        "driver_bone_name",
+        "driver_bone_id",
         "action_layer_id",
         "min_rotation_deg",
         "max_rotation_deg",
@@ -108,16 +110,23 @@ fn run_slider(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
         "endpoint_policy",
         "manual_value",
     ];
-    let payload = select_fields(raw, FIELDS);
+    let use_manual_value = raw["use_manual_value"].as_bool().unwrap_or(false);
+    let mut payload = select_fields(raw, FIELDS);
+    if !use_manual_value {
+        if let Some(fields) = payload.as_object_mut() {
+            fields.remove("manual_value");
+        }
+    }
     let params: Params = serde_json::from_value(payload)
         .map_err(|error| format!("invalid Slider parameters: {error}"))?;
     validation::validate(&params)?;
     if params.mode != Mode::Slider {
         return Err("Only Slider mode is currently supported by this mapping path; Transform remains deferred.".into());
     }
-    let driver_value = match params.manual_value {
-        Some(value) => value,
-        None => query_slider_driver(&params, host)?,
+    let driver_value = if use_manual_value {
+        params.manual_value.ok_or("manual_value is required when use_manual_value is enabled")?
+    } else {
+        query_slider_driver(&params, host)?
     };
     let output = preview_slider(&params, driver_value)?;
     let serialized = serde_json::to_string(&output)
@@ -290,20 +299,20 @@ mod tests {
 
     #[test]
     fn slider_bone_resolution_uses_bone_info_response_shape() {
-        let data = json!({"armatures":[{"bones":[{"name":"Head","angle":12.5},{"name":"Jaw","angle":-4.0}]}]});
-        assert_eq!(find_driver_bone(&data, "Jaw"), Some(-4.0));
-        assert_eq!(find_driver_bone(&data, "Missing"), None);
+        let data = json!({"armatures":[{"bones":[{"id":11,"angle":12.5},{"id":12,"angle":-4.0}]}]});
+        assert_eq!(find_driver_bone(&data, 12), Some(-4.0));
+        assert_eq!(find_driver_bone(&data, 99), None);
     }
 
     #[test]
     fn malformed_slider_bone_info_fails_closed() {
-        assert_eq!(find_driver_bone(&json!({"armatures":[]}), "Head"), None);
+        assert_eq!(find_driver_bone(&json!({"armatures":[]}), 12), None);
     }
 
     #[test]
     fn each_mode_ignores_the_other_modes_manifest_fields() {
         let all_fields = json!({
-            "mode":"slider", "driver_layer_id":1, "driver_bone_name":"Head",
+            "mode":"slider", "driver_layer_id":1, "driver_bone_id":12,
             "action_layer_id":2, "min_rotation_deg":-45.0, "max_rotation_deg":45.0,
             "action_start_frame":0, "action_end_frame":20, "endpoint_policy":"exclusive",
             "manual_value":null, "bone_id":4, "element_id":8, "pin_id":9,
@@ -332,7 +341,7 @@ mod tests {
             &[
                 "mode",
                 "driver_layer_id",
-                "driver_bone_name",
+                "driver_bone_id",
                 "action_layer_id",
                 "min_rotation_deg",
                 "max_rotation_deg",
@@ -415,21 +424,19 @@ mod tests {
     }
 
     fn slider_params(manual_value: Option<f64>) -> Value {
-        let mut params = json!({
+        json!({
             "mode": "slider",
             "driver_layer_id": 5,
-            "driver_bone_name": "Head",
+            "driver_bone_id": 12,
             "action_layer_id": 2,
             "min_rotation_deg": -45.0,
             "max_rotation_deg": 45.0,
             "action_start_frame": 0,
             "action_end_frame": 20,
-            "endpoint_policy": "exclusive"
-        });
-        if let Some(value) = manual_value {
-            params["manual_value"] = json!(value);
-        }
-        params
+            "endpoint_policy": "exclusive",
+            "use_manual_value": manual_value.is_some(),
+            "manual_value": manual_value.unwrap_or(0.0)
+        })
     }
 
     fn deform_params(apply: bool) -> Value {
@@ -492,7 +499,7 @@ mod tests {
     #[test]
     fn slider_queries_driver_bone_and_never_writes_timeline() {
         let mut host = FakeHost::default();
-        host.respond(json!({"armatures":[{"bones":[{"name":"Head","angle":45.0}]}]}));
+        host.respond(json!({"armatures":[{"bones":[{"id":12,"angle":45.0}]}]}));
 
         run_with_host(&slider_params(None), &mut host).unwrap();
 
