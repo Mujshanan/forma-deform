@@ -1,0 +1,16 @@
+[package]
+name = "forma-geometry"
+version = "0.1.0"
+edition = "2024"
+description = "Host-independent geometric value primitives for Forma"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
