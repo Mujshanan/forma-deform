@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "bindings": [
+    {
+      "id": "binding-head-turn",
+      "controller_id": "bone-head-turn",
+      "input_range": { "minimum": -45.0, "neutral": 0.0, "maximum": 45.0 },
+      "easing": "linear",
+      "mode": "absolute_pose",
+      "target": {
+        "type": "symbol_frame",
+        "symbol_instance_id": "instance-head",
+        "negative_frame": 1,
+        "neutral_frame": 5,
+        "positive_frame": 9
+      },
+      "enabled": true
+    },
+    {
+      "id": "binding-arm-corrective",
+      "controller_id": "bone-arm",
+      "input_range": { "minimum": -45.0, "neutral": 0.0, "maximum": 45.0 },
+      "easing": "smoothstep",
+      "mode": "relative_delta",
+      "target": {
+        "type": "geometry_deform",
+        "element_id": "shape-arm",
+        "pin_id": "pin-arm-tip",
+        "negative_offset": { "x": -4.0, "y": 2.0 },
+        "neutral_offset": { "x": 1.0, "y": 1.0 },
+        "positive_offset": { "x": 9.0, "y": 5.0 }
+      },
+      "enabled": true
+    }
+  ]
+}

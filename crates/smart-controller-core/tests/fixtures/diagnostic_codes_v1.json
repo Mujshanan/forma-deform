@@ -1,0 +1,21 @@
+{
+  "schema": {
+    "name": "smart-controller-diagnostic-codes",
+    "version": 1
+  },
+  "codes": [
+    "SC_INPUT_MISSING",
+    "SC_INPUT_STALE",
+    "SC_INPUT_INVALID",
+    "SC_INPUT_UNAVAILABLE",
+    "SC_GRAPH_INVALID",
+    "SC_GRAPH_CYCLE",
+    "SC_MAPPING_DOMAIN",
+    "SC_MAPPING_TYPE",
+    "SC_COMPOSITION_CONFLICT",
+    "SC_COMPOSITION_WEIGHT_INVALID",
+    "SC_COMPOSITION_NO_ELIGIBLE",
+    "SC_CONTROLLER_DISABLED",
+    "SC_OUTPUT_SKIPPED"
+  ]
+}

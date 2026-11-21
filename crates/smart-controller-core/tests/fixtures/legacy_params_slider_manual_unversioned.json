@@ -1,0 +1,16 @@
+{
+  "mode": "slider",
+  "driver_layer_id": null,
+  "driver_bone_name": null,
+  "action_layer_id": 3,
+  "min_rotation_deg": -45.0,
+  "max_rotation_deg": 45.0,
+  "action_start_frame": 0,
+  "action_end_frame": 10,
+  "endpoint_policy": "inclusive",
+  "target_bone_name": null,
+  "property": null,
+  "scale": null,
+  "additive": false,
+  "manual_value": 12.5
+}
