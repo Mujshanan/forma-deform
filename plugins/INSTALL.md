@@ -33,7 +33,7 @@ Prepare one project containing:
 Then test in this order:
 
 1. Run Bone Query. Confirm armature, bone IDs, keyed angles, and spring fields are reported correctly.
-2. Run Smart Controller in Slider mode with Apply-independent preview inputs. Test negative, neutral, and positive driver angles; verify Exclusive and Inclusive endpoint behavior.
+2. Run Smart Controller in Slider mode. Select the driver armature layer and stable bone ID (not the editable bone name); leave **Use manual driver angle** off for a bone query, or enable it to test a supplied angle. Test negative, neutral, and positive inputs; verify Exclusive and Inclusive endpoint behavior.
 3. Run Smart Controller in Deform mode with Apply disabled. Enter the known bone/element/pin IDs, neutral angle, neutral pin stage position, and small per-degree gains. Confirm the reported target is stable when rerun at the same frame.
 4. Enable Apply only after the Deform calculation is correct; confirm the pin moves to the calculated absolute stage position and Undo restores its previous position.
 
