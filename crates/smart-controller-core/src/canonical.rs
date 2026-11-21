@@ -129,7 +129,7 @@ impl Controller {
             }
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
             MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, .. } => {
-                if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || minimum >= neutral || neutral >= maximum {
+                if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || !(*neutral - *minimum).is_finite() || !(*maximum - *neutral).is_finite() || minimum >= neutral || neutral >= maximum {
                     return Err(CoreError::InvalidMapping("three-anchor range must be finite and strictly ordered".into()));
                 }
             },
