@@ -27,6 +27,7 @@ fn producer_binding() -> ControllerBinding {
         },
         mode: BindingMode::AbsolutePose,
         base_value: None,
+        composition: None,
     }
 }
 
