@@ -121,8 +121,8 @@ mod tests {
         let response = json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
         let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly).unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
-        assert!((angle.radians - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
-        assert!(!angle.wrapped);
+        assert!((angle.radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+        assert!(!angle.is_wrapped());
         assert_eq!(sample.age_ticks, Some(0));
     }
 
@@ -131,7 +131,7 @@ mod tests {
         let response = json!({"armatures":[{"bones":[{"id":"42","angle":30.0,"swing":-10.0}]}]});
         let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing).unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
-        assert!((angle.radians - 20.0_f64.to_radians()).abs() < 1e-12);
+        assert!((angle.radians() - 20.0_f64.to_radians()).abs() < 1e-12);
     }
 
     #[test]
