@@ -11,6 +11,10 @@ pub enum CoreError {
     InvalidIdentifier { kind: &'static str },
     NonFiniteValue { context: &'static str },
     DuplicateInputId(String),
+    DuplicatePoseBindingId(String),
+    PoseBindingMissing { binding_id: String },
+    PoseValueTypeMismatch { binding_id: String, expected: &'static str, actual: &'static str },
+    PoseAngleSemanticsMismatch { binding_id: String },
     InvalidInputSample { input_id: String, reason: &'static str },
     InputValueTypeMismatch {
         input_id: String,
@@ -40,6 +44,10 @@ impl fmt::Display for CoreError {
             Self::InvalidIdentifier { kind } => write!(f, "{kind} identifier must not be empty"),
             Self::NonFiniteValue { context } => write!(f, "{context} must be finite"),
             Self::DuplicateInputId(id) => write!(f, "duplicate input ID: {id}"),
+            Self::DuplicatePoseBindingId(id) => write!(f, "duplicate pose binding ID: {id}"),
+            Self::PoseBindingMissing { binding_id } => write!(f, "pose is missing binding value: {binding_id}"),
+            Self::PoseValueTypeMismatch { binding_id, expected, actual } => write!(f, "pose binding {binding_id} expects {expected}, received {actual}"),
+            Self::PoseAngleSemanticsMismatch { binding_id } => write!(f, "pose binding {binding_id} has incompatible wrapped/unwrapped angle semantics"),
             Self::InvalidInputSample { input_id, reason } => {
                 write!(f, "invalid sample for input {input_id}: {reason}")
             }
