@@ -251,3 +251,14 @@ fn migration_dispatch_rejects_unknown_legacy_params_fields() {
     value["unexpected"] = serde_json::json!(true);
     assert!(migrate_json(&serde_json::to_string(&value).unwrap()).is_err());
 }
+
+#[test]
+fn unversioned_bone_name_that_looks_like_a_layer_path_is_not_misparsed() {
+    let mut original = slider_params();
+    original.manual_value = None;
+    original.driver_layer_id = None;
+    original.driver_bone_name = Some("layer:17/bone:head".into());
+    let migrated = migrate_unversioned_params(&original).unwrap();
+    let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
+    assert_eq!(exported.params, original);
+}
