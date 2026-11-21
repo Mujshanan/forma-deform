@@ -667,7 +667,7 @@ Phase 4 is complete at `f08185f043141ac3f476bd2301dbcabd72d9bebb`.
 
 ## 17. Phase 5 adapter integration — merged
 
-Initial adapter foundations are being added:
+The merged Phase 5 adapter provides:
 
 - `plugins/smart-controller/src/adapter.rs`: parses the verified read-only `bone.info` response by stable numeric bone ID; converts degrees to radians; makes spring-swing inclusion and wrapped/unwrapped angle semantics explicit; produces same-invocation input samples without reading a clock.
 - `plugins/smart-controller/src/targets.rs`: assesses host target capabilities without issuing mutating commands, queries the documented read-only `warp.info` endpoint, and verifies geometry targets against numeric element/pin IDs rather than array positions. Geometry pin application is marked command-preview-only (`warp.pin_move`); symbol-frame, frame-range and generic property targets remain calculation-only.
@@ -687,7 +687,7 @@ The Phase 5 adapter now has an end-to-end read-only request path:
 - `preview_plan.rs` builds a stable TargetId-ordered list containing the exact canonical target mapping, composed TypedValue and capability assessment. It rejects target/value type mismatches and records outputs that have no target definition. The host-driven path performs read-only `warp.info` checks for GeometryDeform targets and verifies exact numeric element/pin IDs before marking them host-verified. It does not invent frame conversion, property setters, or geometry mutation commands.
 - Compatibility wrappers and migration reports remain available; adapter-level tests cover malformed legacy JSON, strict canonical decoding, empty V1 migration/export, and orchestration/no-op behavior.
 
-**Phase 5 implementation scope is complete, pending verification.** The concrete Pose2D/joystick mapper remains a separate Phase 2/core prerequisite and is deliberately injected rather than fabricated here. Host application remains limited by verified capabilities: geometry pin mutation requires the host preview/undo transaction; symbol-frame and generic property setters are not established. No playback/scrubbing hook, durable host metadata API, or Smart Controller/Form Deform composition has been added. Existing V1 Slider execution is unchanged.
+**Phase 5 implementation scope is complete.** Its initial merged commit failed CI; the adapter compile and missing-input test corrections are included on the Phase 6A branch and verified by the workflow recorded below. The concrete Pose2D/joystick mapper remains a separate Phase 2/core prerequisite and is deliberately injected rather than fabricated here. Host application remains limited by verified capabilities: geometry pin mutation requires the host preview/undo transaction; symbol-frame and generic property setters are not established. No playback/scrubbing hook, durable host metadata API, or Smart Controller/Form Deform composition has been added. Existing V1 Slider execution is unchanged.
 
 **Verification correction:** the initial Phase 5 merge CI did not pass. While beginning Phase 6A, CI exposed two adapter compile errors and an outdated test that contradicted the intended missing-input fallback contract. Those were corrected on the Phase 6A branch. The full workflow subsequently passed on `3ef3f57e55ae6165885edf6588a704670bf08f9d`: 191 Rust tests, Bun typecheck, Bun tests, Bun build, and all three release WASM plugin builds. AniCraft in-app smoke testing remains external. Rustfmt/Clippy are not included in that workflow and are not claimed.
 
