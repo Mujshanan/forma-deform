@@ -555,7 +555,7 @@ Added the following Phase 1 work on this branch:
 - Pure range/frame/easing functions reject non-finite and overflowing public inputs. New range/frame parity tests compare the scalar/frame results against the characterized V1 functions.
 - Graph validation rejects duplicate dependency edges; tests cover shared-node parent-scoped configuration.
 
-**Remaining Phase 1 work:** add the explicit core/Form Deform dependency-boundary test and finish a complete source-level review. Then run core/workspace tests, formatting, Clippy and WASM builds on this branch. None of the Phase 1 tests have been executed in this environment, so they remain pending. No competing V1 API has been removed.
+**Phase 1 implementation and CI gates:** the dependency-boundary test, Pose2D value contract, wrapped/unwrapped angle interpolation, and typed-value interpolation contracts have now been added. The full CI workflow passed on commit d2536c09c7ff32d25bc4d5eed1cd41807ab31195. The CI workflow does not run rustfmt or Clippy; those are not claimed as passing. No competing V1 API has been removed.
 
 
 The explicit dependency-boundary test is now present at crates/smart-controller-core/tests/dependency_boundary_tests.rs. It checks both crate manifests (including normal, dev, build and target-specific dependency sections) and fails if either core directly depends on the other.
