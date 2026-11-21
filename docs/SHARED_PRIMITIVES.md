@@ -1,7 +1,7 @@
 # Shared Primitives — CCC-01.3
 
 - **Milestone:** CCC-01.3 — Shared Primitives
-- **Status:** Implemented on a review branch; pending CI and review
+- **Status:** Implemented; CI passed; pending review
 - **Baseline:** `6b53aac51ddc15249c5100745726027fd9c75907`
 - **Compatibility contract:** `docs/CODE_COMPATIBILITY.md` (CCC-COMP-001)
 
@@ -46,7 +46,13 @@ The distinction between these identity domains remains explicit. Array positions
 - Confirm the old public `Vec2` import paths compile.
 - Confirm the dependency graph remains acyclic and no host SDK dependency enters `forma-geometry`.
 
-## 7. Deferred
+## 7. Verification results
+
+GitHub Actions pull-request run [44897850860](https://github.com/Mujshanan/forma-deform/actions/runs/44897850860) completed successfully on the implementation commit. It passed TypeScript typecheck/tests/build, `cargo test --workspace`, and release WASM builds for Bone Query, Form Deform, and Smart Controller.
+
+The workflow does not run `cargo fmt --all -- --check`; formatting was not independently verified by CI.
+
+## 8. Deferred
 
 - Typed identity wrappers and identity conversion rules.
 - Point-versus-displacement semantic types.
