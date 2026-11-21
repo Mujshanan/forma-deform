@@ -1,6 +1,6 @@
 use smart_controller_core::{
     contribution::{BaseRef, CompositionMode, Contribution},
-    ids::{BindingId, TargetId},
+    ids::{BindingId, ControllerId, TargetId},
     schema::{SchemaEnvelope, CURRENT_SCHEMA_VERSION, SCHEMA_NAME},
     value::TypedValue,
 };
@@ -18,6 +18,7 @@ fn schema_envelope_has_explicit_identity_and_rejects_wrong_version() {
 
 fn contribution(mode: CompositionMode) -> Contribution {
     Contribution {
+        controller_id: ControllerId::new("controller-a").unwrap(),
         binding_id: BindingId::new("binding-a").unwrap(),
         target_id: TargetId::new("target-a").unwrap(),
         value: TypedValue::scalar(2.0).unwrap(),
@@ -25,6 +26,7 @@ fn contribution(mode: CompositionMode) -> Contribution {
         weight: None,
         priority: None,
         base_ref: None,
+        base_value: None,
     }
 }
 
