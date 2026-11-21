@@ -79,7 +79,7 @@ mod compatibility_tests {
     }
 
     #[test]
-    fn transform_rejects_non_finite_inputs_and_overflow() {
+    fn transform_rejects_non_finite_inputs_and_preserves_finite_extremes() {
         assert!(transform_value(f64::NAN, 1.0, false).is_err());
         assert!(transform_value(0.5, f64::INFINITY, false).is_err());
         assert!(transform_value(1.0, f64::MAX, false).is_ok());
