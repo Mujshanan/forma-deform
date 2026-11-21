@@ -567,3 +567,6 @@ The Phase 1 branch now includes:
 Migration tests now cover exact BindingSet round-trip, Params slider/transform round-trip, optional endpoint-policy preservation, driver identity preservation, migration dispatch, strict unknown-field rejection, empty BindingSets and explicit rejection of non-representable canonical exports.
 
 **Outstanding:** the core/Form Deform dependency-boundary test and final source review. Rust execution remains unverified: no Phase 1 Cargo test, formatting, Clippy or WASM result is claimed. The existing V1 legacy.rs/Params APIs remain in place; no runtime integration or CCC-01.5 behavior has been changed.
+
+
+The dependency-boundary test now checks both core crate manifests for direct normal/dev/build/target-specific dependencies in either direction. This test is authored but has not been executed with Cargo.
