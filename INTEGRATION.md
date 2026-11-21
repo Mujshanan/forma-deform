@@ -12,7 +12,7 @@ This document is the maintainer's review entry point. The prototype demonstrates
 | Item | Current reference | Meaning |
 |---|---|---|
 | Target host repository | [Mujshanan/AniCraft](https://github.com/Mujshanan/anicraft) | Intended host fork |
-| Target host commit (main head checked 2026-11-20) | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | Pinned P3 candidate; source reviewed, in-app smoke still pending |
+| Target host commit (main head rechecked 2026-11-21) | [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886) | Pinned P3 candidate; source reviewed, in-app smoke still pending |
 | Native-tool work branch | [`feat/smart-controllers-tool`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controllers-tool) at `b001b70e1444c3b194122f859b22b95cb098a22b` | Branch based on the existing three-commit native controller prototype; no native-tool changes merged |
 | Prototype repository | [Mujshanan/forma-deform](https://github.com/Mujshanan/forma-deform) | This prototype and reusable calculation cores |
 | Current plugin-fix branch | `fix/smart-controller-manifest-ids` | Manifest schema and stable driver-bone identity corrections; validation pending |
