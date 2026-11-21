@@ -722,6 +722,129 @@ mod tests {
     }
 
     #[test]
+    fn controller_mapping_failure_is_local_and_downstream_output_becomes_unavailable() {
+        let graph = ControllerGraph::new(vec![
+            node("upstream", vec![input_id("manual")], vec![], true, "up-binding"),
+            node(
+                "downstream",
+                vec![input_id("from-upstream")],
+                vec![controller_id("upstream")],
+                true,
+                "down-binding",
+            ),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Unavailable,
+            },
+        ];
+        let mapper = |controller: &Controller, _: &ResolvedInputs| {
+            if controller.id == controller_id("upstream") {
+                Err(CoreError::InvalidMapping("mapping domain failure".into()))
+            } else {
+                panic!("downstream must be skipped after upstream mapping failure")
+            }
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("manual", 0.5), &mapper).unwrap();
+        assert!(result.contributions.is_empty());
+        assert!(result.unavailable_outputs.contains(&(controller_id("upstream"), binding_id("up-binding"))));
+        assert!(result.unavailable_outputs.contains(&(controller_id("downstream"), binding_id("down-binding"))));
+        assert!(result.diagnostics.iter().any(|item| item.code == crate::diagnostic_codes::MAPPING_DOMAIN));
+        assert!(result.diagnostics.iter().any(|item| item.code == INPUT_UNAVAILABLE));
+    }
+
+    #[test]
+    fn controller_output_reject_policy_aborts_when_upstream_output_is_unavailable() {
+        let graph = ControllerGraph::new(vec![
+            node("upstream", vec![input_id("manual")], vec![], true, "up-binding"),
+            node(
+                "downstream",
+                vec![input_id("from-upstream")],
+                vec![controller_id("upstream")],
+                true,
+                "down-binding",
+            ),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            },
+        ];
+        let mapper = |controller: &Controller, _: &ResolvedInputs| {
+            if controller.id == controller_id("upstream") {
+                Err(CoreError::InvalidMapping("mapping domain failure".into()))
+            } else {
+                panic!("downstream must not run under Reject fallback policy")
+            }
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("manual", 0.5), &mapper);
+        assert!(matches!(result, Err(CoreError::MissingInput(_))));
+    }
+
+    #[test]
+    fn independent_controller_insertion_and_snapshot_order_do_not_change_results() {
+        let alpha = node("alpha", vec![input_id("input-alpha")], vec![], true, "binding-alpha");
+        let beta = node("beta", vec![input_id("input-beta")], vec![], true, "binding-beta");
+        let graph_ab = ControllerGraph::new(vec![alpha.clone(), beta.clone()]).unwrap();
+        let graph_ba = ControllerGraph::new(vec![beta, alpha]).unwrap();
+        let definitions = vec![
+            manual_definition("input-alpha", FallbackPolicy::Reject),
+            manual_definition("input-beta", FallbackPolicy::Reject),
+        ];
+        let snapshot_ab = InputSnapshot::new(5, vec![
+            InputSample::valid(input_id("input-alpha"), TypedValue::scalar(0.25).unwrap(), Some(5)),
+            InputSample::valid(input_id("input-beta"), TypedValue::scalar(-0.5).unwrap(), Some(5)),
+        ]).unwrap();
+        let snapshot_ba = InputSnapshot::new(5, vec![
+            InputSample::valid(input_id("input-beta"), TypedValue::scalar(-0.5).unwrap(), Some(5)),
+            InputSample::valid(input_id("input-alpha"), TypedValue::scalar(0.25).unwrap(), Some(5)),
+        ]).unwrap();
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                inputs.value(&controller.inputs[0]).unwrap(),
+            )]))
+        };
+        let result_ab = evaluate(&graph_ab, &definitions, &snapshot_ab, &mapper).unwrap();
+        let result_ba = evaluate(&graph_ba, &definitions, &snapshot_ba, &mapper).unwrap();
+        assert_eq!(result_ab, result_ba);
+        assert_eq!(
+            result_ab.contributions.iter().map(|item| item.binding_id.to_string()).collect::<Vec<_>>(),
+            vec!["binding-alpha", "binding-beta"],
+        );
+    }
+
+    #[test]
+    fn mapper_cannot_emit_a_binding_not_owned_by_the_controller() {
+        let graph = ControllerGraph::new(vec![
+            node("controller-a", vec![input_id("input-a")], vec![], true, "binding-a"),
+        ]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
+        let mapper = |_: &Controller, _: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                binding_id("foreign-binding"),
+                TypedValue::scalar(1.0).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.5), &mapper);
+        assert!(matches!(result, Err(CoreError::Evaluation(_))));
+    }
+
+    #[test]
     fn evaluator_rechecks_cycles_even_if_graph_was_built_unchecked() {
         let graph = ControllerGraph::from_unchecked_for_test(vec![
             node("a", vec![input_id("input-a")], vec![controller_id("b")], true, "binding-a"),
