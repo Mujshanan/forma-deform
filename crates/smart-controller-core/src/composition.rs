@@ -218,7 +218,7 @@ fn compose_weighted_blend(
                 if sin_sum.hypot(cos_sum) <= 1e-12 {
                     return Err(conflict(target_id, "weighted wrapped-angle mean is undefined for opposing directions"));
                 }
-                TypedValue::angle(sin_sum.atan2(cos_sum), true)?
+                TypedValue::angle(normalize_wrapped_angle(sin_sum.atan2(cos_sum)), true)?
             } else {
                 let mut sum = 0.0;
                 for (angle, weight) in &angles {
@@ -277,6 +277,11 @@ fn add_values(left: TypedValue, right: TypedValue) -> Result<TypedValue, &'stati
         }
         _ => Err("Additive values have incompatible types or angle semantics"),
     }
+}
+
+fn normalize_wrapped_angle(radians: f64) -> f64 {
+    use std::f64::consts::{PI, TAU};
+    (radians + PI).rem_euclid(TAU) - PI
 }
 
 fn conflict(target_id: &TargetId, reason: impl Into<String>) -> CoreError {
