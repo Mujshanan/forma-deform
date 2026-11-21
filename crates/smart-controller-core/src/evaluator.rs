@@ -552,6 +552,7 @@ mod tests {
             },
             mode: BindingMode::AbsolutePose,
             base_value: None,
+            composition: None,
         }
     }
 
