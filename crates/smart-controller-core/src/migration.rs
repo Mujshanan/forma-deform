@@ -372,3 +372,91 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
         },
     })
 }
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ParamsExportOutput {
+    pub params: Params,
+    pub report: MigrationReport,
+}
+
+/// Reverse the unversioned Params migration only when the canonical document
+/// still has the exact deterministic shape and identities created by that migration.
+pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsExportOutput, CoreError> {
+    document.validate()?;
+    if document.controllers.len() != 1 || document.inputs.len() != 1 {
+        return Err(CoreError::InvalidModel("document is not representable as one legacy Params object".into()));
+    }
+    let controller = &document.controllers[0];
+    if controller.id.as_str() != "legacy-params-controller" || controller.enabled == false ||
+        controller.parent_scoped || !controller.dependencies.is_empty() || controller.inputs.len() != 1 || controller.bindings.len() != 1 {
+        return Err(CoreError::InvalidModel("controller identity or structure is not reversible to Params".into()));
+    }
+    let (min_rotation_deg, max_rotation_deg) = match &controller.mapping {
+        MappingConfig::DirectedRange1D { start, end } => (*start, *end),
+        _ => return Err(CoreError::InvalidModel("Params requires a directed scalar range".into())),
+    };
+    let input = &document.inputs[0];
+    if input.id.as_str() != "legacy-params-input" || controller.inputs[0] != input.id {
+        return Err(CoreError::InvalidModel("Params input identity is not reversible".into()));
+    }
+    let (driver_layer_id, driver_bone_name, manual_value) = match (&input.source, &input.fallback) {
+        (InputSource::Manual, FallbackPolicy::UseValue(TypedValue::Scalar(value))) if input.dimension == InputDimension::Scalar =>
+            (None, None, Some(value.get())),
+        (InputSource::LegacyScalar { source_id }, FallbackPolicy::Reject) if input.dimension == InputDimension::Scalar => {
+            if let Some(rest) = source_id.strip_prefix("layer:") {
+                let (layer, bone) = rest.split_once("/bone:")
+                    .ok_or_else(|| CoreError::InvalidModel("legacy driver source identity is malformed".into()))?;
+                let layer_id = layer.parse::<u64>().map_err(|_| CoreError::InvalidModel("legacy driver layer ID is malformed".into()))?;
+                if layer_id == 0 || bone.trim().is_empty() {
+                    return Err(CoreError::InvalidModel("legacy driver layer/bone identity is invalid".into()));
+                }
+                (Some(layer_id), Some(bone.to_owned()), None)
+            } else if !source_id.trim().is_empty() {
+                (None, Some(source_id.clone()), None)
+            } else {
+                return Err(CoreError::InvalidModel("legacy driver source identity is empty".into()));
+            }
+        }
+        _ => return Err(CoreError::InvalidModel("input source/fallback cannot be represented by Params".into())),
+    };
+    let binding = &controller.bindings[0];
+    if binding.id.as_str() != "legacy-params-binding" {
+        return Err(CoreError::InvalidModel("Params binding identity is not reversible".into()));
+    }
+    let (mode, action_layer_id, action_start_frame, action_end_frame, endpoint_policy, target_bone_name, property, scale, additive) = match &binding.target {
+        TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, endpoint_policy } => {
+            if binding.mode != BindingMode::AbsolutePose || binding.base_value.is_some() ||
+                binding.target_id.as_str() != format!("action-layer:{action_layer_id}").as_str() {
+                return Err(CoreError::InvalidModel("frame target is not a reversible Params slider".into()));
+            }
+            (Mode::Slider, Some(*action_layer_id), Some(*start_frame), Some(*end_frame), Some(*endpoint_policy), None, None, None, false)
+        }
+        TargetMapping::Property { target_id, property, scale, additive } => {
+            let expected_mode = if *additive { BindingMode::RelativeDelta } else { BindingMode::AbsolutePose };
+            let expected_base = if *additive { Some(TypedValue::scalar(0.0)?) } else { None };
+            if binding.mode != expected_mode || binding.base_value != expected_base ||
+                binding.target_id.as_str() != format!("bone:{target_id}/property:{property}").as_str() {
+                return Err(CoreError::InvalidModel("property target is not a reversible Params transform".into()));
+            }
+            (Mode::Transform, None, None, None, None, Some(target_id.clone()), Some(property.clone()), Some(*scale), *additive)
+        }
+        _ => return Err(CoreError::InvalidModel("target type is not representable by Params".into())),
+    };
+    let params = Params {
+        mode, driver_layer_id, driver_bone_name, action_layer_id,
+        min_rotation_deg: Some(min_rotation_deg), max_rotation_deg: Some(max_rotation_deg),
+        action_start_frame, action_end_frame, endpoint_policy,
+        target_bone_name, property, scale, additive, manual_value,
+    };
+    validation::validate(&params).map_err(CoreError::InvalidModel)?;
+    Ok(ParamsExportOutput {
+        params,
+        report: MigrationReport {
+            source_format: "canonical_v1".into(),
+            notices: vec!["All canonical fields were representable in the unversioned Params format; export was lossless.".into()],
+            losses: vec![],
+        },
+    })
+}
