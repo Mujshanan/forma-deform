@@ -103,7 +103,7 @@ impl Angle {
 /// The canonical finite value union. Angle remains distinct from scalar so
 /// consumers cannot accidentally apply ordinary scalar interpolation to it.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TypedValue {
     Scalar(Scalar),
     Vector2(Vector2),
