@@ -247,6 +247,32 @@ mod tests {
     }
 
     #[test]
+    fn host_preview_session_orchestrates_empty_document_without_host_mutation() {
+        let document = smart_controller_core::migration::CanonicalDocument::from_json(
+            r#"{\"schema\":{\"name\":\"smart-controller\",\"version\":1},\"inputs\":[],\"controllers\":[]}"#,
+        ).unwrap();
+        let context = crate::input_provider::HostInputContext {
+            manual_values: std::collections::BTreeMap::new(),
+            bone_layers: std::collections::BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
+        };
+        let mapper = |_controller: &smart_controller_core::canonical::Controller,
+                      _inputs: &smart_controller_core::evaluator::ResolvedInputs|
+         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+            panic!("mapper must not run for an empty document");
+        };
+        let session = evaluate_host_document_preview(
+            &document,
+            &context,
+            &mapper,
+            &CompositionContext::default(),
+        ).unwrap();
+        assert!(session.evaluation.composition.outputs.is_empty());
+        assert!(session.target_preview.items.is_empty());
+    }
+
+    #[test]
     fn parses_keyed_pose_angle_in_degrees_as_unwrapped_radians() {
         let response = json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
         let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly, false).unwrap();
