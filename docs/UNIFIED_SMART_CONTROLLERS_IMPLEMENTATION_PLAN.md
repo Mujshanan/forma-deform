@@ -189,7 +189,7 @@ Do not create a support crate merely for organizational convenience. Extract sha
 
 The order below is the proposed implementation sequence. Phase 0 inspects existing files and records the actual baseline before any source file is changed. During Phase 1, reconcile this proposed layout with the current crate; do not create duplicate modules if an existing file already owns the responsibility.
 
-### Phase 0 — Audit and baseline (documentation/tests first)
+### Phase 0 — Audit, fixture verification and V1 characterization (documentation/tests first)
 
 | Order | File | Action | Required content |
 |---:|---|---|---|
@@ -200,14 +200,14 @@ The order below is the proposed implementation sequence. Phase 0 inspects existi
 | 0.5 | `crates/smart-controller-core/src/preview.rs` | Inspect | Existing pure preview functions, output types and V1 limitations. |
 | 0.6 | `crates/smart-controller-core/src/validation.rs` | Inspect | Existing validation, error representation and missing edge cases. |
 | 0.7 | `crates/smart-controller-core/src/lib.rs` | Inspect | Public exports, compatibility surface and module layout. |
-| 0.8 | `crates/smart-controller-core/tests/*` | Inspect/add baseline fixtures | Current tests, golden V1 serialized examples and expected evaluation outputs. |
+| 0.8 | `crates/smart-controller-core/tests/*` | Inspect/add baseline fixtures | Current tests, golden V1 serialized examples, and executable `v1_characterization_tests.rs` capturing current outputs before model changes. |
 | 0.9 | `plugins/smart-controller/src/lib.rs` | Inspect | SDK entry point, bone query parsing, manual input, preview-only behaviour and host assumptions. |
 | 0.10 | `crates/anicraft-plugin-sdk/*` | Inspect | Verified query/command contracts, error behaviour and adapter support. |
 | 0.11 | `docs/SMART_CONTROLLERS_AUDIT.md` | Add | File inventory, reuse map, overlapping models, compatibility matrix, host capability evidence, test gaps and migration risks. |
 
 **Phase 0 exit:** The existing implementation and host boundary are documented; golden fixtures are captured; no existing semantics are removed.
 
-### Phase 1 — Canonical types, model and schema
+### Phase 1 — Canonical types, schema, diagnostics, migration and scalar mapping
 
 Create or adapt files in this order:
 
@@ -215,20 +215,20 @@ Create or adapt files in this order:
 |---:|---|---|
 | 1.1 | `crates/smart-controller-core/src/error.rs` | Typed model, validation, mapping, graph, composition, serialization and evaluation errors. Errors must be structured enough for tests and plugin diagnostics. |
 | 1.2 | `crates/smart-controller-core/src/ids.rs` | Strongly typed ControllerId, InputId, BindingId and target identifiers; stable ordering and serialization rules. |
-| 1.3 | `crates/smart-controller-core/src/value.rs` | Finite scalar, 2D vector and supported typed output values; explicit type compatibility and finite-value validation. |
-| 1.4 | `crates/smart-controller-core/src/input.rs` | InputSource definitions, dimensions, validity/freshness metadata, fallback policy and snapshot data structures. No host API types. |
+| 1.3 | `crates/smart-controller-core/src/value.rs` | Finite scalar/vector values and explicit angle kind (`wrapped` or `unwrapped`); type compatibility and finite-value validation. |
+| 1.4 | `crates/smart-controller-core/src/input.rs` | InputSource definitions, dimensions, explicit validity, per-sample `age_ticks`, snapshot `max_age_ticks`, fallback policy and snapshot structures. No host API types. |
 | 1.5 | `crates/smart-controller-core/src/model.rs` | Canonical Controller, mapping configuration references, nested dependency references, enabled state, bindings and composition configuration. Replace competing model directions only after conversion tests exist. |
 | 1.6 | `crates/smart-controller-core/src/graph.rs` | ControllerGraph storage, dependency extraction, graph integrity checks and deterministic graph representation. |
 | 1.7 | `crates/smart-controller-core/src/serialization.rs` | Schema envelope, version dispatch, versioned decode/encode interfaces and migration registry. |
-| 1.8 | `crates/smart-controller-core/src/validation.rs` | Canonical model validation, IDs, finite values, graph references, mapping compatibility, binding types and unsupported-feature errors. |
+| 1.8 | `crates/smart-controller-core/src/validation.rs` | Canonical model validation, IDs, finite values, graph references, mapping compatibility, binding types, parent-scoped configuration rejection on shared nodes and unsupported-feature errors. |
 | 1.9 | `crates/smart-controller-core/src/lib.rs` | Public module declarations and intentionally supported API re-exports. Keep implementation details private unless needed by consumers. |
 | 1.10 | `crates/smart-controller-core/tests/model_tests.rs` | Model construction, identity, validation, graph references and type compatibility tests. |
 | 1.11 | `crates/smart-controller-core/tests/serialization_tests.rs` | Golden fixtures, round trips, unsupported versions and migration tests. |
-| 1.12 | `crates/smart-controller-core/tests/fixtures/*` | Canonical schema examples and legacy V1 fixture files. |
+| 1.12 | `crates/smart-controller-core/tests/fixtures/*` | Canonical schema examples, legacy V1 inputs and `diagnostic_codes_v1.json`. |\n| 1.13 | `crates/smart-controller-core/src/diagnostic_codes.rs` | Stable public diagnostic-code registry; codes are independent of display messages. |\n| 1.14 | `crates/smart-controller-core/src/migration.rs` | BindingSet v1 and unversioned Params conversion to canonical data, with explicit loss/unsupported-field diagnostics. |\n| 1.15 | `crates/smart-controller-core/src/mapping/range.rs` | Pure scalar/range mapping primitives, preserving legacy three-anchor semantics. |\n| 1.16 | `crates/smart-controller-core/src/mapping/easing.rs` | Pure Linear/Smoothstep easing primitives and compatibility checks. |\n| 1.17 | `crates/smart-controller-core/src/mapping/frame.rs` | Pure inclusive/exclusive frame mapping, preserving V1 endpoint behaviour. |\n| 1.18 | `crates/smart-controller-core/tests/migration_roundtrip_tests.rs` | Fixture → canonical → legacy-compatible round trips where lossless; assert diagnostics for lossy conversions. |\n| 1.19 | `crates/smart-controller-core/tests/diagnostic_registry_tests.rs` | Validate unique stable codes and exact registry fixture coverage. |\n| 1.20 | `crates/smart-controller-core/tests/angle_interpolation_tests.rs` | Wrapped shortest-path, unwrapped linear, antipodal tie and additive-angle semantics. |\n| 1.21 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping V1 regression tests. |
 
 **Phase 1 exit:** One authoritative model represents all controller behaviours, scalar/2D inputs, nested dependencies and multiple bindings. Schema and errors are explicit.
 
-### Phase 2 — Input resolution and mapping
+### Phase 2 — Input contracts and pose mapping
 
 | Order | File | Required content |
 |---:|---|---|
@@ -237,11 +237,11 @@ Create or adapt files in this order:
 | 2.3 | `crates/smart-controller-core/src/mapping/range.rs` | Scalar normalization, three-anchor ranges, reversed endpoints, clamping and endpoint policy. |
 | 2.4 | `crates/smart-controller-core/src/mapping/easing.rs` | Linear and Smoothstep initially; validated easing inputs and deterministic output. |
 | 2.5 | `crates/smart-controller-core/src/mapping/frame.rs` | Inclusive/exclusive animation frame mapping, finite/range validation and preserved V1 semantics. |
-| 2.6 | `crates/smart-controller-core/src/mapping/pose1d.rs` | One-dimensional authored pose interpolation and explicit endpoint behaviour. |
-| 2.7 | `crates/smart-controller-core/src/mapping/pose2d.rs` | Pose2D, five-pose regions, triangle selection, barycentric interpolation and non-uniform pose handling. |
-| 2.8 | `crates/smart-controller-core/src/mapping/boundary.rs` | Unit-square clamp, radial unit-circle clamp and reject policies. |
+| 2.3 | `crates/smart-controller-core/src/mapping/pose1d.rs` | One-dimensional authored pose interpolation and explicit endpoint behaviour. |
+| 2.4 | `crates/smart-controller-core/src/mapping/pose2d.rs` | Typed Pose2D per-binding values, five-pose regions, triangle selection, barycentric interpolation and non-uniform pose handling. |
+| 2.5 | `crates/smart-controller-core/src/mapping/boundary.rs` | Unit-square clamp, radial unit-circle clamp and reject policies. |
 | 2.9 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping regression tests. |
-| 2.10 | `crates/smart-controller-core/tests/pose2d_tests.rs` | Center/cardinal exactness, triangle edges, continuity, non-uniform poses and boundary policies. |
+| 2.6 | `crates/smart-controller-core/tests/pose2d_tests.rs` | Center/cardinal exactness, triangle edges, continuity, non-uniform poses, per-binding typed values and boundary policies. |
 
 The exact module split may be adjusted after Phase 0. Do not retain duplicate scalar mapping implementations merely because their original files differ.
 
@@ -252,11 +252,11 @@ The exact module split may be adjusted after Phase 0. Do not retain duplicate sc
 | Order | File | Required content |
 |---:|---|---|
 | 3.1 | `crates/smart-controller-core/src/graph.rs` | Deterministic topological ordering, canonical-ID tie-breaks, self-loop and cycle detection. |
-| 3.2 | `crates/smart-controller-core/src/diagnostic.rs` | Structured warnings, missing/stale/invalid input diagnostics, skipped/unavailable output diagnostics and stable diagnostic codes. |
-| 3.3 | `crates/smart-controller-core/src/evaluation.rs` | Pure evaluation entry point, per-invocation memoization, dependency evaluation, disabled-node handling and result construction. |
+| 3.2 | `crates/smart-controller-core/src/diagnostic.rs` | Structured warnings and diagnostic instances using the Phase 1 stable code registry. |
+| 3.3 | `crates/smart-controller-core/src/evaluation.rs` | Four-stage pipeline: resolve complete snapshot; evaluate nodes; collect contributions; post-pass composition. Per-invocation memoization and explicit unavailable propagation. |
 | 3.4 | `crates/smart-controller-core/src/lib.rs` | Public evaluator and result exports after API review. |
-| 3.5 | `crates/smart-controller-core/tests/graph_tests.rs` | Chains, independent nodes, diamond DAG, deterministic ties, self-loop and indirect cycle tests. |
-| 3.6 | `crates/smart-controller-core/tests/evaluation_tests.rs` | Memoization, identical-snapshot determinism, disabled nodes, missing/stale/NaN inputs, fallback and diagnostic tests. |
+| 3.5 | `crates/smart-controller-core/tests/graph_tests.rs` | Chains, independent nodes, diamond DAG, deterministic ties, self-loop, indirect cycle and evaluator-side unchecked-cycle defence. |
+| 3.6 | `crates/smart-controller-core/tests/evaluation_tests.rs` | Memoization, identical-snapshot determinism, disabled/unavailable dependencies, missing/stale/NaN inputs, fallback and diagnostics. |\n| 3.7 | `crates/smart-controller-core/tests/no_op_graph_tests.rs` | Empty graph, all-disabled graph and target with no eligible contributions. |
 
 Evaluation memoization is local to one call. No global caches, last-value state, wall-clock reads or random values are permitted.
 
@@ -274,16 +274,16 @@ Evaluation memoization is local to one call. No global caches, last-value state,
 
 **Phase 4 exit:** Outputs are typed and deterministic; composition never relies on incidental iteration order or silent fallback.
 
-### Phase 5 — Plugin adapter and legacy migration
+### Phase 5 — Plugin adapter and compatibility integration
 
 | Order | File | Required content |
 |---:|---|---|
 | 5.1 | `plugins/smart-controller/src/adapter.rs` | Host-specific bone/input queries, source identity resolution and conversion to core snapshots using verified SDK commands only. |
 | 5.2 | `plugins/smart-controller/src/targets.rs` | Host target identity resolution and explicit capability checks; no speculative write or playback commands. |
-| 5.3 | `plugins/smart-controller/src/migration.rs` | Legacy V1 parameter/binding conversion into the canonical schema with explicit diagnostics for unsupported data. |
+| 5.3 | `plugins/smart-controller/src/compatibility.rs` | Adapter wiring to the already-tested core migration API; preserve request compatibility and surface conversion diagnostics. |
 | 5.4 | `plugins/smart-controller/src/lib.rs` | Thin plugin entry point: parse request, call adapter, invoke core evaluator, serialize/log preview and diagnostics. |
 | 5.5 | `plugins/smart-controller/tests/adapter_tests.rs` | Host response parsing, missing bones, malformed response and capability failures. |
-| 5.6 | `plugins/smart-controller/tests/migration_tests.rs` | Legacy fixture conversion and equivalent V1 preview outputs. |
+| 5.6 | `plugins/smart-controller/tests/compatibility_tests.rs` | Verify adapter-level legacy request conversion and equivalent V1 preview outputs; core migration round trips are already tested in Phase 1. |
 | 5.7 | `docs/SMART_CONTROLLER_PLAN.md` | Reconcile or supersede the V1 plan after migration is implemented and verified. |
 | 5.8 | `plugins/README.md` | Update plugin description and verified capability boundaries if needed. |
 
@@ -291,7 +291,7 @@ Preserve V1 preview-only behaviour. Do not claim playback integration, durable a
 
 **Phase 5 exit:** The unified plugin delegates core work to smart-controller-core; legacy data has tested migration; host-specific details remain in the adapter.
 
-### Phase 6 — Authoring and advanced mapping
+### Phase 6A — Core mapping extensions; Phase 6B — contingent host authoring
 
 Add UI/authoring files only after inspecting the actual host UI/plugin extension mechanisms. Do not invent UI integration APIs.
 
