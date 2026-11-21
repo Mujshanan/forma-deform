@@ -98,6 +98,33 @@ impl Angle {
     pub const fn is_wrapped(self) -> bool {
         self.wrapped
     }
+
+    /// Interpolate angles with explicit wrapped/unwrapped semantics.
+    ///
+    /// Wrapped angles follow the shortest arc. Exactly antipodal endpoints use
+    /// the positive rotation direction as the deterministic tie-break. Results
+    /// are normalized to [-π, π). Unwrapped angles interpolate linearly and
+    /// retain authored revolutions. Mixing the two semantics is rejected.
+    pub fn interpolate(self, other: Self, amount: f64) -> Result<Self, CoreError> {
+        if !amount.is_finite() {
+            return Err(CoreError::NonFiniteValue { context: "angle interpolation amount" });
+        }
+        if self.wrapped != other.wrapped {
+            return Err(CoreError::InvalidMapping("wrapped and unwrapped angles cannot be interpolated together".into()));
+        }
+        let t = amount.clamp(0.0, 1.0);
+        let radians = if self.wrapped {
+            use std::f64::consts::{PI, TAU};
+            let from = self.radians().rem_euclid(TAU);
+            let to = other.radians().rem_euclid(TAU);
+            let clockwise_delta = (to - from).rem_euclid(TAU);
+            let shortest_delta = if clockwise_delta > PI { clockwise_delta - TAU } else { clockwise_delta };
+            (from + shortest_delta * t + PI).rem_euclid(TAU) - PI
+        } else {
+            self.radians() * (1.0 - t) + other.radians() * t
+        };
+        Self::new(radians, self.wrapped)
+    }
 }
 
 /// The canonical finite value union. Angle remains distinct from scalar so
