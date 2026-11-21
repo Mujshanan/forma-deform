@@ -265,7 +265,7 @@ The source trace narrows the likely implementation seams to:
 - The central document evaluator is explicitly documented as pure and deterministic. The recommended extension is therefore a host-native evaluator stage, not an external per-frame plug-in callback.
 - `bone.info` exposes the keyed constrained pose angle and separately computes the spring-adjusted angle/swing. The authoring UI's reported angle is diagnostic output only; production evaluation should consume internal typed pose values, not parse command JSON.
 - `warp.pin_move` is an editing command that writes keyframe data. It is not the correct mechanism for live Smart Bone evaluation. The pure warp interpolation path is in `crates/doc/src/eval.rs` and `crates/doc/src/warp.rs`.
-- This inspection is of the fork's `main` at the commit above. The separate `feat/smart-controllers-prototype` branch was not included in this source map; its differences should be audited before selecting a final implementation base.
+- This inspection first traced the fork's `main`; the separate `feat/smart-controllers-prototype` branch was then inspected and is documented in §11.7.
 - No source files in AniCraft were changed. No API, schema, evaluator, or extension point is approved by this investigation alone.
 
 
