@@ -1,12 +1,12 @@
 # Unified Smart Controllers — Architecture and Implementation Plan
 
-**Status:** Proposed implementation baseline  
+**Status:** Phase 1 implementation in progress — foundational types  
 **Target repository:** `Mujshanan/forma-deform`  
-**Branch:** `docs/unified-smart-controllers-plan`  
+**Branch:** `feat/smart-controller-phase1-foundation`  
 **Core:** `smart-controller-core`  
 **Host adapter:** `plugins/smart-controller`  
 **Scope:** Architecture, implementation sequence and file-level build order  
-**Execution status:** Documentation only; no source implementation is authorized by this plan.
+**Execution status:** Phase 0 characterization verified at `17e58fd`; Phase 1 foundational types are implemented on the feature branch. Phase 1 Rust tests have not yet been executed.
 
 ---
 
@@ -205,7 +205,7 @@ The order below is the proposed implementation sequence. Phase 0 inspects existi
 | 0.10 | `crates/anicraft-plugin-sdk/*` | Inspect | Verified query/command contracts, error behaviour and adapter support. |
 | 0.11 | `docs/SMART_CONTROLLERS_AUDIT.md` | Add | File inventory, reuse map, overlapping models, compatibility matrix, host capability evidence, test gaps and migration risks. |
 
-**Phase 0 exit:** The existing implementation and host boundary are documented; golden fixtures are captured; the executable V1 characterization suite passes on the branch; no existing runtime semantics are removed.
+**Phase 0 exit:** Met at `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`: the existing implementation and host boundary are documented; golden fixtures are captured; the executable V1 characterization suite passes; no existing runtime semantics are removed. Formatting and Clippy failures are documented as pre-existing baseline issues, not Phase 0 exit gates.
 
 ### Phase 1 — Canonical types, schema, diagnostics, migration and scalar mapping
 
@@ -500,3 +500,25 @@ The V1 characterization suite covers legacy three-anchor interpolation, easing, 
 Required test files include `v1_characterization_tests.rs`, `migration_roundtrip_tests.rs`, `angle_interpolation_tests.rs`, `pose2d_tests.rs`, `composition_conflict_tests.rs`, `freshness_tests.rs`, `diagnostic_registry_tests.rs`, `graph_tests.rs` (including unchecked-cycle defence), `no_op_graph_tests.rs` and `dependency_boundary_tests.rs`.
 
 The implementation sequence is therefore: Phase 0 characterization; Phase 1 model/schema/diagnostics/migration plus pure range/frame mapping; Phase 2 pose mapping; Phase 3 graph/evaluation; Phase 4 composition; Phase 5 adapter integration; Phase 6A core mapping extensions; Phase 6B host authoring only after capability verification.
+
+## 11. Phase 1 implementation log
+
+### 11.1 Foundation increment
+
+**Branch:** `feat/smart-controller-phase1-foundation`  
+**Base:** `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`
+
+Implemented the first four Phase 1 responsibilities without replacing the existing V1 models:
+
+- `error.rs`: structured `CoreError` variants for identifier/value/input/model/mapping/graph/composition/schema/serialization/evaluation failures.
+- `ids.rs`: strongly typed, ordered, hashable `ControllerId`, `InputId`, `BindingId` and `TargetId`; string serialization and validated deserialization.
+- `value.rs`: finite `Scalar`, `Vector2`, explicit `Angle { radians, wrapped }` semantics, and the `TypedValue` union. Numeric deserialization rejects non-finite values.
+- `input.rs`: host-independent manual/bone/controller-output sources, dimensions, explicit fallback and validity policies, per-sample optional monotonic age, snapshot maximum age, duplicate-ID checks, type checks and strict stale comparison (`age_ticks > max_age_ticks`).
+- `lib.rs`: exports the new foundation while retaining the legacy and Params APIs.
+- `tests/foundation_types_tests.rs`: adds tests for identifiers, finite values, angle serialization, input identity/dimensions, snapshot validation, freshness boundaries and unknown freshness.
+
+**Compatibility boundary:** Existing `legacy.rs`, `model.rs`, `mapping.rs`, `preview.rs`, `validation.rs` and host adapter runtime behavior have not been replaced or changed by this increment.
+
+**Verification:** The Phase 0 results were supplied for base commit `17e58fd`. The newly added Phase 1 foundation tests have not yet been run with Cargo in this implementation environment. Do not treat this increment as test-passing until `cargo test -p smart-controller-core` and the workspace checks are rerun on this branch.
+
+**Next Phase 1 work:** add canonical model/schema and conversion tests before replacing competing models; then implement the diagnostic registry, migration and pure scalar/range/frame mapping in the approved order.
