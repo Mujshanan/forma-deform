@@ -23,6 +23,13 @@ pub struct HostPreviewPlan {
     pub targets: Vec<(TargetId, crate::targets::TargetCapability)>,
 }
 
+/// Complete read-only result for one host-driven canonical preview invocation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostPreviewSession {
+    pub evaluation: ComposedEvaluationResult,
+    pub target_preview: crate::preview_plan::TargetPreviewPlan,
+}
+
 /// Validate and execute a canonical document against an already-collected
 /// host input snapshot. Mapping remains injected: this adapter does not claim
 /// that the not-yet-complete Pose2D/joystick mapper is implemented.
@@ -60,6 +67,32 @@ use smart_controller_core::{
     BoneTransformChannel, InputDefinition, InputSample, InputSnapshot, InputSource,
     TypedValue,
 };
+
+/// Collect host inputs, evaluate the canonical DAG, compose its outputs, and
+/// build target-specific preview data in one invocation. The mapper remains
+/// injected because the concrete Pose2D/joystick mapping implementation is a
+/// separate core milestone. This function performs no target mutation.
+pub fn evaluate_host_document_preview<M: ControllerMapper>(
+    document: &CanonicalDocument,
+    host_context: &crate::input_provider::HostInputContext,
+    mapper: &M,
+    composition_context: &CompositionContext,
+) -> Result<HostPreviewSession, String> {
+    let snapshot = crate::input_provider::collect_host_input_snapshot(
+        &document.inputs,
+        host_context,
+    )?;
+    let plan = evaluate_document_preview(document, &snapshot, mapper, composition_context)
+        .map_err(|error| error.to_string())?;
+    let target_preview = crate::preview_plan::build_target_preview_plan(
+        document,
+        &plan.evaluation,
+    )?;
+    Ok(HostPreviewSession {
+        evaluation: plan.evaluation,
+        target_preview,
+    })
+}
 
 /// Whether the preview uses only the constrained keyed pose or explicitly
 /// adds the separately reported spring swing. Missing swing is an error when
