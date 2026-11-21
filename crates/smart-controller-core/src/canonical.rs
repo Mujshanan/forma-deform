@@ -65,6 +65,10 @@ impl Controller {
         if self.dependencies.iter().any(|id| id == &self.id) {
             return Err(CoreError::InvalidGraph(format!("controller {} depends on itself", self.id)));
         }
+        let mut input_ids = std::collections::HashSet::new();
+        if self.inputs.iter().any(|id| !input_ids.insert(id)) {
+            return Err(CoreError::InvalidModel(format!("controller {} contains duplicate input references", self.id)));
+        }
         let mut ids = std::collections::HashSet::new();
         for binding in &self.bindings {
             if !ids.insert(binding.id.clone()) {
@@ -77,6 +81,17 @@ impl Controller {
                 return Err(CoreError::InvalidModel(format!("base value is only valid for relative binding {}", binding.id)));
             }
             match &binding.target {
+                TargetMapping::SymbolFrame { .. } | TargetMapping::FrameRange { .. }
+                    if binding.mode != BindingMode::AbsolutePose =>
+                    return Err(CoreError::InvalidModel(format!("frame target binding {} must use AbsolutePose", binding.id))),
+                TargetMapping::GeometryDeform { .. } if binding.mode == BindingMode::RelativeDelta
+                    && !matches!(binding.base_value, Some(TypedValue::Vector2(_))) =>
+                    return Err(CoreError::InvalidModel(format!("relative geometry binding {} requires a Vector2 base", binding.id))),
+                TargetMapping::Property { additive, .. } if *additive != (binding.mode == BindingMode::RelativeDelta) =>
+                    return Err(CoreError::InvalidModel(format!("property target additive flag conflicts with binding mode for {}", binding.id))),
+                TargetMapping::Property { .. } if binding.mode == BindingMode::RelativeDelta
+                    && !matches!(binding.base_value, Some(TypedValue::Scalar(_))) =>
+                    return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar base", binding.id))),
                 TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, .. } if *action_layer_id == 0 || end_frame <= start_frame =>
                     return Err(CoreError::InvalidModel("frame range requires a nonzero layer and increasing endpoints".into())),
                 TargetMapping::SymbolFrame { symbol_instance_id, .. } if symbol_instance_id.trim().is_empty() =>
@@ -103,7 +118,7 @@ impl Controller {
                     return Err(CoreError::InvalidMapping("DirectedRange1D endpoints must be distinct and finite".into()));
                 }
             }
-            MappingConfig::PoseSet1D { pose_ids } => if pose_ids.is_empty() { return Err(CoreError::InvalidMapping("PoseSet1D requires at least one pose".into())); },
+            MappingConfig::PoseSet1D { pose_ids } => if pose_ids.is_empty() || pose_ids.iter().any(|id| id.trim().is_empty()) { return Err(CoreError::InvalidMapping("PoseSet1D requires non-empty pose IDs".into())); },
             MappingConfig::JoystickFivePose { center, up, right, down, left } => {
                 let ids = [center, up, right, down, left];
                 if ids.iter().any(|id| id.trim().is_empty()) || ids.iter().collect::<std::collections::HashSet<_>>().len() != 5 {
