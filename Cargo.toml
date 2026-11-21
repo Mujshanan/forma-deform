@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/forma-geometry",
     "crates/smart-controller-core",
     "crates/form-deform-core",
     "crates/anicraft-plugin-sdk",
