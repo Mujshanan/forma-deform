@@ -55,7 +55,10 @@ fn typed_value_json_preserves_distinct_angle_semantics() {
     assert_eq!(decoded, wrapped);
     assert!(decoded.as_angle().unwrap().is_wrapped());
     assert!(!unwrapped.as_angle().unwrap().is_wrapped());
-    assert_eq!(unwrapped.as_angle().unwrap().radians(), 4.0 * std::f64::consts::PI);
+    assert_eq!(
+        unwrapped.as_angle().unwrap().radians(),
+        4.0 * std::f64::consts::PI
+    );
 }
 
 #[test]
@@ -66,19 +69,27 @@ fn scalar_and_vector_values_round_trip() {
     ];
     let encoded = serde_json::to_string(&values).unwrap();
     let decoded: Vec<TypedValue> = serde_json::from_str(&encoded).unwrap();
-    assert_eq!(decoded, values);
+    assert_eq!(decoded.as_slice(), values.as_slice());
 }
 
 #[test]
 fn sample_freshness_uses_strictly_greater_than_maximum_age() {
-    let sample = InputSample::valid(input_id("rotation"), TypedValue::angle(0.5, true).unwrap(), Some(10));
+    let sample = InputSample::valid(
+        input_id("rotation"),
+        TypedValue::angle(0.5, true).unwrap(),
+        Some(10),
+    );
     assert_eq!(sample.freshness(10), Freshness::Fresh);
     assert_eq!(sample.freshness(9), Freshness::Stale);
 }
 
 #[test]
 fn unknown_sample_age_remains_unknown() {
-    let sample = InputSample::valid(input_id("manual"), TypedValue::scalar(3.0).unwrap(), None);
+    let sample = InputSample::valid(
+        input_id("manual"),
+        TypedValue::scalar(3.0).unwrap(),
+        None,
+    );
     assert_eq!(sample.freshness(0), Freshness::Unknown);
 }
 
@@ -104,9 +115,21 @@ fn snapshot_rejects_duplicate_ids_and_invalid_status_value_pairs() {
 
 #[test]
 fn snapshot_lookup_and_freshness_are_deterministic() {
-    let sample = InputSample::valid(input_id("manual"), TypedValue::scalar(2.0).unwrap(), Some(4));
+    let sample = InputSample::valid(
+        input_id("manual"),
+        TypedValue::scalar(2.0).unwrap(),
+        Some(4),
+    );
     let snapshot = InputSnapshot::new(4, vec![sample]).unwrap();
-    assert_eq!(snapshot.get(&input_id("manual")).unwrap().value.unwrap().as_scalar(), Some(2.0));
+    assert_eq!(
+        snapshot
+            .get(&input_id("manual"))
+            .unwrap()
+            .value
+            .unwrap()
+            .as_scalar(),
+        Some(2.0)
+    );
     assert_eq!(
         snapshot.freshness(snapshot.get(&input_id("manual")).unwrap()),
         Freshness::Fresh
@@ -184,4 +207,21 @@ fn missing_and_unavailable_samples_have_no_implicit_value() {
     assert_eq!(unavailable.validity, InputValidity::Unavailable);
     assert!(missing.value.is_none());
     assert!(unavailable.value.is_none());
+}
+
+#[test]
+fn bone_transform_channel_requires_its_declared_dimension() {
+    let definition = InputDefinition {
+        id: input_id("rotation"),
+        source: InputSource::BoneTransform {
+            bone_id: "bone-head".into(),
+            channel: BoneTransformChannel::Rotation,
+        },
+        dimension: InputDimension::Scalar,
+        fallback: FallbackPolicy::Unavailable,
+    };
+    assert!(matches!(
+        definition.validate(),
+        Err(CoreError::InputValueTypeMismatch { .. })
+    ));
 }
