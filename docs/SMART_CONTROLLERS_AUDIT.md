@@ -460,11 +460,12 @@ The earlier source findings remain valid: no DAG, joystick, composition or migra
 | Host capability report | Reconciled with existing SDK audit in Section 5 |
 | Test coverage/gap report | Complete in Section 7 |
 | Migration risks | Complete in Sections 8–10 |
-| Golden fixture baseline | Captured as three JSON inputs under `crates/smart-controller-core/tests/fixtures/`; runtime deserialization/round-trip verification remains pending |
-| Runtime test/build evidence | Not collected; commands not executed |
+| Golden fixture baseline | Three fixtures captured; Rust/Serde deserialization and round-trip assertions passed in the V1 characterization suite |
+| Runtime test/build evidence | Verified at `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`; details in §12.1 |
+| Formatting/lint | `cargo fmt --all -- --check` and Clippy fail on both Phase 0 and `main`; pre-existing baseline findings plus formatting in the new characterization test are documented in §12.1 |
 | AniCraft in-app smoke test | Not performed |
 
-**Phase 0 status: source/document audit, fixture capture and executable characterization test authoring completed; Rust execution remains pending.**
+**Phase 0 status: exit criteria met at `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`.**
 
 Captured fixtures:
 - `legacy_binding_set_v1.json` — representative version-1 binding set with SymbolFrame and GeometryDeform targets.
@@ -473,16 +474,61 @@ Captured fixtures:
 
 The two Params fixtures are deliberately labelled unversioned: the current `Params` structure has no schema envelope/version field. The fixtures are source-derived compatibility inputs, not proof that deserialization or round-trip tests passed. They must be loaded by tests and verified before any model migration. The BindingSet fixture must likewise be checked against the current Serde representation by an executable test.
 
-Phase 0 is complete for architectural discovery, baseline capture and characterization test authoring. The fixtures have passed a structural JSON parse and their expected scalar Slider outputs were independently checked. However, Rust/Serde deserialization, round-trip assertions and V1 characterization tests still require an actual `cargo test -p smart-controller-core` run. Do not begin Phase 1 changes to existing public models until that command passes; then run `cargo test --workspace` and the WASM build checks.
+Phase 0 is complete for architectural discovery, baseline capture and V1 characterization. The user ran the core and workspace Rust suites, the Smart Controller plugin WASM build, TypeScript checking and Bun tests at the recorded commit. The remaining WASM builds for Bone Query and Form Deform, plus the AniCraft in-app smoke test, remain outstanding. Formatting and Clippy failures are documented as baseline maintenance findings; they are not listed as Phase 0 exit gates.
 
-## 13. Explicit non-authorization
+## 13. Authorization and hard boundaries
 
-This audit does not authorize:
+On 2026-11-21, the user explicitly authorized Phase 1 implementation. That authorization applies to the Phase 1 scope on `feat/smart-controller-phase1-foundation`; it does not authorize unrelated repository changes.
 
-- Source implementation or refactoring.
+The following remain outside scope unless separately approved:
+
 - Changes to Form Deform formulas or runtime behaviour.
 - Combining Smart Controller outputs with Form Deform pin evaluation.
 - Host API changes in AniCraft.
-- PR creation, review approval or merge.
+- Pull-request creation, review approval or merge.
 
-The accepted CCC-01.5 separation remains in force.
+The accepted CCC-01.5 separation remains in force. No merge has been performed or authorized.
+
+
+### 12.1 Verification record
+
+**Verified base:** `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`  
+**Branch:** `feat/smart-controller-phase0-characterization`
+
+| Command/check | Result |
+|---|---|
+| `cargo test -p smart-controller-core` | 36 passed, 0 failed |
+| `cargo test --workspace` | 52 passed, 0 failed; 7 more than `main` (45), attributable to the V1 characterization additions |
+| WASM build of `anicraft-smart-controller-plugin` | Finished successfully; Cargo reused the previous build artifacts. Plugin/core sources did not differ from `main`, so this was not a fresh recompilation. |
+| `tsc --noEmit` | Clean |
+| `bun test` | 9 of 9 passed |
+| `cargo fmt --all -- --check` | Failed on both this branch and `main`. Diffs span 15 files across all six crates. The legacy unit tests identified in the original comparison pre-date Phase 0; the new `v1_characterization_tests.rs` also has formatting diffs. |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Failed on both this branch and `main`. Reported errors: `derivable_impls` at `crates/smart-controller-core/src/model.rs:15` and `collapsible_if` at `plugins/bone-query/src/lib.rs:55`. |
+
+**Baseline comparison:** `main` was `6b53aac` (`6b53aac51ddc15249c5100745726027fd9c75907`) and failed the same formatting and Clippy checks. These failures are not regressions introduced by the Phase 0 runtime/test additions, except that the newly added characterization test file itself needs formatting.
+
+**Clippy completeness:** The two reported Clippy errors prevented dependent crates from being linted. Additional findings may appear after those blockers are addressed.
+
+**CI policy:** CI installs rustfmt but does not currently enforce a formatting check or Clippy step.
+
+**Not run:** WASM builds for `plugins/bone-query` and `plugins/form-deform`; AniCraft in-app smoke test. The Phase 0 verification does not claim these checks passed.
+
+**Toolchain note:** This record intentionally does not infer Rust/Cargo versions; record the exact local toolchain versions alongside the verification log if they are available.
+
+## 14. Phase 1 foundation progress
+
+**Branch:** `feat/smart-controller-phase1-foundation`  
+**Base:** `17e58fd75b585f77fdc7f10758c47c64c58d0e0c`
+
+Implemented the first four Phase 1 responsibilities without replacing existing V1 models:
+
+- `error.rs`: typed core errors for identifiers, finite values, input validation, model/mapping/graph/composition, schema, serialization and evaluation.
+- `ids.rs`: strongly typed, ordered and serializable ControllerId, InputId, BindingId and TargetId.
+- `value.rs`: finite Scalar and Vector2, explicit wrapped/unwrapped Angle, and TypedValue. Deserialization validates finite numeric values.
+- `input.rs`: host-independent input sources, dimensions, explicit fallback and validity policies, sample ages, snapshot maximum age, duplicate checks, dimension checks and freshness classification. Staleness uses the strict rule `age_ticks > max_age_ticks`; absent age remains Unknown.
+- `lib.rs`: exports the new modules while preserving the existing legacy and Params public API.
+- `tests/foundation_types_tests.rs`: tests the new foundational contracts.
+
+**Unchanged:** `legacy.rs`, `model.rs`, the existing scalar/frame mapping and preview functions, and host adapter runtime behaviour have not been replaced by this increment. Smart Controller core and Form Deform core remain independent.
+
+**Verification status:** The Phase 0 results above apply to the base commit, not to this new Phase 1 branch. The new foundation test file and Phase 1 branch have not yet been executed with Cargo; rerun core/workspace tests and WASM checks on the Phase 1 branch before treating this increment as verified.
