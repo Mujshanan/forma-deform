@@ -51,6 +51,8 @@ pub enum BoneTransformChannel {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum InputSource {
     Manual,
+    /// Transitional scalar source for imported V1 controller IDs whose units were host-defined.
+    LegacyScalar { source_id: String },
     BoneTransform {
         bone_id: String,
         channel: BoneTransformChannel,
