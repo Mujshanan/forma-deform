@@ -47,7 +47,7 @@ impl CanonicalDocument {
                 return Err(CoreError::DuplicateInputId(input.id.to_string()));
             }
         }
-        let controllers_by_id: std::collections::HashMap<_, _> = self.controllers.iter().map(|item| (&item.id, item)).collect();
+        let controllers_by_id: std::collections::HashMap<_, _> = self.controllers.iter().map(|item| (item.id.clone(), item)).collect();
         for controller in &self.controllers {
             controller.validate_local()?;
             for input_id in &controller.inputs {
