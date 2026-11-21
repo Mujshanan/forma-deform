@@ -416,7 +416,41 @@ The proposed file-level build order remains usable, with these refinements:
 7. **Separate graph validation from evaluation.** The evaluator must still defend itself against invalid graphs.
 8. **Preserve V1 plugin output and preview-only behaviour** until the unified plugin adapter has compatibility tests.
 
-## 11. Phase 0 exit assessment
+## 11. Follow-up plan review: adopted design enhancements
+
+A subsequent architecture review identified underspecified contracts in the initial plan. The following decisions are now adopted in the implementation plan before source implementation begins:
+
+1. **Pose algebra:** `Pose2D` is an ordered set of `(BindingId, TypedValue)` entries, interpolated per property. Participating poses require compatible binding schemas. Wrapped and unwrapped angles have distinct interpolation semantics; wrapped angles use deterministic shortest-path interpolation.
+2. **Evaluation stages:** resolve the complete input snapshot first, evaluate nodes in deterministic topological order, collect binding contributions, then compose targets in a separate post-pass. Disabled outputs are unavailable to dependants; no implicit neutral/zero/cache substitution is permitted.
+3. **Composition model:** use a common typed contribution record. All contributions to one target must agree on composition mode or return a typed conflict. The priority mode is named `PriorityOverride`; Additive and WeightedBlend accumulation use canonical BindingId order.
+4. **WeightedBlend eligibility:** a contribution is eligible only when it produced a valid value and has a finite positive weight. Zero weight is excluded; invalid negative/non-finite weights are errors; no eligible contributions means no target output plus a diagnostic.
+5. **Freshness:** each sample carries monotonic `age_ticks`; the snapshot carries `max_age_ticks`. Stale means strictly greater than the maximum. The core does not read a clock; unknown host freshness is explicit/unavailable.
+6. **Floating point:** reject non-finite values, sort accumulation deterministically and use a combined absolute/relative test tolerance of (10^{-9}).
+7. **Diagnostics:** Phase 1 owns a stable diagnostic-code registry and checked-in fixture; diagnostic meanings cannot silently change.
+8. **Graph correctness:** reject parent-scoped configuration on nodes shared by multiple parents; retain evaluator-side cycle defence through a test-only unchecked graph builder.
+9. **Compatibility:** Phase 0 adds executable V1 characterization tests. Phase 1 adds legacy-to-canonical conversion and round-trip/loss diagnostics for both BindingSet v1 and unversioned Params fixtures, before evaluator/adapter integration.
+10. **Phase sequencing:** pure range/frame mapping moves into Phase 1; Pose2D remains in Phase 2; Phase 3 owns the four-stage evaluator; Phase 4 completes composition; Phase 5 only wires tested migration; Phase 6 is split into core mapping extensions and host-authoring work contingent on a new host audit.
+11. **No-op cases:** empty graphs, all-disabled graphs and targets with no eligible contributions produce documented empty/unavailable results and diagnostics rather than fabricated values.
+12. **Portability and independence:** audit and enforce core dependency/WASM constraints. Add CI dependency-boundary checks in both directions between Smart Controller core and Form Deform core.
+
+These are plan-level contracts only. The Phase 0 source audit and three JSON fixture captures remain complete as previously recorded, but executable characterization, fixture deserialization/round-trip verification, Rust tests, WASM builds and host smoke tests remain pending. No source implementation or runtime semantics changed in this documentation update.
+
+### Additional acceptance tests
+
+- `v1_characterization_tests.rs`
+- `migration_roundtrip_tests.rs`
+- `angle_interpolation_tests.rs`
+- `pose2d_tests.rs`
+- `composition_conflict_tests.rs`
+- `freshness_tests.rs`
+- `diagnostic_registry_tests.rs`
+- `graph_tests.rs`, including unchecked-cycle defence
+- `no_op_graph_tests.rs`
+- `dependency_boundary_tests.rs`
+
+The earlier source findings remain valid: no DAG, joystick, composition or migration implementation was found in the inspected code. These requirements are future acceptance criteria, not claims that the features exist.
+
+## 12. Phase 0 exit assessment
 
 | Deliverable | Status |
 |---|---|
@@ -441,7 +475,7 @@ The two Params fixtures are deliberately labelled unversioned: the current `Para
 
 Phase 0 is complete for architectural discovery and baseline capture, but executable fixture verification remains a prerequisite before Phase 1 changes existing public models. Confirm identity and schema decisions before implementation.
 
-## 12. Explicit non-authorization
+## 13. Explicit non-authorization
 
 This audit does not authorize:
 
