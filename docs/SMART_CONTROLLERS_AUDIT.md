@@ -581,3 +581,22 @@ The mapping algorithm is injected through `ControllerMapper`. This deliberately 
 Phase 3A/3B hardening added full structural/input-snapshot preflight, consistent fallback semantics, controller-local mapping failure handling, unavailable-output diagnostics, unknown-binding rejection, and deterministic output tests. Eighteen evaluator tests now execute successfully. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44927336954 passed on commit `1eaea3fd92752ce557af77c3c2c151045d724a28`: 135 workspace Rust tests passed; Bun typecheck, 9/9 Bun tests and Bun build passed; all three release WASM plugin builds passed. rustfmt and Clippy were not part of the workflow and are not claimed as passing.
 
 The evaluator remains a core-only orchestration layer with injected `ControllerMapper`; target composition and host integration remain deferred. Smart Controller V1 remains preview-only and CCC-01.5 remains unchanged. No PR or merge has been created.
+
+
+## 13. Phase 4 composition implementation update
+
+The historical Phase 0 audit above is retained as a record of the original source review. The following is a later implementation update, not a rewrite of that audit.
+
+Phase 4 work has started on `feat/smart-controller-phase3-evaluator`:
+
+- A pure target composition post-pass now groups by TargetId and deterministically orders contributions by BindingId, then ControllerId.
+- Contributions carry their originating ControllerId and an explicit authored base value when applicable.
+- Canonical ControllerBinding now has an optional CompositionConfig. Existing documents without this field retain the established AbsolutePose → Replace and RelativeDelta → Additive(Authored) behavior.
+- The four configured modes are represented: Replace, Additive, WeightedBlend and PriorityOverride.
+- Additive requires a single consistent explicit base reference; WeightedBlend normalizes positive weights and treats all-zero weights as no output plus diagnostic; PriorityOverride uses highest priority and canonical identity tie-breaking.
+- Conflicting modes, multiple Replace contributions, invalid weights, unavailable additive bases, incompatible types and ambiguous circular angle means return typed errors.
+- The new evaluate-and-compose API runs the Phase 3 evaluator and the Phase 4 post-pass sequentially, with no host mutation.
+
+Tests have been authored for the four modes, conflicts, bases, weights, deterministic ordering, angle handling and end-to-end evaluator/composition integration. **Phase 4 CI is pending; none of these tests or builds is yet claimed as passing.**
+
+CCC-01.5 remains unchanged: this composition pass does not combine Smart Controller binding outputs with Form Deform pin-deformation outputs. V1 remains preview-only. No PR or merge has been created.
