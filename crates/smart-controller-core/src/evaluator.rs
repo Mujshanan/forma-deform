@@ -473,14 +473,14 @@ mod tests {
         }
     }
 
-    fn node(id: &str, inputs: Vec<InputId>, dependencies: Vec<ControllerId>, enabled: bool, binding: &str) -> Controller {
+    fn node(id: &str, inputs: Vec<InputId>, dependencies: Vec<ControllerId>, enabled: bool, binding_name: &str) -> Controller {
         Controller {
             id: controller_id(id),
             enabled,
             inputs,
             dependencies,
             mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
-            bindings: vec![binding(binding)],
+            bindings: vec![binding(binding_name)],
             parent_scoped: false,
         }
     }
