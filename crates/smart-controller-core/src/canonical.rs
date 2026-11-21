@@ -1,7 +1,7 @@
 //! Canonical, host-independent controller configuration.
 use crate::{
     error::CoreError,
-    model::EndpointPolicy,
+    endpoint::EndpointPolicy,
     ids::{BindingId, ControllerId, InputId, TargetId},
     value::TypedValue,
 };
