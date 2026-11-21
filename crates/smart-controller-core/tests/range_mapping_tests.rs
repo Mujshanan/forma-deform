@@ -26,3 +26,11 @@ fn easing_preserves_linear_and_smoothstep_endpoints() {
     assert_eq!(Easing::Smoothstep.apply(0.0).unwrap(), 0.0);
     assert_eq!(Easing::Smoothstep.apply(1.0).unwrap(), 1.0);
 }
+
+#[test]
+fn numeric_mapping_boundaries_reject_non_finite_and_overflowing_values() {
+    assert!(ThreePointRange::new(-f64::MAX, f64::MAX / 2.0, f64::MAX).is_err());
+    assert!(normalize_directed(0.0, -f64::MAX, f64::MAX).is_err());
+    assert!(frame::map_to_frame(f64::NAN, 0, 10, EndpointPolicy::Inclusive).is_err());
+    assert!(Easing::Linear.apply(f64::INFINITY).is_err());
+}
