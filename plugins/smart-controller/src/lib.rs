@@ -298,6 +298,33 @@ mod tests {
     use std::collections::VecDeque;
 
     #[test]
+    fn manifest_parameters_match_the_abi_v1_schema() {
+        let manifest: Value = serde_json::from_str(MANIFEST).unwrap();
+        let params = manifest["params"].as_object().unwrap();
+        for (name, spec) in params {
+            match spec["type"].as_str().unwrap() {
+                "number" | "int" => {
+                    let minimum = spec["min"].as_f64().unwrap();
+                    let maximum = spec["max"].as_f64().unwrap();
+                    let default = spec["default"].as_f64().unwrap();
+                    assert!(minimum < maximum, "{name} must have an ordered range");
+                    assert!((minimum..=maximum).contains(&default), "{name} default must be in range");
+                }
+                "bool" => assert!(spec["default"].is_boolean(), "{name} needs a boolean default"),
+                "choice" => {
+                    let options = spec["options"].as_array().unwrap();
+                    assert!(!options.is_empty(), "{name} needs choices");
+                    assert!(options.iter().any(|option| option == &spec["default"]), "{name} default must be one of its choices");
+                }
+                "color" => assert!(spec["default"].is_string(), "{name} needs a colour default"),
+                other => panic!("unsupported ABI v1 parameter type for {name}: {other}"),
+            }
+        }
+        assert_eq!(params["mode"]["type"], "choice");
+        assert_eq!(params["endpoint_policy"]["type"], "choice");
+    }
+
+    #[test]
     fn slider_bone_resolution_uses_bone_info_response_shape() {
         let data = json!({"armatures":[{"bones":[{"id":11,"angle":12.5},{"id":12,"angle":-4.0}]}]});
         assert_eq!(find_driver_bone(&data, 12), Some(-4.0));
