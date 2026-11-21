@@ -34,6 +34,27 @@ pub struct CompositionResult {
     pub unavailable_targets: BTreeSet<TargetId>,
 }
 
+/// Result of running the DAG evaluator and then its independent composition post-pass.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ComposedEvaluationResult {
+    pub evaluation: EvaluationResult,
+    pub composition: CompositionResult,
+}
+
+/// Run controller evaluation first, then compose its contributions without
+/// performing any host reads or writes.
+pub fn evaluate_and_compose<M: ControllerMapper>(
+    graph: &ControllerGraph,
+    definitions: &[InputDefinition],
+    snapshot: &InputSnapshot,
+    mapper: &M,
+    context: &CompositionContext,
+) -> Result<ComposedEvaluationResult, CoreError> {
+    let evaluation = evaluate(graph, definitions, snapshot, mapper)?;
+    let composition = compose(&evaluation.contributions, context)?;
+    Ok(ComposedEvaluationResult { evaluation, composition })
+}
+
 /// Compose all contributions for each target in canonical target order.
 ///
 /// Contributions are ordered by (BindingId, ControllerId) before any
