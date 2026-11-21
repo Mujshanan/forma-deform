@@ -5,7 +5,7 @@
 //! refactor that happens to change the observed result.
 
 use smart_controller_core::{
-    preview_slider, BindingSet, ControllerMode, ControllerTarget, EndpointPolicy, Mode,
+    preview_slider, BindingSet, ControllerMode, EndpointPolicy, Mode,
     Params, PreviewResult, Vec2, validation,
 };
 
