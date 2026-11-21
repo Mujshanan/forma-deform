@@ -33,10 +33,12 @@ pub fn query_bone_info(layer_id: u64, frame: Option<u32>) -> Result<Value, Strin
 /// Parse a canonical bone-rotation input from a previously fetched bone.info
 /// response. Bone IDs are stable numeric host IDs represented canonically as
 /// decimal strings. Host angles and spring swing are reported in degrees.
+/// Wrapped/unwrapped interpolation semantics are supplied explicitly by the caller.
 pub fn sample_bone_rotation(
     definition: &InputDefinition,
     response: &Value,
     policy: BoneAnglePolicy,
+    wrapped: bool,
 ) -> Result<InputSample, String> {
     let (bone_id, channel) = match &definition.source {
         InputSource::BoneTransform { bone_id, channel } => (bone_id, channel),
@@ -75,7 +77,7 @@ pub fn sample_bone_rotation(
     }
 
     let radians = degrees.to_radians();
-    let value = TypedValue::angle(radians, false).map_err(|error| error.to_string())?;
+    let value = TypedValue::angle(radians, wrapped).map_err(|error| error.to_string())?;
     definition.validate() .map_err(|error| error.to_string())?;
     Ok(InputSample::valid(definition.id.clone(), value, Some(0)))
 }
@@ -87,9 +89,10 @@ pub fn snapshot_from_bone_info(
     definitions: &[InputDefinition],
     response: &Value,
     policy: BoneAnglePolicy,
+    wrapped: bool,
 ) -> Result<InputSnapshot, String> {
     let samples = definitions.iter()
-        .map(|definition| sample_bone_rotation(definition, response, policy))
+        .map(|definition| sample_bone_rotation(definition, response, policy, wrapped))
         .collect::<Result<Vec<_>, _>>()?;
     InputSnapshot::new(0, samples).map_err(|error| error.to_string())
 }
@@ -119,7 +122,7 @@ mod tests {
     #[test]
     fn parses_keyed_pose_angle_in_degrees_as_unwrapped_radians() {
         let response = json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
-        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly).unwrap();
+        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly, false).unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
         assert!((angle.radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
         assert!(!angle.is_wrapped());
@@ -129,7 +132,7 @@ mod tests {
     #[test]
     fn spring_swing_is_added_only_when_explicitly_selected() {
         let response = json!({"armatures":[{"bones":[{"id":"42","angle":30.0,"swing":-10.0}]}]});
-        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing).unwrap();
+        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing, false).unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
         assert!((angle.radians() - 20.0_f64.to_radians()).abs() < 1e-12);
     }
@@ -137,12 +140,12 @@ mod tests {
     #[test]
     fn missing_spring_swing_does_not_default_to_zero() {
         let response = json!({"armatures":[{"bones":[{"id":42,"angle":30.0}]}]});
-        assert!(sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing).is_err());
+        assert!(sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing, false).is_err());
     }
 
     #[test]
     fn missing_bone_and_malformed_response_fail_closed() {
-        assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly).is_err());
+        assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
         assert!(sample_bone_rotation(&definition(), &json!({"bones":[]}), BoneAnglePolicy::KeyedPoseOnly).is_err());
     }
 }
