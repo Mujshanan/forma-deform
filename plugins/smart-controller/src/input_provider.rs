@@ -12,7 +12,7 @@ use smart_controller_core::{
 use crate::adapter::{query_bone_info, sample_bone_rotation, BoneAnglePolicy};
 
 /// Explicit host-side values and identity resolution for one preview invocation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct HostInputContext {
     /// Values supplied by the user/UI for Manual inputs.
     pub manual_values: BTreeMap<InputId, TypedValue>,
@@ -104,7 +104,9 @@ mod tests {
         ];
         let context = HostInputContext {
             manual_values: BTreeMap::from([(manual_id.clone(), TypedValue::scalar(2.5).unwrap())]),
-            ..HostInputContext::default()
+            bone_layers: BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
         };
         let snapshot = collect_host_input_snapshot(&definitions, &context).unwrap();
         assert_eq!(snapshot.samples.len(), 1);
@@ -120,6 +122,6 @@ mod tests {
             dimension: InputDimension::Scalar,
             fallback: FallbackPolicy::Reject,
         };
-        assert!(collect_host_input_snapshot(&[definition], &HostInputContext::default()).is_err());
+        assert!(collect_host_input_snapshot(&[definition], &HostInputContext { manual_values: BTreeMap::new(), bone_layers: BTreeMap::new(), bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly, wrapped_angles: false }).is_err());
     }
 }
