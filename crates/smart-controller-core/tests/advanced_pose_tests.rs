@@ -1,5 +1,6 @@
 use smart_controller_core::{
     mapping::advanced::{
+        PoseMapping2D,
         grid::{GridBoundaryPolicy, GridMapping},
         triangulated::{MeshBoundaryPolicy, Triangle, TriangulatedMapping, TriangulatedPose},
     },
@@ -213,4 +214,15 @@ fn triangulated_mapping_rejects_duplicate_and_unreferenced_topology() {
         vec![Triangle::new(0, 1, 2)],
         MeshBoundaryPolicy::Reject,
     ).is_err());
+}
+
+
+#[test]
+fn triangulated_and_grid_mappings_share_the_same_trait_contract() {
+    let grid_mapping = grid(GridBoundaryPolicy::Reject);
+    let triangulated_mapping = triangle_mesh(MeshBoundaryPolicy::Reject);
+    let grid_result = (&grid_mapping as &dyn PoseMapping2D).map_pose(point(1.0, 2.0)).unwrap();
+    let triangle_result = (&triangulated_mapping as &dyn PoseMapping2D).map_pose(point(0.5, 0.5)).unwrap();
+    assert!((scalar(&grid_result) - 15.0).abs() < 1.0e-9);
+    assert!((scalar(&triangle_result) - 7.5).abs() < 1.0e-9);
 }
