@@ -3,7 +3,8 @@
 //! Plans preserve the canonical target mapping and composed typed value. They
 //! are data for a host preview surface, not host commands or mutations.
 use smart_controller_core::{
-    canonical::{CanonicalDocument, TargetMapping},
+    canonical::TargetMapping,
+    migration::CanonicalDocument,
     composition::ComposedEvaluationResult,
     ids::TargetId,
     value::TypedValue,
