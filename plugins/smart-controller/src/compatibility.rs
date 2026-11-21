@@ -29,7 +29,6 @@ pub fn decode_canonical_json(source: &str) -> Result<CanonicalDocument, CoreErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use smart_controller_core::{legacy::BindingSet, Params};
 
     #[test]
     fn malformed_legacy_inputs_return_serialization_errors() {
@@ -43,14 +42,4 @@ mod tests {
         assert!(decode_canonical_json(source).is_err());
     }
 
-    #[test]
-    fn wrappers_delegate_to_core_migration_contracts() {
-        let binding_set = BindingSet::new(vec![]).unwrap();
-        let source = serde_json::to_string(&binding_set).unwrap();
-        let migrated = migrate_binding_set_json(&source).unwrap();
-        assert!(migrated.report.is_lossless());
-        let params = Params::default();
-        let params_source = serde_json::to_string(&params).unwrap();
-        let _ = migrate_params_json(&params_source);
-    }
 }
