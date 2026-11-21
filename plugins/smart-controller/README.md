@@ -35,3 +35,14 @@ Manual input overrides the host query. A missing or malformed bone response is a
     cargo test -p smart-controller-core
     cargo test -p anicraft-smart-controller-plugin
     cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+
+
+## Unified adapter foundations (Phase 5)
+
+The adapter now has isolated modules for:
+
+- Parsing the verified `bone.info` response by numeric bone ID, with explicit spring-swing and angle-wrapping choices.
+- Assessing target capability without executing a mutating command.
+- Delegating legacy BindingSet / Params migration to `smart-controller-core` while retaining its migration report.
+
+These modules are foundations only. The existing V1 Slider command still uses its original preview path. Geometry pin mutation is not issued by the new adapter; the documented `warp.pin_move` path requires a host preview/undo transaction. Symbol-frame display, generic property application, playback evaluation and durable document persistence remain unverified or unsupported.
