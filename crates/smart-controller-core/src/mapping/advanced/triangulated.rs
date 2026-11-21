@@ -175,6 +175,9 @@ impl TriangulatedMapping {
             let b = self.vertices[edge[1]].position;
             let projected = closest_point_on_segment(point, a, b)?;
             let distance = distance_squared(point, projected);
+            if !distance.is_finite() {
+                return Err(CoreError::InvalidMapping("distance calculation overflowed while clamping to the mesh".into()));
+            }
             if best.as_ref().map_or(true, |(best_distance, best_edge, _)| {
                 distance < *best_distance || (distance == *best_distance && edge < *best_edge)
             }) {
