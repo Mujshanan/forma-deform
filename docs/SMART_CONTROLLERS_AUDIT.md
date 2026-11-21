@@ -597,6 +597,6 @@ Phase 4 work has started on `feat/smart-controller-phase3-evaluator`:
 - Conflicting modes, multiple Replace contributions, invalid weights, unavailable additive bases, incompatible types and ambiguous circular angle means return typed errors.
 - The new evaluate-and-compose API runs the Phase 3 evaluator and the Phase 4 post-pass sequentially, with no host mutation.
 
-Tests have been authored for the four modes, conflicts, bases, weights, deterministic ordering, angle handling and end-to-end evaluator/composition integration. **Phase 4 CI is pending; none of these tests or builds is yet claimed as passing.**
+Fifteen composition-module tests and one canonical binding-composition validation test execute successfully. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44928985038 passed on commit `ccc31ca7c3e3d893772869c7f6282c988b188828`: 151 workspace Rust tests passed, Bun typecheck/tests (9/9)/build passed, and all three release WASM plugin builds passed. The successful job log contained no compiler warnings or errors. Rustfmt and Clippy were not part of this workflow and are not claimed as passing.
 
 CCC-01.5 remains unchanged: this composition pass does not combine Smart Controller binding outputs with Form Deform pin-deformation outputs. V1 remains preview-only. No PR or merge has been created.
