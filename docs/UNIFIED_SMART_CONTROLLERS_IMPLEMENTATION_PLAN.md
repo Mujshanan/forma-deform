@@ -6,7 +6,7 @@
 **Core:** `smart-controller-core`  
 **Host adapter:** `plugins/smart-controller`  
 **Scope:** Architecture, implementation sequence and file-level build order  
-**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI at `c83182d`. Phase 4 composition implementation is in progress on the branch above; its tests are pending CI.
+**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI at `c83182d`. Phase 4 composition implementation is in progress on the branch above; initial implementation CI passed at `ccc31ca7`.
 
 ---
 
@@ -613,7 +613,9 @@ Hardening completed:
 
 **Branch:** `feat/smart-controller-phase3-evaluator`  
 **Base:** verified Phase 3 implementation `c83182d8c5039977baaf0b8fcac2317066368a09`  
-**Status:** implementation started; CI verification pending.
+**Verified implementation commit:** `ccc31ca7c3e3d893772869c7f6282c988b188828`  
+**CI run:** https://github.com/Mujshanan/forma-deform/actions/runs/44928985038  
+**Status:** initial composition implementation and tests passed CI; remaining review and hardening continue.
 
 Implemented in this increment:
 
@@ -629,8 +631,8 @@ Implemented in this increment:
 - Scalar and Vector2 additive/blend paths are implemented. Additive wrapped angles normalize to [-π, π); weighted wrapped angles use a circular mean and reject the undefined opposing-direction case.
 - Added `evaluate_and_compose` as a pure orchestration convenience: it first runs the existing Phase 3 evaluator, then the composition post-pass. It does not read or mutate host state.
 
-**Tests authored:** composition mode tests, Replace conflicts, Additive bases, positive/zero/invalid WeightedBlend weights, incompatible values, angle edge cases, PriorityOverride tie-breaking, insertion-order determinism, and evaluator-to-composition integration. Canonical binding composition validation tests are also added.
+**Tests executed:** 15 composition-module tests plus one canonical binding composition-validation test. The successful workspace workflow reports 151 Rust tests passed, Bun typecheck/tests (9/9)/build passed, and release WASM builds passed for bone-query, form-deform and smart-controller plugins. No compiler warnings or errors appeared in the successful job log.
 
-**Not yet verified:** no Phase 4 test/build pass is claimed until the current branch's GitHub Actions run completes. Rustfmt and Clippy are not yet verified. No PR or merge has been created.
+**Not verified:** Rustfmt and Clippy were not run by this workflow. Host in-app smoke tests remain separate. No PR or merge has been created.
 
 **Preserved boundaries:** composition consumes only Smart Controller contributions. It does not compose with Form Deform pin outputs, change the Form Deform formula, or make V1 playback-capable.
