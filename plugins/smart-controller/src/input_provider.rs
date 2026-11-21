@@ -207,13 +207,22 @@ mod tests {
     }
 
     #[test]
-    fn missing_manual_value_fails_closed() {
+    fn missing_manual_value_is_preserved_for_core_rejection() {
         let definition = InputDefinition {
             id: InputId::new("manual").unwrap(),
             source: InputSource::Manual,
             dimension: InputDimension::Scalar,
             fallback: FallbackPolicy::Reject,
         };
-        assert!(collect_host_input_snapshot(&[definition], &HostInputContext { manual_values: BTreeMap::new(), bone_layers: BTreeMap::new(), bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly, wrapped_angles: false }).is_err());
+        let context = HostInputContext {
+            manual_values: BTreeMap::new(),
+            bone_layers: BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
+        };
+        let snapshot = collect_host_input_snapshot(&[definition.clone()], &context).unwrap();
+        let sample = snapshot.get(&definition.id).unwrap();
+        assert_eq!(sample.validity, smart_controller_core::InputValidity::Missing);
+        assert!(sample.value.is_none());
     }
 }
