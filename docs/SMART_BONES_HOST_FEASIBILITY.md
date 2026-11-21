@@ -267,3 +267,28 @@ The source trace narrows the likely implementation seams to:
 - `warp.pin_move` is an editing command that writes keyframe data. It is not the correct mechanism for live Smart Bone evaluation. The pure warp interpolation path is in `crates/doc/src/eval.rs` and `crates/doc/src/warp.rs`.
 - This inspection is of the fork's `main` at the commit above. The separate `feat/smart-controllers-prototype` branch was not included in this source map; its differences should be audited before selecting a final implementation base.
 - No source files in AniCraft were changed. No API, schema, evaluator, or extension point is approved by this investigation alone.
+
+
+### 11.7 Existing AniCraft Smart Controller prototype branch
+
+The branch `feat/smart-controllers-prototype` was compared against `main` and inspected at head `b001b70e1444c3b194122f859b22b95cb098a22b`. It is three commits ahead of `main` and adds exactly these files:
+- [`crates/controller/Cargo.toml`](https://github.com/Mujshanan/anicraft/blob/b001b70e1444c3b194122f859b22b95cb098a22b/crates/controller/Cargo.toml)
+- [`crates/controller/README.md`](https://github.com/Mujshanan/anicraft/blob/b001b70e1444c3b194122f859b22b95cb098a22b/crates/controller/README.md)
+- [`crates/controller/src/lib.rs`](https://github.com/Mujshanan/anicraft/blob/b001b70e1444c3b194122f859b22b95cb098a22b/crates/controller/src/lib.rs)
+
+Observed prototype contract:
+- `ControllerBinding` contains a stable `BoneId`, nested `InstancePath`, finite scalar `InputRange`, and inclusive `FrameRange`.
+- `ControllerBinding::evaluate` clamps the scalar input and linearly maps it to a target symbol frame, including reversed output ranges.
+- The crate is pure and deterministic; it does not mutate authored timelines.
+- Its own README explicitly lists as unimplemented: durable document storage, resolving the effective bone angle from evaluated armature pose, applying the output to nested-symbol playback/evaluation, authoring/inspection UI, and continuous live playback.
+
+**Critical product distinction:** this prototype is a bone-driven nested-symbol frame selector. It is a useful first Smart Controller mechanism and could support a corrective drawing/action represented as a nested symbol timeline. It is not yet a general Moho-style Smart Bone Action system that authors and evaluates corrective changes to arbitrary target channels/geometry. It also does not itself deform geometry.
+
+Consequences for the current Smart Bones plan:
+1. Keep the existing controller prototype as a distinct, narrow capability; do not silently redefine its frame-mapping semantics as deformation composition.
+2. Decide whether a nested symbol action is an accepted first MVP representation, or whether the MVP must directly animate a geometry channel such as a warp mesh or shape skin.
+3. If nested symbol frame switching is retained, the concrete host application point is the recursive symbol-instance evaluation in `crates/doc/src/eval.rs` (the symbol branch inside `eval_timeline`, where the instance's local frame is selected before recursively calling `eval_timeline` on the symbol timeline). The controller output must affect evaluation state, not rewrite keyframes.
+4. If direct corrective geometry is required, the existing armature-aware layer hook at `evaluate_shown` and the geometry-specific evaluation functions are the relevant extension seams. The exact ordering relative to armature skinning and warp interpolation must be specified and tested.
+5. The prototype's `InstancePath` is already defined in `crates/doc/src/player.rs` as the chain of element IDs from the main timeline to the nested instance. It is a more precise target locator than a single element ID for nested symbol playback.
+
+This branch is not merged into `main`; this assessment does not authorize merging it or selecting it as the final implementation base.
