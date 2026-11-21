@@ -5,7 +5,7 @@ use crate::{
     ids::{BindingId, ControllerId, InputId, TargetId},
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
     legacy::{BindingSet, ControllerBinding as LegacyBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, Vec2},
-    model::{EndpointPolicy, Mode, Params},
+    model::{Mode, Params},
     schema::{SchemaIdentity, CURRENT_SCHEMA_VERSION, SCHEMA_NAME},
     validation,
     value::TypedValue,
