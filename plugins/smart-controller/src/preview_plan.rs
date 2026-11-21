@@ -100,6 +100,7 @@ mod tests {
         composition::{CompositionResult, EvaluationResult},
         ids::{BindingId, ControllerId},
         schema::SchemaIdentity,
+        input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
     };
 
     #[test]
@@ -121,7 +122,12 @@ mod tests {
         };
         let document = CanonicalDocument {
             schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
-            inputs: vec![],
+            inputs: vec![InputDefinition {
+                id: smart_controller_core::InputId::new("input").unwrap(),
+                source: InputSource::Manual,
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            }],
             controllers: vec![Controller {
                 id: ControllerId::new("controller").unwrap(),
                 enabled: true,
