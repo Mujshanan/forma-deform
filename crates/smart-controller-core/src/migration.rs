@@ -4,7 +4,7 @@ use crate::{
     error::CoreError,
     ids::{BindingId, ControllerId, InputId, TargetId},
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
-    legacy::{BindingSet, ControllerMode, ControllerTarget},
+    legacy::{BindingSet, ControllerBinding as LegacyBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, Vec2},
     model::{EndpointPolicy, Mode, Params},
     schema::{SchemaIdentity, CURRENT_SCHEMA_VERSION, SCHEMA_NAME},
     validation,
@@ -278,4 +278,90 @@ pub fn migrate_json(source: &str) -> Result<MigrationOutput, CoreError> {
             .map_err(|e| CoreError::Serialization(e.to_string()))?;
         migrate_unversioned_params(&params)
     }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyExportOutput {
+    pub binding_set: BindingSet,
+    pub report: MigrationReport,
+}
+
+/// Export only when every canonical field is representable by the V1 BindingSet.
+/// Unsupported canonical structures fail explicitly rather than being silently dropped.
+pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExportOutput, CoreError> {
+    document.validate()?;
+    let mut bindings = Vec::with_capacity(document.controllers.len());
+    for controller in &document.controllers {
+        if controller.parent_scoped || !controller.dependencies.is_empty() || controller.inputs.len() != 1 || controller.bindings.len() != 1 {
+            return Err(CoreError::InvalidModel(format!("controller {} is not representable as one V1 binding", controller.id)));
+        }
+        let (minimum, neutral, maximum, easing) = match controller.mapping {
+            MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, easing } => (
+                minimum, neutral, maximum,
+                match easing { EasingConfig::Linear => EaseCurve::Linear, EasingConfig::Smoothstep => EaseCurve::Smoothstep },
+            ),
+            _ => return Err(CoreError::InvalidModel(format!("controller {} uses a mapping unsupported by V1", controller.id))),
+        };
+        let input_id = &controller.inputs[0];
+        let input = document.inputs.iter().find(|item| &item.id == input_id)
+            .ok_or_else(|| CoreError::MissingInput(input_id.to_string()))?;
+        let source_id = match &input.source {
+            InputSource::LegacyScalar { source_id } if input.dimension == InputDimension::Scalar && input.fallback == FallbackPolicy::Reject => source_id.clone(),
+            _ => return Err(CoreError::InvalidModel(format!("input {} is not a lossless V1 scalar source", input.id))),
+        };
+        let canonical = &controller.bindings[0];
+        let (mode, target) = match &canonical.target {
+            TargetMapping::SymbolFrame { symbol_instance_id, negative_frame, neutral_frame, positive_frame } => {
+                if canonical.mode != BindingMode::AbsolutePose || canonical.base_value.is_some() {
+                    return Err(CoreError::InvalidModel(format!("symbol binding {} has unsupported V1 mode/base", canonical.id)));
+                }
+                (ControllerMode::AbsolutePose, ControllerTarget::SymbolFrame {
+                    symbol_instance_id: symbol_instance_id.clone(),
+                    negative_frame: *negative_frame,
+                    neutral_frame: *neutral_frame,
+                    positive_frame: *positive_frame,
+                })
+            }
+            TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, neutral_offset, positive_offset } => {
+                let expected_base = TypedValue::vector2(neutral_offset[0], neutral_offset[1])?;
+                match canonical.mode {
+                    BindingMode::AbsolutePose if canonical.base_value.is_none() => {}
+                    BindingMode::RelativeDelta if canonical.base_value == Some(expected_base) => {}
+                    _ => return Err(CoreError::InvalidModel(format!("geometry binding {} has a non-round-trippable base/mode", canonical.id))),
+                }
+                (match canonical.mode { BindingMode::AbsolutePose => ControllerMode::AbsolutePose, BindingMode::RelativeDelta => ControllerMode::RelativeDelta },
+                 ControllerTarget::GeometryDeform {
+                    element_id: element_id.clone(), pin_id: pin_id.clone(),
+                    negative_offset: Vec2 { x: negative_offset[0], y: negative_offset[1] },
+                    neutral_offset: Vec2 { x: neutral_offset[0], y: neutral_offset[1] },
+                    positive_offset: Vec2 { x: positive_offset[0], y: positive_offset[1] },
+                 })
+            }
+            _ => return Err(CoreError::InvalidModel(format!("target of binding {} is unsupported by V1", canonical.id))),
+        };
+        let expected_controller_id = format!("legacy-binding:{}", canonical.id);
+        if controller.id.as_str() != expected_controller_id {
+            return Err(CoreError::InvalidModel(format!("controller {} has no reversible V1 identity", controller.id)));
+        }
+        bindings.push(LegacyBinding {
+            id: canonical.id.to_string(),
+            controller_id: source_id,
+            input_range: InputRange { minimum, neutral, maximum },
+            easing,
+            mode,
+            target,
+            enabled: controller.enabled,
+        });
+    }
+    let binding_set = BindingSet::new(bindings).map_err(|e| CoreError::InvalidModel(e.to_string()))?;
+    Ok(LegacyExportOutput {
+        binding_set,
+        report: MigrationReport {
+            source_format: "canonical_v1".into(),
+            notices: vec!["All canonical fields were representable in the V1 BindingSet; export was lossless.".into()],
+            losses: vec![],
+        },
+    })
 }
