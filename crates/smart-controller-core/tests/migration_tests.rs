@@ -207,6 +207,10 @@ fn unversioned_params_migration_and_export_round_trip_transform() {
     original.property = Some("rotation".into());
     original.scale = Some(1.5);
     original.additive = true;
+    original.action_layer_id = None;
+    original.action_start_frame = None;
+    original.action_end_frame = None;
+    original.endpoint_policy = None;
     let migrated = migrate_unversioned_params(&original).unwrap();
     let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
     assert_eq!(exported.params, original);
