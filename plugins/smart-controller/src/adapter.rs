@@ -78,7 +78,7 @@ pub fn sample_bone_rotation(
 
     let radians = degrees.to_radians();
     let value = TypedValue::angle(radians, wrapped).map_err(|error| error.to_string())?;
-    definition.validate() .map_err(|error| error.to_string())?;
+    definition.validate().map_err(|error| error.to_string())?;
     Ok(InputSample::valid(definition.id.clone(), value, Some(0)))
 }
 
@@ -146,6 +146,6 @@ mod tests {
     #[test]
     fn missing_bone_and_malformed_response_fail_closed() {
         assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
-        assert!(sample_bone_rotation(&definition(), &json!({"bones":[]}), BoneAnglePolicy::KeyedPoseOnly).is_err());
+        assert!(sample_bone_rotation(&definition(), &json!({"bones":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
     }
 }
