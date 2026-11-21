@@ -5,7 +5,7 @@
 
 use smart_controller_core::{
     CoreError,
-    migration::{CanonicalDocument, MigrationOutput, migrate_binding_set_v1, migrate_unversioned_params},
+    migration::{CanonicalDocument, LegacyExportOutput, MigrationOutput, ParamsExportOutput, export_binding_set_v1, export_unversioned_params, migrate_binding_set_v1, migrate_json, migrate_unversioned_params},
     legacy::BindingSet,
     Params,
 };
@@ -20,6 +20,31 @@ pub fn migrate_params_json(source: &str) -> Result<MigrationOutput, CoreError> {
     let params: Params = serde_json::from_str(source)
         .map_err(|error| CoreError::Serialization(error.to_string()))?;
     migrate_unversioned_params(&params)
+}
+
+
+/// Detect and migrate either supported legacy JSON format through the core's
+/// single structural discriminator.
+pub fn migrate_legacy_json(source: &str) -> Result<MigrationOutput, CoreError> {
+    migrate_json(source)
+}
+
+/// Export canonical content to V1 only when the core proves it is losslessly
+/// representable. The report is returned alongside the serialized payload.
+pub fn export_binding_set_v1_json(document: &CanonicalDocument) -> Result<(String, LegacyExportOutput), CoreError> {
+    let output = export_binding_set_v1(document)?;
+    let json = serde_json::to_string_pretty(&output.binding_set)
+        .map_err(|error| CoreError::Serialization(error.to_string()))?;
+    Ok((json, output))
+}
+
+/// Export canonical content to unversioned Params only when its migrated
+/// identity and structure remain exactly reversible.
+pub fn export_params_json(document: &CanonicalDocument) -> Result<(String, ParamsExportOutput), CoreError> {
+    let output = export_unversioned_params(document)?;
+    let json = serde_json::to_string_pretty(&output.params)
+        .map_err(|error| CoreError::Serialization(error.to_string()))?;
+    Ok((json, output))
 }
 
 pub fn decode_canonical_json(source: &str) -> Result<CanonicalDocument, CoreError> {
