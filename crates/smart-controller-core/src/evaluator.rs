@@ -118,6 +118,9 @@ pub fn evaluate<M: ControllerMapper>(
     // before the first call into the mapping layer.
     graph.validate()?;
     snapshot.validate()?;
+    for (_, controller) in graph.iter() {
+        controller.validate_local()?;
+    }
 
     let mut definition_map = BTreeMap::new();
     for definition in definitions {
@@ -245,8 +248,22 @@ pub fn evaluate<M: ControllerMapper>(
         for input_id in &controller.inputs {
             let item = preflight.get(input_id).ok_or_else(|| CoreError::MissingInput(input_id.to_string()))?;
             let value = if let InputSource::ControllerOutput { controller_id: producer, binding_id } = &item.definition.source {
-                outputs.get(&(producer.clone(), binding_id.clone())).copied()
-                    .or_else(|| apply_fallback(&item.definition.fallback))
+                match outputs.get(&(producer.clone(), binding_id.clone())).copied() {
+                    Some(value) => Some(value),
+                    None => match &item.definition.fallback {
+                        FallbackPolicy::UseValue(value) => {
+                            result.diagnostics.push(diagnostic(
+                                INPUT_UNAVAILABLE,
+                                DiagnosticSeverity::Warning,
+                                format!("controller output {}:{} is unavailable; explicit fallback used", producer, binding_id),
+                                Some(controller_id.clone()),
+                                Some(input_id.clone()),
+                            )?);
+                            Some(*value)
+                        }
+                        FallbackPolicy::Unavailable | FallbackPolicy::Reject => None,
+                    }
+                }
             } else {
                 item.resolved.or_else(|| apply_fallback(&item.definition.fallback))
             };
