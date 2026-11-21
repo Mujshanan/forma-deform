@@ -549,3 +549,21 @@ Additional files on feat/smart-controller-phase1-foundation:
 No legacy migration converter, migration registry, explicit loss report, canonical schema dispatch, or full canonical model golden round-trip tests are present yet. Existing legacy.rs and Params model remain unchanged. This increment is implementation work, not a verified Phase 1 completion.
 
 **Verification:** These changes have not been compiled or tested with Cargo. Do not claim the Phase 1 tests pass until a Rust CI run or local toolchain confirms them.
+
+
+### 14.2 Migration and contract increment — implementation status
+
+The Phase 1 branch now includes:
+
+- migration.rs: strict dispatch and migration from BindingSet V1 and unversioned Params to CanonicalDocument.
+- MigrationReport: explicit notices and losses; generated Params IDs are documented as deterministic migration IDs, not durable authored IDs.
+- Reverse exporters for BindingSet V1 and unversioned Params. They reject canonical structures that cannot be represented exactly; they do not silently discard unsupported data.
+- Validated canonical JSON persistence with schema identity/version checks and strict unknown-field rejection.
+- Structured diagnostics tied to the stable diagnostic_codes_v1.json registry.
+- Canonical-owned three-anchor/easing types, independent of the legacy model.
+- Pure range/frame/easing mapping primitives with finite-input/overflow checks and parity tests against the characterized V1 range/frame functions.
+- Graph tests for duplicate dependency edges and parent-scoped configuration on shared DAG nodes.
+
+Migration tests now cover exact BindingSet round-trip, Params slider/transform round-trip, optional endpoint-policy preservation, driver identity preservation, migration dispatch, strict unknown-field rejection, empty BindingSets and explicit rejection of non-representable canonical exports.
+
+**Outstanding:** the core/Form Deform dependency-boundary test and final source review. Rust execution remains unverified: no Phase 1 Cargo test, formatting, Clippy or WASM result is claimed. The existing V1 legacy.rs/Params APIs remain in place; no runtime integration or CCC-01.5 behavior has been changed.
