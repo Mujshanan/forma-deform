@@ -137,9 +137,31 @@ mod tests {
     #[test]
     fn disabled_controller_inputs_are_not_required_or_queried() {
         let input_id = InputId::new("disabled-manual").unwrap();
-        let document = CanonicalDocument::from_json(
-            r#"{"schema":{"name":"smart-controller","version":1},"inputs":[{"id":"disabled-manual","source":{"kind":"manual"},"dimension":"scalar","fallback":{"kind":"reject"}}],"controllers":[{"id":"disabled","enabled":false,"inputs":["disabled-manual"],"dependencies":[],"mapping":{"kind":"range1_d","minimum":0.0,"neutral":1.0,"maximum":2.0},"bindings":[],"parent_scoped":false}]}"#,
-        ).unwrap();
+        let document = CanonicalDocument {
+            schema: smart_controller_core::schema::SchemaIdentity {
+                name: "smart-controller".into(),
+                version: 1,
+            },
+            inputs: vec![InputDefinition {
+                id: input_id.clone(),
+                source: InputSource::Manual,
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            }],
+            controllers: vec![smart_controller_core::canonical::Controller {
+                id: smart_controller_core::ControllerId::new("disabled").unwrap(),
+                enabled: false,
+                inputs: vec![input_id.clone()],
+                dependencies: vec![],
+                mapping: smart_controller_core::canonical::MappingConfig::Range1D {
+                    minimum: 0.0,
+                    neutral: 1.0,
+                    maximum: 2.0,
+                },
+                bindings: vec![],
+                parent_scoped: false,
+            }],
+        };
         let context = HostInputContext {
             manual_values: BTreeMap::new(),
             bone_layers: BTreeMap::new(),
