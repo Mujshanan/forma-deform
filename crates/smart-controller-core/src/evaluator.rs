@@ -677,6 +677,27 @@ mod tests {
     }
 
     #[test]
+    fn all_disabled_controllers_produce_only_disabled_and_skipped_diagnostics() {
+        let graph = ControllerGraph::new(vec![
+            node("disabled", vec![input_id("input-a")], vec![], false, "binding-a"),
+        ]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Unavailable)];
+        let mapper = |_: &Controller, _: &ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+            panic!("disabled controller must not invoke mapper")
+        };
+        let result = evaluate(
+            &graph,
+            &definitions,
+            &InputSnapshot::new(0, vec![]).unwrap(),
+            &mapper,
+        ).unwrap();
+        assert!(result.contributions.is_empty());
+        assert_eq!(result.unavailable_outputs.len(), 1);
+        assert!(result.diagnostics.iter().any(|item| item.code == CONTROLLER_DISABLED));
+        assert!(result.diagnostics.iter().any(|item| item.code == OUTPUT_SKIPPED));
+    }
+
+    #[test]
     fn evaluator_rechecks_cycles_even_if_graph_was_built_unchecked() {
         let graph = ControllerGraph::from_unchecked_for_test(vec![
             node("a", vec![input_id("input-a")], vec![controller_id("b")], true, "binding-a"),
