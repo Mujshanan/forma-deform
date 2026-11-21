@@ -189,3 +189,45 @@ fn canonical_export_rejects_unrepresentable_mapping_instead_of_dropping_it() {
     migrated.document.controllers[0].mapping = MappingConfig::DirectedRange1D { start: 0.0, end: 1.0 };
     assert!(smart_controller_core::migration::export_binding_set_v1(&migrated.document).is_err());
 }
+
+#[test]
+fn unversioned_params_migration_and_export_round_trip_slider() {
+    let original = slider_params();
+    let migrated = migrate_unversioned_params(&original).unwrap();
+    let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
+    assert!(exported.report.is_lossless());
+    assert_eq!(exported.params, original);
+}
+
+#[test]
+fn unversioned_params_migration_and_export_round_trip_transform() {
+    let mut original = slider_params();
+    original.mode = Mode::Transform;
+    original.target_bone_name = Some("forearm".into());
+    original.property = Some("rotation".into());
+    original.scale = Some(1.5);
+    original.additive = true;
+    let migrated = migrate_unversioned_params(&original).unwrap();
+    let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
+    assert_eq!(exported.params, original);
+}
+
+#[test]
+fn unversioned_params_round_trip_preserves_absent_optional_endpoint_policy() {
+    let mut original = slider_params();
+    original.endpoint_policy = None;
+    let migrated = migrate_unversioned_params(&original).unwrap();
+    let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
+    assert_eq!(exported.params.endpoint_policy, None);
+}
+
+#[test]
+fn unversioned_bone_driven_params_round_trip_preserves_layer_and_bone_identity() {
+    let mut original = slider_params();
+    original.manual_value = None;
+    original.driver_layer_id = Some(17);
+    original.driver_bone_name = Some("head".into());
+    let migrated = migrate_unversioned_params(&original).unwrap();
+    let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
+    assert_eq!(exported.params, original);
+}
