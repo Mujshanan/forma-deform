@@ -95,3 +95,21 @@ fn wrapped_angle_interpolation_handles_large_finite_revolutions() {
     let to = Angle::new(-f64::MAX, true).unwrap();
     assert!(from.interpolate(to, 0.5).unwrap().radians().is_finite());
 }
+
+#[test]
+fn typed_value_interpolation_preserves_scalar_and_vector_types() {
+    close(scalar(2.0).interpolate(scalar(6.0), 0.5).unwrap().as_scalar().unwrap(), 4.0);
+    let vector = TypedValue::vector2(0.0, 10.0).unwrap()
+        .interpolate(TypedValue::vector2(10.0, 30.0).unwrap(), 0.5).unwrap();
+    let vector = vector.as_vector2().unwrap();
+    close(vector.x(), 5.0);
+    close(vector.y(), 20.0);
+}
+
+#[test]
+fn typed_value_interpolation_delegates_angle_semantics_and_rejects_type_mismatch() {
+    let from = TypedValue::angle(350.0_f64.to_radians(), true).unwrap();
+    let to = TypedValue::angle(10.0_f64.to_radians(), true).unwrap();
+    close(from.interpolate(to, 0.5).unwrap().as_angle().unwrap().radians(), 0.0);
+    assert!(scalar(1.0).interpolate(TypedValue::vector2(1.0, 2.0).unwrap(), 0.5).is_err());
+}
