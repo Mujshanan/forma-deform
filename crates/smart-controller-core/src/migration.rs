@@ -297,9 +297,9 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
         if controller.parent_scoped || !controller.dependencies.is_empty() || controller.inputs.len() != 1 || controller.bindings.len() != 1 {
             return Err(CoreError::InvalidModel(format!("controller {} is not representable as one V1 binding", controller.id)));
         }
-        let (minimum, neutral, maximum, easing) = match controller.mapping {
+        let (minimum, neutral, maximum, easing) = match &controller.mapping {
             MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, easing } => (
-                minimum, neutral, maximum,
+                *minimum, *neutral, *maximum,
                 match easing { EasingConfig::Linear => EaseCurve::Linear, EasingConfig::Smoothstep => EaseCurve::Smoothstep },
             ),
             _ => return Err(CoreError::InvalidModel(format!("controller {} uses a mapping unsupported by V1", controller.id))),
@@ -311,8 +311,11 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
             InputSource::LegacyScalar { source_id } if input.dimension == InputDimension::Scalar && input.fallback == FallbackPolicy::Reject => source_id.clone(),
             _ => return Err(CoreError::InvalidModel(format!("input {} is not a lossless V1 scalar source", input.id))),
         };
+        if input.id.as_str() != format!("legacy-controller:{}", match &input.source { InputSource::LegacyScalar { source_id } => source_id.as_str(), _ => "" }).as_str() {
+            return Err(CoreError::InvalidModel(format!("input {} has no reversible V1 identity", input.id)));
+        }
         let canonical = &controller.bindings[0];
-        let (mode, target) = match &canonical.target {
+        let (mode, target, expected_target_id) = match &canonical.target {
             TargetMapping::SymbolFrame { symbol_instance_id, negative_frame, neutral_frame, positive_frame } => {
                 if canonical.mode != BindingMode::AbsolutePose || canonical.base_value.is_some() {
                     return Err(CoreError::InvalidModel(format!("symbol binding {} has unsupported V1 mode/base", canonical.id)));
@@ -322,7 +325,7 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
                     negative_frame: *negative_frame,
                     neutral_frame: *neutral_frame,
                     positive_frame: *positive_frame,
-                })
+                }, TargetId::new(format!("symbol:{symbol_instance_id}"))?)
             }
             TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, neutral_offset, positive_offset } => {
                 let expected_base = TypedValue::vector2(neutral_offset[0], neutral_offset[1])?;
@@ -337,12 +340,15 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
                     negative_offset: Vec2 { x: negative_offset[0], y: negative_offset[1] },
                     neutral_offset: Vec2 { x: neutral_offset[0], y: neutral_offset[1] },
                     positive_offset: Vec2 { x: positive_offset[0], y: positive_offset[1] },
-                 })
+                 }, TargetId::new(format!("geometry:{element_id}:{pin_id}"))?)
             }
             _ => return Err(CoreError::InvalidModel(format!("target of binding {} is unsupported by V1", canonical.id))),
         };
+        if canonical.target_id != expected_target_id {
+            return Err(CoreError::InvalidModel(format!("binding {} has a non-reversible target identity", canonical.id)));
+        }
         let expected_controller_id = format!("legacy-binding:{}", canonical.id);
-        if controller.id.as_str() != expected_controller_id {
+        if controller.id.as_str() != expected_controller_id.as_str() {
             return Err(CoreError::InvalidModel(format!("controller {} has no reversible V1 identity", controller.id)));
         }
         bindings.push(LegacyBinding {
