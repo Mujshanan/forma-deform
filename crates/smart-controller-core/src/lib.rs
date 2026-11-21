@@ -1,6 +1,7 @@
 //! Host-independent Smart Controller calculation crate.
 pub mod canonical;
 pub mod contribution;
+pub mod composition;
 pub mod diagnostic_codes;
 pub mod endpoint;
 pub mod evaluator;
