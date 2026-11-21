@@ -4,7 +4,7 @@
 **Audit branch:** `docs/unified-smart-controllers-plan`  
 **Audit scope:** Existing Smart Controller core, plugin adapter, AniCraft SDK boundary, tests, documentation and Form Deform separation  
 **Audit type:** Static source and repository-document review  
-**Status:** Phase 0 audit report — implementation not started
+**Status:** Phase 0 audit and characterization baseline — production implementation not started
 
 > This report records what the inspected source currently does. It does not claim that tests or builds were executed. The GitHub source inspection did not provide a local Rust execution environment.
 
@@ -25,7 +25,7 @@ The recommended strategy is therefore **consolidate and evolve, not rewrite**. P
 
 The current plugin is a thin command adapter in broad terms and is explicitly preview-only. The inspected SDK and repository audit document do not establish continuous playback evaluation, durable arbitrary binding persistence, or a verified nested-symbol frame setter.
 
-No source files were changed as part of Phase 0.
+No production source or runtime files were changed during Phase 0. A test-only characterization file was subsequently added under `crates/smart-controller-core/tests/`.
 
 ## 2. Scope and evidence
 
@@ -433,7 +433,7 @@ A subsequent architecture review identified underspecified contracts in the init
 11. **No-op cases:** empty graphs, all-disabled graphs and targets with no eligible contributions produce documented empty/unavailable results and diagnostics rather than fabricated values.
 12. **Portability and independence:** audit and enforce core dependency/WASM constraints. Add CI dependency-boundary checks in both directions between Smart Controller core and Form Deform core.
 
-These are plan-level contracts only. The Phase 0 source audit and three JSON fixture captures remain complete as previously recorded, but executable characterization, fixture deserialization/round-trip verification, Rust tests, WASM builds and host smoke tests remain pending. No source implementation or runtime semantics changed in this documentation update.
+These are plan-level contracts only. The Phase 0 source audit and three JSON fixture captures remain complete. The executable characterization suite has now been authored at `crates/smart-controller-core/tests/v1_characterization_tests.rs`; it covers fixture deserialization/round trips and captured V1 outputs. The three fixture files were independently parsed as JSON and their expected Slider normalization/frame outputs were checked, but the Rust/Serde test suite has not yet been executed. Rust workspace tests, WASM builds and host smoke tests remain pending. No production implementation or runtime semantics changed.
 
 ### Additional acceptance tests
 
@@ -464,7 +464,7 @@ The earlier source findings remain valid: no DAG, joystick, composition or migra
 | Runtime test/build evidence | Not collected; commands not executed |
 | AniCraft in-app smoke test | Not performed |
 
-**Phase 0 status: source/document audit and initial fixture capture completed; executable verification remains pending.**
+**Phase 0 status: source/document audit, fixture capture and executable characterization test authoring completed; Rust execution remains pending.**
 
 Captured fixtures:
 - `legacy_binding_set_v1.json` — representative version-1 binding set with SymbolFrame and GeometryDeform targets.
@@ -473,7 +473,7 @@ Captured fixtures:
 
 The two Params fixtures are deliberately labelled unversioned: the current `Params` structure has no schema envelope/version field. The fixtures are source-derived compatibility inputs, not proof that deserialization or round-trip tests passed. They must be loaded by tests and verified before any model migration. The BindingSet fixture must likewise be checked against the current Serde representation by an executable test.
 
-Phase 0 is complete for architectural discovery and baseline capture, but executable fixture verification remains a prerequisite before Phase 1 changes existing public models. Confirm identity and schema decisions before implementation.
+Phase 0 is complete for architectural discovery, baseline capture and characterization test authoring. The fixtures have passed a structural JSON parse and their expected scalar Slider outputs were independently checked. However, Rust/Serde deserialization, round-trip assertions and V1 characterization tests still require an actual `cargo test -p smart-controller-core` run. Do not begin Phase 1 changes to existing public models until that command passes; then run `cargo test --workspace` and the WASM build checks.
 
 ## 13. Explicit non-authorization
 
