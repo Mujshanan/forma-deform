@@ -7,7 +7,11 @@ use crate::{
     contribution::{BaseRef, CompositionMode, Contribution},
     diagnostic_codes::{Diagnostic, DiagnosticSeverity, COMPOSITION_NO_ELIGIBLE},
     error::CoreError,
-    ids::TargetId,
+    ids::{BindingId, ControllerId, InputId, TargetId},
+    input::{FallbackPolicy, InputDefinition, InputDimension, InputSample, InputSnapshot, InputSource},
+    canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
+    evaluator::{evaluate, ControllerMapper, EvaluationResult},
+    graph::ControllerGraph,
     value::{Angle, TypedValue},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -306,6 +310,78 @@ mod tests {
         let mut item = contribution(controller_id, binding_id, scalar(value), CompositionMode::PriorityOverride);
         item.priority = Some(priority);
         item
+    }
+
+    #[test]
+    fn evaluate_and_compose_uses_explicit_binding_composition_configuration() {
+        let make_controller = |controller_name: &str, input_name: &str, binding_name: &str, weight: f64| {
+            Controller {
+                id: ControllerId::new(controller_name).unwrap(),
+                enabled: true,
+                inputs: vec![InputId::new(input_name).unwrap()],
+                dependencies: vec![],
+                mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+                bindings: vec![ControllerBinding {
+                    id: BindingId::new(binding_name).unwrap(),
+                    target_id: id("shared-target"),
+                    target: TargetMapping::Property {
+                        target_id: "arm".into(),
+                        property: "rotation".into(),
+                        scale: 1.0,
+                        additive: false,
+                    },
+                    mode: BindingMode::AbsolutePose,
+                    base_value: None,
+                    composition: Some(CompositionConfig {
+                        mode: CompositionMode::WeightedBlend,
+                        weight: Some(weight),
+                        priority: None,
+                        base_ref: None,
+                    }),
+                }],
+                parent_scoped: false,
+            }
+        };
+        let graph = ControllerGraph::new(vec![
+            make_controller("controller-a", "input-a", "binding-a", 1.0),
+            make_controller("controller-b", "input-b", "binding-b", 3.0),
+        ]).unwrap();
+        let definitions = vec![
+            InputDefinition {
+                id: InputId::new("input-a").unwrap(),
+                source: InputSource::Manual,
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            },
+            InputDefinition {
+                id: InputId::new("input-b").unwrap(),
+                source: InputSource::Manual,
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            },
+        ];
+        let snapshot = InputSnapshot::new(5, vec![
+            InputSample::valid(InputId::new("input-a").unwrap(), scalar(10.0), Some(5)),
+            InputSample::valid(InputId::new("input-b").unwrap(), scalar(20.0), Some(5)),
+        ]).unwrap();
+        let mapper = |controller: &Controller, inputs: &crate::evaluator::ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                inputs.value(&controller.inputs[0]).unwrap(),
+            )]))
+        };
+        let result = evaluate_and_compose(
+            &graph,
+            &definitions,
+            &snapshot,
+            &mapper,
+            &CompositionContext::default(),
+        ).unwrap();
+        assert_eq!(result.evaluation.contributions.len(), 2);
+        assert_eq!(
+            result.composition.outputs.get(&id("shared-target")),
+            Some(&scalar(17.5)),
+        );
     }
 
     #[test]
