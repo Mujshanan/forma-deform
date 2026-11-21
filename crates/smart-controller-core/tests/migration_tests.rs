@@ -2,7 +2,7 @@ use smart_controller_core::{
     legacy::{BindingSet, ControllerBinding as LegacyBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, Vec2},
     migration::{migrate_binding_set_v1, migrate_unversioned_params},
     model::{EndpointPolicy, Mode, Params},
-    canonical::{BindingMode, MappingConfig, TargetMapping},
+    canonical::{BindingMode, EasingConfig, MappingConfig, TargetMapping},
 };
 
 fn legacy_geometry() -> LegacyBinding {
@@ -31,10 +31,7 @@ fn binding_set_migration_preserves_geometry_anchors_range_easing_and_mode() {
     assert_eq!(migrated.document.controllers.len(), 1);
     let controller = &migrated.document.controllers[0];
     assert_eq!(controller.enabled, true);
-    assert_eq!(controller.mapping, MappingConfig::LegacyThreeAnchor {
-        input_range: InputRange { minimum: -45.0, neutral: 0.0, maximum: 45.0 },
-        easing: EaseCurve::Smoothstep,
-    });
+    assert_eq!(controller.mapping, MappingConfig::ThreeAnchorRange { minimum: -45.0, neutral: 0.0, maximum: 45.0, easing: EasingConfig::Smoothstep });
     let binding = &controller.bindings[0];
     assert_eq!(binding.mode, BindingMode::RelativeDelta);
     assert_eq!(binding.base_value.as_ref().unwrap().as_vector2().unwrap().x(), 1.0);
