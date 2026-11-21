@@ -136,7 +136,7 @@ impl Controller {
                     return Err(CoreError::InvalidModel(format!("property target additive flag conflicts with binding mode for {}", binding.id))),
                 TargetMapping::Property { .. } if binding.mode == BindingMode::RelativeDelta
                     && (binding.composition.is_none() || matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)))
-                    && !matches!(binding.base_value.as_ref(), Some(TypedValue::Scalar(_))) =>
+                    && !matches!(binding.base_value.as_ref(), Some(TypedValue::Scalar(_) | TypedValue::Angle(_))) =>
                     return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar authored base", binding.id))),
                 TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, .. } if *action_layer_id == 0 || end_frame <= start_frame =>
                     return Err(CoreError::InvalidModel("frame range requires a nonzero layer and increasing endpoints".into())),
