@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn host_preview_session_orchestrates_empty_document_without_host_mutation() {
         let document = smart_controller_core::migration::CanonicalDocument::from_json(
-            r#"{\"schema\":{\"name\":\"smart-controller\",\"version\":1},\"inputs\":[],\"controllers\":[]}"#,
+            r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
         ).unwrap();
         let context = crate::input_provider::HostInputContext {
             manual_values: std::collections::BTreeMap::new(),
