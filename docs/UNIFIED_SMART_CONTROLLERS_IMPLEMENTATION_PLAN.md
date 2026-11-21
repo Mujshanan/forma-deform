@@ -556,3 +556,6 @@ Added the following Phase 1 work on this branch:
 - Graph validation rejects duplicate dependency edges; tests cover shared-node parent-scoped configuration.
 
 **Remaining Phase 1 work:** add the explicit core/Form Deform dependency-boundary test and finish a complete source-level review. Then run core/workspace tests, formatting, Clippy and WASM builds on this branch. None of the Phase 1 tests have been executed in this environment, so they remain pending. No competing V1 API has been removed.
+
+
+The explicit dependency-boundary test is now present at crates/smart-controller-core/tests/dependency_boundary_tests.rs. It checks both crate manifests (including normal, dev, build and target-specific dependency sections) and fails if either core directly depends on the other.
