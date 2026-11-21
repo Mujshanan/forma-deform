@@ -3,6 +3,7 @@ members = [
     "crates/forma-geometry",
     "crates/smart-controller-core",
     "crates/form-deform-core",
+    "crates/forma-deformation-integration",
     "crates/anicraft-plugin-sdk",
     "plugins/bone-query",
     "plugins/form-deform",
