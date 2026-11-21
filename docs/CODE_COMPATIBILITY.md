@@ -5,7 +5,7 @@
 - **Project:** Forma Deformation / AniCraft
 - **Baseline revision:** `6b53aac51ddc15249c5100745726027fd9c75907`
 - **Baseline branch:** `main`
-- **Status:** Proposed compatibility contract
+- **Status:** Accepted compatibility contract
 - **Created:** 2026-11-21
 
 ## 1. Purpose
