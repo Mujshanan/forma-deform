@@ -5,6 +5,57 @@
 //! the caller supplies the response obtained through the SDK.
 
 use anicraft_plugin_sdk as ac;
+
+use smart_controller_core::{
+    canonical::TargetMapping,
+    composition::{evaluate_and_compose, CompositionContext, ComposedEvaluationResult},
+    evaluator::ControllerMapper,
+    graph::ControllerGraph,
+    ids::TargetId,
+    migration::CanonicalDocument,
+    CoreError,
+};
+
+/// Pure preview plan produced by the host adapter. It contains calculated
+/// target values and capability assessments, but performs no document writes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostPreviewPlan {
+    pub evaluation: ComposedEvaluationResult,
+    pub targets: Vec<(TargetId, crate::targets::TargetCapability)>,
+}
+
+/// Validate and execute a canonical document against an already-collected
+/// host input snapshot. Mapping remains injected: this adapter does not claim
+/// that the not-yet-complete Pose2D/joystick mapper is implemented.
+pub fn evaluate_document_preview<M: ControllerMapper>(
+    document: &CanonicalDocument,
+    snapshot: &InputSnapshot,
+    mapper: &M,
+    composition_context: &CompositionContext,
+) -> Result<HostPreviewPlan, CoreError> {
+    document.validate()?;
+    let graph = ControllerGraph::new(document.controllers.clone())?;
+    let evaluation = evaluate_and_compose(
+        &graph,
+        &document.inputs,
+        snapshot,
+        mapper,
+        composition_context,
+    )?;
+    let mut targets = Vec::new();
+    for controller in &document.controllers {
+        for binding in &controller.bindings {
+            targets.push((
+                binding.target_id.clone(),
+                crate::targets::assess_target(&binding.target),
+            ));
+        }
+    }
+    targets.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(HostPreviewPlan { evaluation, targets })
+}
+
+
 use serde_json::Value;
 use smart_controller_core::{
     BoneTransformChannel, InputDefinition, InputSample, InputSnapshot, InputSource,
