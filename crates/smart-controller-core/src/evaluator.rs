@@ -141,12 +141,19 @@ pub fn evaluate<M: ControllerMapper>(
     // Every supplied sample must have a declared definition. This prevents
     // unnoticed or ambiguous values from entering an evaluation snapshot.
     for sample in &snapshot.samples {
-        if !definition_map.contains_key(&sample.id) {
-            return Err(CoreError::InvalidInputSample {
+        let definition = definition_map.get(&sample.id).ok_or_else(|| {
+            CoreError::InvalidInputSample {
                 input_id: sample.id.to_string(),
                 reason: "snapshot contains a sample with no input definition",
+            }
+        })?;
+        if matches!(&definition.source, InputSource::ControllerOutput { .. }) {
+            return Err(CoreError::InvalidInputSample {
+                input_id: sample.id.to_string(),
+                reason: "controller-output inputs must be resolved from the dependency graph, not the external snapshot",
             });
         }
+        definition.validate_sample(sample)?;
     }
 
     let active_input_ids: BTreeSet<InputId> = graph.iter()
@@ -155,9 +162,6 @@ pub fn evaluate<M: ControllerMapper>(
         .collect();
 
     for (_, controller) in graph.iter() {
-        if !controller.enabled {
-            continue;
-        }
         for input_id in &controller.inputs {
             let definition = &definition_map[input_id];
             if let InputSource::ControllerOutput { controller_id, binding_id } = &definition.source {
@@ -188,12 +192,6 @@ pub fn evaluate<M: ControllerMapper>(
     let mut preflight = BTreeMap::new();
     let mut diagnostics = Vec::new();
     for (id, definition) in &definition_map {
-        if matches!(&definition.source, InputSource::ControllerOutput { .. }) && snapshot.get(id).is_some() {
-            return Err(CoreError::InvalidInputSample {
-                input_id: id.to_string(),
-                reason: "controller-output inputs must be resolved from the dependency graph, not the external snapshot",
-            });
-        }
         if !active_input_ids.contains(id) {
             continue;
         }
@@ -315,7 +313,12 @@ pub fn evaluate<M: ControllerMapper>(
                 Some(controller_id.clone()),
                 Some(input_id),
             )?);
-            mark_controller_outputs_unavailable(controller, &controller_id, &mut result);
+            mark_controller_outputs_unavailable(
+                controller,
+                &controller_id,
+                &mut result,
+                "required input was unavailable",
+            )?;
             continue;
         }
 
@@ -329,7 +332,12 @@ pub fn evaluate<M: ControllerMapper>(
                     Some(controller_id.clone()),
                     None,
                 )?);
-                mark_controller_outputs_unavailable(controller, &controller_id, &mut result);
+                mark_controller_outputs_unavailable(
+                    controller,
+                    &controller_id,
+                    &mut result,
+                    "mapping failed",
+                )?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -366,6 +374,13 @@ pub fn evaluate<M: ControllerMapper>(
                     None,
                 )?);
                 result.unavailable_outputs.insert((controller_id.clone(), binding.id.clone()));
+                result.diagnostics.push(diagnostic(
+                    OUTPUT_SKIPPED,
+                    DiagnosticSeverity::Warning,
+                    format!("binding {} was skipped because its output type is incompatible with its target", binding.id),
+                    Some(controller_id.clone()),
+                    None,
+                )?);
                 continue;
             }
 
@@ -476,10 +491,19 @@ fn mark_controller_outputs_unavailable(
     controller: &Controller,
     controller_id: &ControllerId,
     result: &mut EvaluationResult,
-) {
+    reason: &str,
+) -> Result<(), CoreError> {
     for binding in &controller.bindings {
         result.unavailable_outputs.insert((controller_id.clone(), binding.id.clone()));
+        result.diagnostics.push(diagnostic(
+            OUTPUT_SKIPPED,
+            DiagnosticSeverity::Warning,
+            format!("binding {} was skipped because {reason}", binding.id),
+            Some(controller_id.clone()),
+            None,
+        )?);
     }
+    Ok(())
 }
 
 fn target_accepts_value(target: &TargetMapping, value: TypedValue) -> bool {
