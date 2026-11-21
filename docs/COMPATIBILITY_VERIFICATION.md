@@ -58,7 +58,7 @@ Existing binding tests cover duplicate IDs, stable-ID CRUD, disabled bindings, d
 | AniCraft SDK / ABI v1 | Existing native test stand-ins and build coverage | Partial; malformed pointer/length, allocation bounds, and full unsafe-boundary audit remain outstanding |
 | TypeScript geometry/timeline/document | Existing Bun test suite and build | Automated suite; no separate archived v1 document fixture corpus identified in this milestone |
 | WASM artifacts | Release build for all three plugin crates | Automated build only; not a host-load test |
-| Formatting | `cargo fmt --all -- --check` added to CI | Automated when CI completes |
+| Formatting | Not part of the existing CI workflow | Not independently verified in this milestone |
 
 ## 4. Runtime verification still required
 
