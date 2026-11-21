@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use smart_controller_core::{
     BoneTransformChannel, InputDefinition, InputId, InputSample, InputSnapshot,
-    InputSource, TypedValue, InputValidity,
+    InputSource, TypedValue,
     migration::CanonicalDocument,
 };
 
@@ -163,7 +163,7 @@ mod tests {
         };
         let snapshot = collect_host_input_snapshot(&[definition.clone()], &context).unwrap();
         let sample = snapshot.get(&definition.id).unwrap();
-        assert_eq!(sample.validity, InputValidity::Missing);
+        assert_eq!(sample.validity, smart_controller_core::InputValidity::Missing);
         assert!(sample.value.is_none());
     }
 
