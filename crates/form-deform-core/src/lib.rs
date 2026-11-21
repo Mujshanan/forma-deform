@@ -1,7 +1,6 @@
 //! Deterministic, non-accumulating bone-to-warp-pin deformation math.
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Vec2 { pub x: f64, pub y: f64 }
+pub use forma_geometry::Vec2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeformSpec {
