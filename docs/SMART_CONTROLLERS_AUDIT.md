@@ -619,7 +619,7 @@ The following adapter foundations are now present on `feat/smart-controller-phas
 
 - `plugins/smart-controller/src/adapter.rs` consumes a previously fetched `bone.info` JSON response, identifies a bone by its numeric stable ID, reads its degree-valued keyed angle, and optionally adds the separately reported spring swing. The caller must explicitly choose whether spring swing is included and whether the resulting Angle is wrapped or unwrapped. Missing IDs, malformed responses, absent angles, and absent requested swing fail closed.
 - Input snapshots use a zero age tick only for samples queried in the same invocation; the adapter does not read a clock or claim freshness across invocations.
-- `plugins/smart-controller/src/targets.rs` records capability status without issuing commands. Geometry pin read/move commands are marked preview-transaction-only; symbol-frame, frame-range and generic property application remain unverified/calculation-only.
+- `plugins/smart-controller/src/targets.rs` records capability status, queries the documented read-only `warp.info` command, and validates exact numeric element/pin identities. It does not invoke `warp.pin_move`; that mutation remains preview-transaction-only. Symbol-frame, frame-range and generic property application remain unverified/calculation-only.
 - `plugins/smart-controller/src/compatibility.rs` delegates legacy JSON decoding and migration to the core migration API; migration notices and losses remain available to callers.
 - `plugins/smart-controller/src/lib.rs` exports these modules. Existing V1 Slider preview execution is unchanged.
 
