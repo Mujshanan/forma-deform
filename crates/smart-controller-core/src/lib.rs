@@ -12,6 +12,7 @@ pub mod mapping;
 pub mod model;
 pub mod migration;
 pub mod preview;
+pub mod pose;
 pub mod schema;
 pub mod validation;
 pub mod value;
