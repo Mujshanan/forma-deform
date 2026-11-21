@@ -74,6 +74,7 @@ impl TriangulatedMapping {
         }
 
         let mut seen = std::collections::BTreeSet::new();
+        let mut used_vertices = std::collections::BTreeSet::new();
         for triangle in &triangles {
             let [a, b, c] = triangle.vertices;
             if a >= vertices.len() || b >= vertices.len() || c >= vertices.len() {
@@ -85,6 +86,7 @@ impl TriangulatedMapping {
             if !seen.insert(triangle.canonical_key()) {
                 return Err(CoreError::InvalidMapping("triangulated mapping contains duplicate triangles".into()));
             }
+            used_vertices.extend([a, b, c]);
             let area = cross(vertices[a].position, vertices[b].position, vertices[c].position).abs();
             let ab = distance_squared(vertices[a].position, vertices[b].position);
             let bc = distance_squared(vertices[b].position, vertices[c].position);
@@ -93,6 +95,9 @@ impl TriangulatedMapping {
             if !area.is_finite() || scale == 0.0 || area <= DEGENERACY_RELATIVE_EPSILON * scale {
                 return Err(CoreError::InvalidMapping("triangle is degenerate or numerically ill-conditioned".into()));
             }
+        }
+        if used_vertices.len() != vertices.len() {
+            return Err(CoreError::InvalidMapping("triangulated mapping contains vertices that are not referenced by any triangle".into()));
         }
         Ok(Self { vertices, triangles, boundary })
     }
@@ -183,7 +188,7 @@ impl TriangulatedMapping {
 
 fn normalize_weights(mut weights: [f64; 3]) -> Result<[f64; 3], CoreError> {
     for weight in &mut weights {
-        if *weight < 0.0 && *weight >= -BARYCENTRIC_EPSILON { *weight = 0.0; }
+        if weight.abs() <= BARYCENTRIC_EPSILON { *weight = 0.0; }
     }
     let sum = weights.iter().sum::<f64>();
     if !sum.is_finite() || sum <= 0.0 {
