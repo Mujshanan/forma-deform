@@ -93,8 +93,11 @@ fn query_slider_driver(params: &Params, host: &mut impl HostApi) -> Result<f64, 
         .filter(|id| *id > 0)
         .ok_or("a positive driver_bone_id is required for Slider mode bone input")?;
     let response = host.command("bone.info", json!({"layer": layer_id}))?;
-    find_driver_bone(&response, bone_id)
-        .ok_or_else(|| format!("driver bone ID {bone_id} was not returned by bone.info or has no evaluated angle"))
+    find_driver_bone(&response, bone_id).ok_or_else(|| {
+        format!(
+            "driver bone ID {bone_id} was not returned by bone.info or has no evaluated angle"
+        )
+    })
 }
 
 fn run_slider(raw: &Value, host: &mut impl HostApi) -> Result<(), String> {
@@ -314,7 +317,10 @@ mod tests {
                 "choice" => {
                     let options = spec["options"].as_array().unwrap();
                     assert!(!options.is_empty(), "{name} needs choices");
-                    assert!(options.iter().any(|option| option == &spec["default"]), "{name} default must be one of its choices");
+                    assert!(
+                        options.iter().any(|option| option == &spec["default"]),
+                        "{name} default must be one of its choices"
+                    );
                 }
                 "color" => assert!(spec["default"].is_string(), "{name} needs a colour default"),
                 other => panic!("unsupported ABI v1 parameter type for {name}: {other}"),
