@@ -211,10 +211,11 @@ fn compose_weighted_blend(
                 let mut sin_sum = 0.0;
                 let mut cos_sum = 0.0;
                 for (angle, weight) in &angles {
-                    sin_sum += angle.radians().sin() * *weight;
-                    cos_sum += angle.radians().cos() * *weight;
+                    let normalized_weight = *weight / total_weight;
+                    sin_sum += angle.radians().sin() * normalized_weight;
+                    cos_sum += angle.radians().cos() * normalized_weight;
                 }
-                if sin_sum.hypot(cos_sum) <= total_weight * 1e-12 {
+                if sin_sum.hypot(cos_sum) <= 1e-12 {
                     return Err(conflict(target_id, "weighted wrapped-angle mean is undefined for opposing directions"));
                 }
                 TypedValue::angle(sin_sum.atan2(cos_sum), true)?
