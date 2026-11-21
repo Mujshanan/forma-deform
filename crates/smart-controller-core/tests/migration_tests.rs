@@ -235,3 +235,19 @@ fn unversioned_bone_driven_params_round_trip_preserves_layer_and_bone_identity()
     let exported = smart_controller_core::migration::export_unversioned_params(&migrated.document).unwrap();
     assert_eq!(exported.params, original);
 }
+
+#[test]
+fn empty_binding_set_migrates_and_exports_as_empty() {
+    let original = BindingSet::new(vec![]).unwrap();
+    let migrated = migrate_binding_set_v1(&original).unwrap();
+    assert!(migrated.document.controllers.is_empty());
+    assert!(migrated.document.inputs.is_empty());
+    assert_eq!(smart_controller_core::migration::export_binding_set_v1(&migrated.document).unwrap().binding_set, original);
+}
+
+#[test]
+fn migration_dispatch_rejects_unknown_legacy_params_fields() {
+    let mut value: serde_json::Value = serde_json::to_value(slider_params()).unwrap();
+    value["unexpected"] = serde_json::json!(true);
+    assert!(migrate_json(&serde_json::to_string(&value).unwrap()).is_err());
+}
