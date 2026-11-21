@@ -92,8 +92,8 @@ impl InputDefinition {
             _ => {}
         }
 
-        if let FallbackPolicy::UseValue(value) = self.fallback {
-            if !self.dimension.accepts(value) {
+        if let FallbackPolicy::UseValue(value) = &self.fallback {
+            if !self.dimension.accepts(*value) {
                 return Err(CoreError::InputValueTypeMismatch {
                     input_id: self.id.to_string(),
                     expected: self.dimension.name(),
