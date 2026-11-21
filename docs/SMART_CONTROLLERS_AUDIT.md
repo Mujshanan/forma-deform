@@ -532,3 +532,20 @@ Implemented the first four Phase 1 responsibilities without replacing existing V
 **Unchanged:** `legacy.rs`, `model.rs`, the existing scalar/frame mapping and preview functions, and host adapter runtime behaviour have not been replaced by this increment. Smart Controller core and Form Deform core remain independent.
 
 **Verification status:** The Phase 0 results above apply to the base commit, not to this new Phase 1 branch. The new foundation test file and Phase 1 branch have not yet been executed with Cargo; rerun core/workspace tests and WASM checks on the Phase 1 branch before treating this increment as verified.
+
+
+### 14.1 Canonical contracts increment — not yet verified
+
+Additional files on feat/smart-controller-phase1-foundation:
+
+- canonical.rs: additive canonical controller/configuration/binding types and local validation.
+- graph.rs: validated DAG storage, dependency existence, shared-node parent-scope checks, cycle detection and deterministic topological ordering.
+- schema.rs: schema identity and version-1 envelope.
+- diagnostic_codes.rs and tests/fixtures/diagnostic_codes_v1.json: initial stable diagnostic registry.
+- contribution.rs: typed contribution data shape and mode-specific optional-field validation; no composition execution.
+- mapping/range.rs, mapping/easing.rs, mapping/frame.rs: pure mapping primitives; legacy mapping functions remain present.
+- Tests: graph, range/frame/easing, diagnostic registry, schema and contribution contract tests.
+
+No legacy migration converter, migration registry, explicit loss report, canonical schema dispatch, or full canonical model golden round-trip tests are present yet. Existing legacy.rs and Params model remain unchanged. This increment is implementation work, not a verified Phase 1 completion.
+
+**Verification:** These changes have not been compiled or tested with Cargo. Do not claim the Phase 1 tests pass until a Rust CI run or local toolchain confirms them.
