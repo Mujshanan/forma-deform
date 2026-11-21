@@ -3,7 +3,6 @@ use crate::{
     error::CoreError,
     model::EndpointPolicy,
     ids::{BindingId, ControllerId, InputId, TargetId},
-    legacy::{ControllerMode, EaseCurve, InputRange},
     value::TypedValue,
 };
 use serde::{Deserialize, Serialize};
@@ -16,9 +15,12 @@ pub enum MappingConfig {
     PoseSet1D { pose_ids: Vec<String> },
     JoystickFivePose { center: String, up: String, right: String, down: String, left: String },
     Discrete { values: Vec<TypedValue> },
-    /// Exact scalar/frame mapping semantics retained while importing legacy V1 bindings.
-    LegacyThreeAnchor { input_range: InputRange, easing: EaseCurve },
+    ThreeAnchorRange { minimum: f64, neutral: f64, maximum: f64, easing: EasingConfig },
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EasingConfig { Linear, Smoothstep }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -126,7 +128,11 @@ impl Controller {
                 }
             }
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
-            MappingConfig::LegacyThreeAnchor { input_range, .. } => input_range.validate().map_err(|e| CoreError::InvalidMapping(e.to_string()))?,
+            MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, .. } => {
+                if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || minimum >= neutral || neutral >= maximum {
+                    return Err(CoreError::InvalidMapping("three-anchor range must be finite and strictly ordered".into()));
+                }
+            },
         }
         Ok(())
     }
