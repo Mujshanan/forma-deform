@@ -1,7 +1,7 @@
 # Controller Consolidation — CCC-01.4
 
 - **Milestone:** CCC-01.4 — Controller Consolidation
-- **Status:** Implemented on review branch; pending CI and review
+- **Status:** Implemented; CI passed; pending review
 - **Baseline:** CCC-01.3 shared-primitives branch
 - **Compatibility contract:** `docs/CODE_COMPATIBILITY.md` (CCC-COMP-001)
 
@@ -65,7 +65,13 @@ Keeping these contracts separate is intentional, not a second implementation of 
 - Binding identity newtypes and host identity conversion.
 - Runtime scheduling, playback, persistence in AniCraft, and FDM v2 document ownership.
 
-## 7. Verification required
+## 7. Verification results
+
+GitHub Actions pull-request run [44898942033](https://github.com/Mujshanan/forma-deform/actions/runs/44898942033) completed successfully on the implementation commit. It passed TypeScript typecheck/tests/build, `cargo test --workspace`, and release WASM builds for Bone Query, Form Deform, and Smart Controller.
+
+The workflow does not run `cargo fmt --all -- --check`; formatting was not independently verified by CI.
+
+## 8. Verification required
 
 - Full Rust workspace tests.
 - Existing TypeScript checks/tests/build.
