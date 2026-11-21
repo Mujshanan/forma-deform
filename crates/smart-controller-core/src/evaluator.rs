@@ -149,7 +149,15 @@ pub fn evaluate<M: ControllerMapper>(
         }
     }
 
+    let active_input_ids: BTreeSet<InputId> = graph.iter()
+        .filter(|(_, controller)| controller.enabled)
+        .flat_map(|(_, controller)| controller.inputs.iter().cloned())
+        .collect();
+
     for (_, controller) in graph.iter() {
+        if !controller.enabled {
+            continue;
+        }
         for input_id in &controller.inputs {
             let definition = &definition_map[input_id];
             if let InputSource::ControllerOutput { controller_id, binding_id } = &definition.source {
@@ -180,13 +188,16 @@ pub fn evaluate<M: ControllerMapper>(
     let mut preflight = BTreeMap::new();
     let mut diagnostics = Vec::new();
     for (id, definition) in &definition_map {
+        if matches!(&definition.source, InputSource::ControllerOutput { .. }) && snapshot.get(id).is_some() {
+            return Err(CoreError::InvalidInputSample {
+                input_id: id.to_string(),
+                reason: "controller-output inputs must be resolved from the dependency graph, not the external snapshot",
+            });
+        }
+        if !active_input_ids.contains(id) {
+            continue;
+        }
         if matches!(&definition.source, InputSource::ControllerOutput { .. }) {
-            if snapshot.get(id).is_some() {
-                return Err(CoreError::InvalidInputSample {
-                    input_id: id.to_string(),
-                    reason: "controller-output inputs must be resolved from the dependency graph, not the external snapshot",
-                });
-            }
             preflight.insert(id.clone(), PreflightInput {
                 definition: definition.clone(),
                 resolved: None,
@@ -681,14 +692,14 @@ mod tests {
         let graph = ControllerGraph::new(vec![
             node("disabled", vec![input_id("input-a")], vec![], false, "binding-a"),
         ]).unwrap();
-        let definitions = vec![manual_definition("input-a", FallbackPolicy::Unavailable)];
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
         let mapper = |_: &Controller, _: &ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
             panic!("disabled controller must not invoke mapper")
         };
         let result = evaluate(
             &graph,
             &definitions,
-            &snapshot("input-a", 0.0),
+            &InputSnapshot::new(0, vec![]).unwrap(),
             &mapper,
         ).unwrap();
         assert!(result.contributions.is_empty());
