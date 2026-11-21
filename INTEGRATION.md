@@ -69,10 +69,10 @@ Use the pinned host's existing fixture as the starting point:
 
 Prepare the actual smoke project in AniCraft:
 
-1. Open the pinned fixture. Rename bone `100` to `Driver` in the host UI if it has no name, then confirm its name, keyed angle, and swing with `bone.info` using layer `102`.
+1. Open the pinned fixture. Confirm bone ID `100`, its keyed angle, and its spring swing with `bone.info` using armature layer `102`. Slider driver selection uses the stable bone ID, not the editable bone name.
 2. On normal layer `1`, draw a separate rectangle. Add an Asset Warp mesh and one pin to it. Record the actual element ID, pin ID, and the pin's current stage-pixel `at` position from `warp.info`. Do not reuse the synthetic IDs from the core test.
 3. Build the Smart Controller module with `cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin`, then install that exact WASM module in the pinned host.
-4. Slider check: use driver layer `102`, bone name `Driver`, action layer `1`, rotation range `-45°…+45°`, and frame range `0…20`. Set the bone to `22.5°`; expect normalized input `0.75` and Exclusive preview frame `15`. Confirm the plugin only logs a preview and does not change the timeline. The action-layer ID is currently validated but not queried or driven.
+4. Slider check: use driver layer `102`, driver bone ID `100`, action layer `1`, rotation range `-45°…+45°`, and frame range `0…20`. Keep **Use manual driver angle** off. Set the bone to `22.5°`; expect normalized input `0.75` and Exclusive preview frame `15`. Confirm the plugin only logs a preview and does not change the timeline. The action-layer ID remains preview context only; this V1 plugin does not drive the timeline.
 5. Deform check: use bone ID `100`, the recorded element/pin IDs, the actual pin `at` position as the neutral position, neutral angle `0°`, gains `(0.5, -0.25)` px/degree, and spring swing disabled. At a keyed bone angle of `10°`, expect the absolute pin target to be `(neutral_x + 5, neutral_y - 2.5)` px. Preview first, then Apply.
 6. Confirm the pin moves to the reported target, one Undo restores its original position, and repeating evaluation from the same authored neutral values yields the same target without drift.
 7. Save the modified project as `smart-controller-smoke.anicraft`; record the actual bone/element/pin IDs, host-returned values, plugin logs, and a screenshot.
