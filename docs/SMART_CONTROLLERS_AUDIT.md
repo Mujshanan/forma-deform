@@ -600,3 +600,12 @@ Phase 4 work has started on `feat/smart-controller-phase3-evaluator`:
 Fifteen composition-module tests and two canonical binding/serialization tests execute successfully. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44929171315 passed on commit `da644fa1bf91aab74a716524895145375595547f`: 152 workspace Rust tests passed, Bun typecheck/tests (9/9)/build passed, and all three release WASM plugin builds passed. The successful job log contained no compiler warnings or errors. Rustfmt and Clippy were not part of this workflow and are not claimed as passing.
 
 CCC-01.5 remains unchanged: this composition pass does not combine Smart Controller binding outputs with Form Deform pin-deformation outputs. V1 remains preview-only. No PR or merge has been created.
+
+
+### Phase 4 final verification addendum
+
+The composition layer's final review identified and corrected a target-type gate that prevented Angle values from reaching Property targets. Property targets now accept Scalar and Angle values, while SymbolFrame/FrameRange remain Scalar and GeometryDeform remains Vector2. Authored additive Property bases can be Scalar or Angle; composition enforces exact compatibility.
+
+An end-to-end evaluator-plus-composition test now verifies Angle property output. Its first run caught a +π normalization boundary issue in wrapped weighted-angle composition; the output is now normalized to [-π, π).
+
+Final verified commit: `f08185f043141ac3f476bd2301dbcabd72d9bebb`. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44931731464 passed: 153 workspace Rust tests; Bun typecheck, tests (9/9), build; and release WASM builds for bone-query, form-deform and smart-controller. Rustfmt and Clippy were not run. Phase 4 remains a pure core post-pass, with no host mutation and no composition with Form Deform pin outputs. No PR or merge has been created.
