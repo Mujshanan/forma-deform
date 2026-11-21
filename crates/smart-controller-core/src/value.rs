@@ -178,4 +178,25 @@ impl TypedValue {
             _ => None,
         }
     }
+
+    /// Interpolate values without coercing between scalar, vector and angle types.
+    /// The interpolation amount is clamped to [0, 1].
+    pub fn interpolate(self, other: Self, amount: f64) -> Result<Self, CoreError> {
+        if !amount.is_finite() {
+            return Err(CoreError::NonFiniteValue { context: "typed-value interpolation amount" });
+        }
+        let t = amount.clamp(0.0, 1.0);
+        match (self, other) {
+            (Self::Scalar(from), Self::Scalar(to)) =>
+                Self::scalar(from.get() * (1.0 - t) + to.get() * t),
+            (Self::Vector2(from), Self::Vector2(to)) =>
+                Self::vector2(from.x() * (1.0 - t) + to.x() * t, from.y() * (1.0 - t) + to.y() * t),
+            (Self::Angle(from), Self::Angle(to)) =>
+                Ok(Self::Angle(from.interpolate(to, t)?)),
+            (left, right) => Err(CoreError::InvalidMapping(format!(
+                "cannot interpolate {} with {}",
+                left.kind_name(), right.kind_name()
+            ))),
+        }
+    }
 }
