@@ -1,12 +1,12 @@
 # Unified Smart Controllers — Architecture and Implementation Plan
 
-**Status:** Phase 4 implementation in progress — target composition and conflict handling  
+**Status:** Phase 4 complete; Phase 5 adapter integration started  
 **Target repository:** `Mujshanan/forma-deform`  
 **Branch:** `feat/smart-controller-phase3-evaluator`  
 **Core:** `smart-controller-core`  
 **Host adapter:** `plugins/smart-controller`  
 **Scope:** Architecture, implementation sequence and file-level build order  
-**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI at `c83182d`. Phase 4 composition implementation is in progress on the branch above; initial implementation CI passed at `ccc31ca7`.
+**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI. Phase 4 composition is complete and verified at `f08185f043141ac3f476bd2301dbcabd72d9bebb`; final CI run: https://github.com/Mujshanan/forma-deform/actions/runs/44931731464. Phase 5 host-adapter foundations are now being implemented on the branch above.
 
 ---
 
@@ -650,3 +650,28 @@ Added an end-to-end `evaluate_and_compose` regression test proving an Angle valu
 **Final verification:** 153 workspace Rust tests passed; Bun typecheck, Bun tests (9/9), Bun build, and release WASM builds for bone-query, form-deform, and smart-controller all passed. The workflow completed successfully. Rustfmt and Clippy are not included in this workflow and are not claimed as passing.
 
 Phase 4 remains core-only. No host state is mutated; no Smart Controller contribution is combined with Form Deform pin-deformation output; V1 remains preview-only. No PR or merge has been created.
+
+
+## 16. Phase 4 completion record
+
+Phase 4 is complete at `f08185f043141ac3f476bd2301dbcabd72d9bebb`.
+
+- Deterministic composition post-pass for Replace, Additive, WeightedBlend and PriorityOverride.
+- Explicit additive bases, positive-weight normalization, zero-eligible diagnostics, priority tie-breaking and typed conflicts.
+- Target-specific typed-value acceptance, including Scalar/Angle Property outputs and Vector2 GeometryDeform outputs.
+- Wrapped weighted-angle outputs normalized to the documented half-open interval.
+- End-to-end evaluator-plus-composition coverage.
+- CI run https://github.com/Mujshanan/forma-deform/actions/runs/44931731464 passed: 153 workspace Rust tests, Bun typecheck, 9/9 Bun tests, Bun build and all three release WASM plugin builds.
+- Rustfmt/Clippy were not part of this run. No PR or merge was created.
+- Composition remains a pure core operation. It does not mutate the host or combine Smart Controller output with Form Deform pin evaluation.
+
+## 17. Phase 5 adapter integration — started, not complete
+
+Initial adapter foundations are being added:
+
+- `plugins/smart-controller/src/adapter.rs`: parses the verified read-only `bone.info` response by stable numeric bone ID; converts degrees to radians; makes spring-swing inclusion and wrapped/unwrapped angle semantics explicit; produces same-invocation input samples without reading a clock.
+- `plugins/smart-controller/src/targets.rs`: assesses host target capabilities without issuing commands. Geometry pin application is marked command-preview-only (`warp.info` / `warp.pin_move`); symbol-frame, frame-range and generic property targets remain calculation-only.
+- `plugins/smart-controller/src/compatibility.rs`: delegates legacy BindingSet and unversioned Params decoding/migration to the core migration API and preserves MigrationReport.
+- The plugin entry point registers these modules; its existing V1 Slider preview path is unchanged.
+
+**Important remaining work:** Phase 5 is not complete. The adapter still needs full request orchestration, canonical evaluation wiring, target-specific preview planning, adapter-level compatibility regression tests, and documentation reconciliation. The Phase 2 concrete pose/joystick mapper remains a separate prerequisite for general canonical mapping; this increment must not pretend the injected evaluator mapper is a complete production mapper. No mutating target command, playback hook, durable metadata API or Form Deform composition is introduced.
