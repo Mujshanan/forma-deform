@@ -10,7 +10,7 @@ impl ThreePointRange {
         let lower_span = neutral.get() - minimum.get();
         let upper_span = maximum.get() - neutral.get();
         if !lower_span.is_finite() || !upper_span.is_finite() || lower_span <= 0.0 || upper_span <= 0.0 {
-            return Err(CoreError::InvalidMapping("three-point range must be strictly ordered".into()));
+            return Err(CoreError::InvalidMapping("three-point range must be strictly ordered with finite spans".into()));
         }
         Ok(Self { minimum, neutral, maximum })
     }
@@ -18,10 +18,13 @@ impl ThreePointRange {
     /// Clamps to the authored range and maps minimum/neutral/maximum to -1/0/1.
     pub fn normalize_signed(self, input: f64) -> Result<f64, CoreError> {
         if !input.is_finite() { return Err(CoreError::NonFiniteValue { context: "range input" }); }
-        let min = self.minimum.get(); let mid = self.neutral.get(); let max = self.maximum.get();
+        let min = self.minimum.get();
+        let mid = self.neutral.get();
+        let max = self.maximum.get();
         let x = input.clamp(min, max);
-        let result = if x <= mid { (x-mid)/(mid-min) } else { (x-mid)/(max-mid) };
-        if result.is_finite() { Ok(result) } else { Err(CoreError::InvalidMapping("range normalization overflow".into())) }
+        let result = if x <= mid { (x - mid) / (mid - min) } else { (x - mid) / (max - mid) };
+        if result.is_finite() { Ok(result) }
+        else { Err(CoreError::InvalidMapping("range normalization overflow".into())) }
     }
 }
 
@@ -30,8 +33,12 @@ pub fn normalize_directed(input: f64, start: f64, end: f64) -> Result<f64, CoreE
     if !input.is_finite() || !start.is_finite() || !end.is_finite() || start == end {
         return Err(CoreError::InvalidMapping("input and distinct endpoints must be finite".into()));
     }
+    let span = end - start;
+    if !span.is_finite() {
+        return Err(CoreError::InvalidMapping("directed interval span overflow".into()));
+    }
     let clamped = input.clamp(start.min(end), start.max(end));
-    let value = (clamped-start)/(end-start);
-    if value.is_finite() { Ok(value.clamp(0.0,1.0)) }
+    let value = (clamped - start) / span;
+    if value.is_finite() { Ok(value.clamp(0.0, 1.0)) }
     else { Err(CoreError::InvalidMapping("directed normalization overflow".into())) }
 }
