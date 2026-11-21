@@ -522,3 +522,20 @@ Implemented the first four Phase 1 responsibilities without replacing the existi
 **Verification:** The Phase 0 results were supplied for base commit `17e58fd`. The newly added Phase 1 foundation tests have not yet been run with Cargo in this implementation environment. Do not treat this increment as test-passing until `cargo test -p smart-controller-core` and the workspace checks are rerun on this branch.
 
 **Next Phase 1 work:** add canonical model/schema and conversion tests before replacing competing models; then implement the diagnostic registry, migration and pure scalar/range/frame mapping in the approved order.
+
+
+### 11.2 Canonical contracts increment (implementation in progress)
+
+Added without removing the V1 Params or legacy.rs APIs:
+
+- canonical.rs: one host-independent controller shape with input references, dependency references, mapping configuration variants, bindings, enabled state and a parent-scoped marker. Local validation rejects malformed ranges, duplicate binding IDs, invalid joystick pose IDs and additive bindings without an explicit base.
+- graph.rs: validated graph storage, missing-dependency checks, shared-node parent-scope rejection, cycle detection and deterministic topological order with canonical ID tie-breaking.
+- schema.rs: explicit smart-controller schema identity and version-1 envelope.
+- diagnostic_codes.rs plus tests/fixtures/diagnostic_codes_v1.json: initial stable diagnostic code registry.
+- contribution.rs: typed contribution shape and mode-specific field validation. Composition execution remains Phase 4.
+- mapping/range.rs, mapping/easing.rs, mapping/frame.rs: pure range/easing/frame primitives. Existing mapping.rs functions remain intact for compatibility.
+- Tests added: diagnostic registry fixture, graph ordering/invalid graph, range/frame/easing, schema identity and contribution field invariants.
+
+**Important incomplete work:** No legacy BindingSet/Params migration registry or loss-reporting converters have been implemented yet. Canonical model serialization dispatch and golden canonical model round-trip coverage are also outstanding. The canonical types are additive alongside the legacy models; the competing APIs have deliberately not yet been replaced.
+
+**Execution:** No Phase 1 Cargo tests have been run in this environment. Treat every newly authored test as pending until CI or a Rust toolchain executes them. Phase 1 exit is not met.
