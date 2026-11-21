@@ -72,3 +72,14 @@ impl ControllerGraph {
         Ok(ordered)
     }
 }
+
+
+#[cfg(test)]
+impl ControllerGraph {
+    /// Construct an intentionally invalid graph for evaluator cycle-defence tests.
+    pub(crate) fn from_unchecked_for_test(controllers: Vec<Controller>) -> Self {
+        Self {
+            nodes: controllers.into_iter().map(|controller| (controller.id.clone(), controller)).collect(),
+        }
+    }
+}
