@@ -3,12 +3,9 @@
 //! Triangles are authored as vertex indices; this module does not silently
 //! generate or reorder topology. Point selection and interpolation are pure
 //! and deterministic. A point on a shared edge is resolved by canonical
-//! sorted triangle-index order.
-use crate::{
-    error::CoreError,
-    pose::Pose2D,
-    value::Vector2,
-};
+//! sorted triangle-index order. Overlapping triangles that produce different
+//! poses are rejected as ambiguous.
+use crate::{error::CoreError, pose::Pose2D, value::Vector2};
 use super::interpolation::interpolate_weighted_poses;
 
 const BARYCENTRIC_EPSILON: f64 = 1.0e-10;
@@ -25,15 +22,10 @@ pub enum MeshBoundaryPolicy {
 
 /// Three indices into a TriangulatedMapping's vertex array.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Triangle {
-    pub vertices: [usize; 3],
-}
+pub struct Triangle { pub vertices: [usize; 3] }
 
 impl Triangle {
-    pub const fn new(a: usize, b: usize, c: usize) -> Self {
-        Self { vertices: [a, b, c] }
-    }
-
+    pub const fn new(a: usize, b: usize, c: usize) -> Self { Self { vertices: [a, b, c] } }
     fn canonical_key(self) -> [usize; 3] {
         let mut key = self.vertices;
         key.sort_unstable();
@@ -47,11 +39,8 @@ pub struct TriangulatedPose {
     pub position: Vector2,
     pub pose: Pose2D,
 }
-
 impl TriangulatedPose {
-    pub fn new(position: Vector2, pose: Pose2D) -> Self {
-        Self { position, pose }
-    }
+    pub fn new(position: Vector2, pose: Pose2D) -> Self { Self { position, pose } }
 }
 
 /// A validated, host-independent piecewise-linear pose field.
@@ -72,9 +61,7 @@ impl TriangulatedMapping {
             return Err(CoreError::InvalidMapping("triangulated mapping requires at least three vertices and one triangle".into()));
         }
         let first_pose = &vertices[0].pose;
-        for vertex in vertices.iter().skip(1) {
-            first_pose.validate_compatible(&vertex.pose)?;
-        }
+        for vertex in vertices.iter().skip(1) { first_pose.validate_compatible(&vertex.pose)?; }
 
         for i in 0..vertices.len() {
             for j in (i + 1)..vertices.len() {
@@ -103,11 +90,10 @@ impl TriangulatedMapping {
             let bc = distance_squared(vertices[b].position, vertices[c].position);
             let ca = distance_squared(vertices[c].position, vertices[a].position);
             let scale = ab.max(bc).max(ca);
-            if scale == 0.0 || area <= DEGENERACY_RELATIVE_EPSILON * scale {
+            if !area.is_finite() || scale == 0.0 || area <= DEGENERACY_RELATIVE_EPSILON * scale {
                 return Err(CoreError::InvalidMapping("triangle is degenerate or numerically ill-conditioned".into()));
             }
         }
-
         Ok(Self { vertices, triangles, boundary })
     }
 
@@ -116,48 +102,44 @@ impl TriangulatedMapping {
     pub fn boundary_policy(&self) -> MeshBoundaryPolicy { self.boundary }
 
     pub fn evaluate(&self, point: Vector2) -> Result<Pose2D, CoreError> {
-        let mut candidates: Vec<( [usize; 3], [f64; 3] )> = Vec::new();
-        for triangle in &self.triangles {
-            let weights = self.barycentric(point, *triangle);
-            if weights.iter().all(|weight| *weight >= -BARYCENTRIC_EPSILON) {
-                candidates.push((triangle.canonical_key(), normalize_weights(weights)?));
-            }
-        }
-
+        let mut candidates = self.containing_triangles(point);
         if candidates.is_empty() {
             if self.boundary == MeshBoundaryPolicy::Reject {
                 return Err(CoreError::InvalidMapping("query point lies outside the triangulated pose mesh".into()));
             }
             let projected = self.closest_mesh_point(point)?;
-            for triangle in &self.triangles {
-                let weights = self.barycentric(projected, *triangle);
-                if weights.iter().all(|weight| *weight >= -BARYCENTRIC_EPSILON) {
-                    candidates.push((triangle.canonical_key(), normalize_weights(weights)?));
-                }
+            candidates = self.containing_triangles(projected);
+        }
+        candidates.sort_by_key(|(key, _, _)| *key);
+
+        let mut outputs = candidates.into_iter().map(|(_, triangle, weights)| {
+            self.interpolate_triangle(triangle, weights)
+        });
+        let first = outputs.next()
+            .ok_or_else(|| CoreError::InvalidMapping("triangulated mesh has no containing triangle".into()))??;
+        for output in outputs {
+            let output = output?;
+            if output != first {
+                return Err(CoreError::InvalidMapping("query point is covered by overlapping triangles with different pose results".into()));
             }
         }
-        candidates.sort_by_key(|(key, _)| *key);
-        let (_, weights) = candidates.into_iter().next()
-            .ok_or_else(|| CoreError::InvalidMapping("triangulated mesh has no containing triangle".into()))?;
-        let triangle = self.triangles.iter()
-            .find(|triangle| triangle.canonical_key() == self.triangles_key_for_weights_placeholder())
-            ;
-        let _ = triangle;
-        self.interpolate_triangle(point, weights)
+        Ok(first)
     }
 
-    fn triangles_key_for_weights_placeholder(&self) -> [usize; 3] { [usize::MAX; 3] }
+    fn containing_triangles(&self, point: Vector2) -> Vec<([usize; 3], Triangle, [f64; 3])> {
+        self.triangles.iter().copied().filter_map(|triangle| {
+            let weights = self.barycentric(point, triangle);
+            if weights.iter().all(|weight| *weight >= -BARYCENTRIC_EPSILON) {
+                normalize_weights(weights).ok().map(|weights| (triangle.canonical_key(), triangle, weights))
+            } else { None }
+        }).collect()
+    }
 
-    fn interpolate_triangle(&self, _point: Vector2, weights: [f64; 3]) -> Result<Pose2D, CoreError> {
-        // Triangle ordering is canonicalized before interpolation so results do
-        // not depend on the order in which triangles were authored.
-        let mut selected: Vec<(usize, f64)> = Vec::new();
-        // The containing triangle is recovered from the canonical candidate
-        // selected by evaluate; this helper is replaced below by evaluate's
-        // selected triangle tuple.
-        let _ = &mut selected;
-        let _ = weights;
-        Err(CoreError::InvalidMapping("internal triangulation selection error".into()))
+    fn interpolate_triangle(&self, triangle: Triangle, weights: [f64; 3]) -> Result<Pose2D, CoreError> {
+        let mut entries = triangle.vertices.into_iter().zip(weights).collect::<Vec<_>>();
+        entries.sort_by_key(|(index, _)| *index);
+        let samples = entries.iter().map(|(index, weight)| (&self.vertices[*index].pose, *weight)).collect::<Vec<_>>();
+        interpolate_weighted_poses(&samples)
     }
 
     fn barycentric(&self, point: Vector2, triangle: Triangle) -> [f64; 3] {
@@ -186,7 +168,7 @@ impl TriangulatedMapping {
             let b = self.vertices[edge[1]].position;
             let projected = closest_point_on_segment(point, a, b)?;
             let distance = distance_squared(point, projected);
-            if best.as_ref().is_none_or(|(best_distance, best_edge, _)| {
+            if best.as_ref().map_or(true, |(best_distance, best_edge, _)| {
                 distance < *best_distance || (distance == *best_distance && edge < *best_edge)
             }) {
                 best = Some((distance, edge, projected));
