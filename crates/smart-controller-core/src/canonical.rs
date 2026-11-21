@@ -104,7 +104,7 @@ impl Controller {
                     return Err(CoreError::InvalidModel("symbol frame target requires an identity".into())),
                 TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, neutral_offset, positive_offset } => {
                     if element_id.trim().is_empty() || pin_id.trim().is_empty() ||
-                        [negative_offset, neutral_offset, positive_offset].iter().flatten().any(|v| !v.is_finite()) {
+                        negative_offset.iter().chain(neutral_offset.iter()).chain(positive_offset.iter()).any(|v| !v.is_finite()) {
                         return Err(CoreError::InvalidModel("geometry target identity and anchors must be valid".into()));
                     }
                 }
