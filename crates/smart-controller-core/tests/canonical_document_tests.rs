@@ -121,3 +121,22 @@ fn explicit_binding_composition_configuration_is_validated_by_mode() {
     neutral_additive.bindings[0].composition.as_mut().unwrap().base_ref = None;
     assert!(neutral_additive.validate_local().is_err());
 }
+
+#[test]
+fn optional_composition_config_round_trips_and_old_documents_still_deserialize() {
+    let mut current = document(true, true);
+    current.controllers[0].bindings[0].composition = Some(CompositionConfig {
+        mode: CompositionMode::WeightedBlend,
+        weight: Some(0.5),
+        priority: None,
+        base_ref: None,
+    });
+    let json = current.to_json().unwrap();
+    let decoded = CanonicalDocument::from_json(&json).unwrap();
+    assert_eq!(decoded, current);
+
+    let mut old_json: serde_json::Value = serde_json::from_str(&json).unwrap();
+    old_json["controllers"][0]["bindings"][0].as_object_mut().unwrap().remove("composition");
+    let decoded_old = CanonicalDocument::from_json(&serde_json::to_string(&old_json).unwrap()).unwrap();
+    assert!(decoded_old.controllers[0].bindings[0].composition.is_none());
+}
