@@ -384,9 +384,13 @@ pub fn evaluate<M: ControllerMapper>(
                 continue;
             }
 
-            let (mode, base_ref) = match binding.mode {
-                BindingMode::AbsolutePose => (CompositionMode::Replace, None),
-                BindingMode::RelativeDelta => (CompositionMode::Additive, Some(BaseRef::Authored)),
+            let (mode, weight, priority, base_ref) = if let Some(config) = &binding.composition {
+                (config.mode, config.weight, config.priority, config.base_ref.clone())
+            } else {
+                match binding.mode {
+                    BindingMode::AbsolutePose => (CompositionMode::Replace, None, None, None),
+                    BindingMode::RelativeDelta => (CompositionMode::Additive, None, None, Some(BaseRef::Authored)),
+                }
             };
             let contribution = Contribution {
                 controller_id: controller_id.clone(),
@@ -394,10 +398,10 @@ pub fn evaluate<M: ControllerMapper>(
                 target_id: binding.target_id.clone(),
                 value,
                 mode,
-                weight: None,
-                priority: None,
+                weight,
+                priority,
                 base_ref,
-                base_value: if mode == CompositionMode::Additive { binding.base_value } else { None },
+                base_value: if mode == CompositionMode::Additive && matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)) || (binding.composition.is_none() && mode == CompositionMode::Additive) { binding.base_value } else { None },
             };
             contribution.validate()?;
             outputs.insert((controller_id.clone(), binding.id.clone()), value);
