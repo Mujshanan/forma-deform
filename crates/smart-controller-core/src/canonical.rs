@@ -111,12 +111,12 @@ impl Controller {
         }
         match &self.mapping {
             MappingConfig::Range1D { minimum, neutral, maximum } => {
-                if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || minimum >= neutral || neutral >= maximum {
+                if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || !(*neutral - *minimum).is_finite() || !(*maximum - *neutral).is_finite() || minimum >= neutral || neutral >= maximum {
                     return Err(CoreError::InvalidMapping("Range1D endpoints must be finite and strictly ordered".into()));
                 }
             }
             MappingConfig::DirectedRange1D { start, end } => {
-                if !start.is_finite() || !end.is_finite() || start == end {
+                if !start.is_finite() || !end.is_finite() || !(*end - *start).is_finite() || start == end {
                     return Err(CoreError::InvalidMapping("DirectedRange1D endpoints must be distinct and finite".into()));
                 }
             }
