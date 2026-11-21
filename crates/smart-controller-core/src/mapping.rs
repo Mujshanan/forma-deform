@@ -1,3 +1,7 @@
+pub mod easing;
+pub mod frame;
+pub mod range;
+
 use crate::model::EndpointPolicy;
 
 /// Normalize a signed driver angle into [0, 1]. Reversed endpoints are valid.
