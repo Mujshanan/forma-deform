@@ -1,3 +1,4 @@
+pub mod advanced;
 pub mod easing;
 pub mod frame;
 pub mod range;
