@@ -685,4 +685,18 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(binding, original);
     }
+    #[test]
+    fn shared_vec2_preserves_public_paths_and_serde_shape() {
+        let legacy_path_value = Vec2 { x: 3.5, y: -2.0 };
+        let root_path_value: crate::Vec2 = legacy_path_value;
+        assert_eq!(root_path_value, legacy_path_value);
+
+        let serialized = serde_json::to_value(legacy_path_value).unwrap();
+        assert_eq!(serialized, serde_json::json!({ "x": 3.5, "y": -2.0 }));
+        assert_eq!(
+            serde_json::from_value::<Vec2>(serialized).unwrap(),
+            legacy_path_value
+        );
+    }
+
 }
