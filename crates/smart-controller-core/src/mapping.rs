@@ -34,3 +34,54 @@ pub fn transform_value(normalized: f64, scale: f64, additive: bool) -> Result<f6
     let _ = additive; // retained in the V2 contract; application semantics belong to its adapter.
     Ok(value)
 }
+
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn rotation_normalization_clamps_and_preserves_reversed_ranges() {
+        assert_eq!(normalize_rotation(-90.0, -45.0, 45.0).unwrap(), 0.0);
+        assert_eq!(normalize_rotation(90.0, -45.0, 45.0).unwrap(), 1.0);
+        assert_eq!(normalize_rotation(0.0, 45.0, -45.0).unwrap(), 0.5);
+        assert_eq!(normalize_rotation(45.0, 45.0, -45.0).unwrap(), 0.0);
+        assert_eq!(normalize_rotation(-45.0, 45.0, -45.0).unwrap(), 1.0);
+    }
+
+    #[test]
+    fn rotation_normalization_rejects_non_finite_and_degenerate_ranges() {
+        assert!(normalize_rotation(f64::NAN, -1.0, 1.0).is_err());
+        assert!(normalize_rotation(0.0, f64::INFINITY, 1.0).is_err());
+        assert!(normalize_rotation(0.0, 1.0, 1.0).is_err());
+    }
+
+    #[test]
+    fn frame_mapping_preserves_exclusive_and_inclusive_endpoints() {
+        assert_eq!(map_to_frame(0.0, 10, 20, EndpointPolicy::Exclusive), 10);
+        assert_eq!(map_to_frame(1.0, 10, 20, EndpointPolicy::Exclusive), 19);
+        assert_eq!(map_to_frame(0.0, 10, 20, EndpointPolicy::Inclusive), 10);
+        assert_eq!(map_to_frame(1.0, 10, 20, EndpointPolicy::Inclusive), 20);
+        assert_eq!(map_to_frame(0.5, 10, 20, EndpointPolicy::Inclusive), 15);
+    }
+
+    #[test]
+    fn frame_mapping_clamps_and_handles_degenerate_intervals() {
+        assert_eq!(map_to_frame(-1.0, 10, 20, EndpointPolicy::Inclusive), 10);
+        assert_eq!(map_to_frame(2.0, 10, 20, EndpointPolicy::Inclusive), 20);
+        assert_eq!(map_to_frame(0.75, 12, 12, EndpointPolicy::Exclusive), 12);
+    }
+
+    #[test]
+    fn transform_additive_flag_retains_current_non_composing_behavior() {
+        assert_eq!(transform_value(0.25, 8.0, false).unwrap(), 2.0);
+        assert_eq!(transform_value(0.25, 8.0, true).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn transform_rejects_non_finite_inputs_and_preserves_finite_extremes() {
+        assert!(transform_value(f64::NAN, 1.0, false).is_err());
+        assert!(transform_value(0.5, f64::INFINITY, false).is_err());
+        assert!(transform_value(1.0, f64::MAX, false).is_ok());
+    }
+}
