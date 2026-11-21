@@ -5,6 +5,8 @@
 //! host's command-dialog preview/undo transaction to be invoked by a later,
 //! separately reviewed integration.
 
+use anicraft_plugin_sdk as ac;
+use serde_json::Value;
 use smart_controller_core::TargetMapping;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +26,43 @@ pub struct TargetCapability {
     pub read_command: Option<&'static str>,
     pub apply_command: Option<&'static str>,
     pub explanation: &'static str,
+}
+
+
+/// Query the documented read-only warp.info endpoint for one numeric element ID.
+pub fn query_geometry_info(element_id: &str, frame: Option<u32>) -> Result<Value, String> {
+    let element = element_id.parse::<u64>()
+        .map_err(|_| format!("element ID '{element_id}' is not a numeric host element ID"))?;
+    let mut params = serde_json::Map::new();
+    params.insert("element".into(), Value::from(element));
+    if let Some(frame) = frame {
+        params.insert("frame".into(), Value::from(frame));
+    }
+    ac::command("warp.info", Value::Object(params))
+}
+
+/// Verify that a canonical geometry target resolves to the exact host pin.
+/// IDs are numeric host identities, never array positions or selection indices.
+pub fn verify_geometry_pin(
+    response: &Value,
+    element_id: &str,
+    pin_id: &str,
+) -> Result<(), String> {
+    let expected_element = element_id.parse::<u64>()
+        .map_err(|_| format!("element ID '{element_id}' is not numeric"))?;
+    let expected_pin = pin_id.parse::<u64>()
+        .map_err(|_| format!("pin ID '{pin_id}' is not numeric"))?;
+    let actual_element = response.get("element").and_then(Value::as_u64)
+        .ok_or("warp.info response is missing numeric element ID")?;
+    if actual_element != expected_element {
+        return Err(format!("warp.info returned element {actual_element}, expected {expected_element}"));
+    }
+    let pins = response.get("pins").and_then(Value::as_array)
+        .ok_or("warp.info response is missing pins")?;
+    if !pins.iter().any(|pin| pin.get("id").and_then(Value::as_u64) == Some(expected_pin)) {
+        return Err(format!("pin ID {expected_pin} was not found on element {expected_element}"));
+    }
+    Ok(())
 }
 
 /// Resolve target identity and its verified capability boundary without
@@ -64,6 +103,21 @@ pub fn assess_target(target: &TargetMapping) -> TargetCapability {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn geometry_pin_identity_is_verified_by_host_ids_not_array_position() {
+        let response = serde_json::json!({"element":17,"pins":[{"id":90,"at":[1.0,2.0]},{"id":12,"at":[3.0,4.0]}]});
+        assert!(verify_geometry_pin(&response, "17", "12").is_ok());
+        assert!(verify_geometry_pin(&response, "17", "1").is_err());
+        assert!(verify_geometry_pin(&response, "18", "12").is_err());
+    }
+
+    #[test]
+    fn malformed_geometry_identity_fails_closed() {
+        assert!(verify_geometry_pin(&serde_json::json!({"pins":[]}), "17", "12").is_err());
+        assert!(verify_geometry_pin(&serde_json::json!({"element":17,"pins":[]}), "17", "not-a-pin").is_err());
+    }
 
     #[test]
     fn symbol_frame_is_calculation_only() {
