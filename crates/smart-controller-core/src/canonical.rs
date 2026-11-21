@@ -26,7 +26,7 @@ pub enum EasingConfig { Linear, Smoothstep }
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TargetMapping {
     SymbolFrame { symbol_instance_id: String, negative_frame: u32, neutral_frame: u32, positive_frame: u32 },
-    FrameRange { action_layer_id: u64, start_frame: u32, end_frame: u32, endpoint_policy: EndpointPolicy },
+    FrameRange { action_layer_id: u64, start_frame: u32, end_frame: u32, endpoint_policy: Option<EndpointPolicy> },
     GeometryDeform { element_id: String, pin_id: String, negative_offset: [f64; 2], neutral_offset: [f64; 2], positive_offset: [f64; 2] },
     Property { target_id: String, property: String, scale: f64, additive: bool },
 }
