@@ -1,5 +1,5 @@
 //! Pure frame mapping; endpoint semantics match the characterized V1 policies.
-use crate::{error::CoreError, model::EndpointPolicy};
+use crate::{endpoint::EndpointPolicy, error::CoreError};
 
 pub fn map_to_frame(normalized: f64, start: u32, end: u32, policy: EndpointPolicy) -> Result<u32, CoreError> {
     if end < start {
