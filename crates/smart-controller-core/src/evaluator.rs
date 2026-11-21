@@ -688,7 +688,7 @@ mod tests {
         let result = evaluate(
             &graph,
             &definitions,
-            &InputSnapshot::new(0, vec![]).unwrap(),
+            &snapshot("input-a", 0.0),
             &mapper,
         ).unwrap();
         assert!(result.contributions.is_empty());
