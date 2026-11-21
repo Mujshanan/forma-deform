@@ -46,3 +46,10 @@ fn contribution_requires_mode_specific_fields() {
     priority.priority = Some(10);
     assert!(priority.validate().is_ok());
 }
+
+#[test]
+fn contribution_rejects_empty_input_base_reference() {
+    let mut additive = contribution(CompositionMode::Additive);
+    additive.base_ref = Some(BaseRef::Input("  ".into()));
+    assert!(additive.validate().is_err());
+}
