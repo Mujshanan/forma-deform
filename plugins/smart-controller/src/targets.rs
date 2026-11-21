@@ -7,7 +7,7 @@
 
 use anicraft_plugin_sdk as ac;
 use serde_json::Value;
-use smart_controller_core::TargetMapping;
+use smart_controller_core::canonical::TargetMapping;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetCapabilityStatus {
