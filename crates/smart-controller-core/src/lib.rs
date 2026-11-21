@@ -17,10 +17,12 @@ pub mod schema;
 pub mod validation;
 pub mod value;
 
+pub use diagnostic_codes::{Diagnostic, DiagnosticSeverity};
 pub use error::CoreError;
 pub use ids::{BindingId, ControllerId, InputId, TargetId};
 pub use input::{BoneTransformChannel, FallbackPolicy, Freshness, InputDefinition, InputDimension, InputSample, InputSnapshot, InputSource, InputValidity};
 pub use legacy::*;
 pub use model::{EndpointPolicy, Mode, Params};
+pub use pose::Pose2D;
 pub use preview::{PreviewOutput, preview_slider, preview_transform};
 pub use value::{Angle, Scalar, TypedValue, Vector2};
