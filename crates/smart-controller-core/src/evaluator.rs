@@ -272,7 +272,13 @@ pub fn evaluate<M: ControllerMapper>(
                             )?);
                             Some(*value)
                         }
-                        FallbackPolicy::Unavailable | FallbackPolicy::Reject => None,
+                        FallbackPolicy::Unavailable => None,
+                        FallbackPolicy::Reject => {
+                            return Err(CoreError::MissingInput(format!(
+                                "controller output {}:{} for input {}",
+                                producer, binding_id, input_id
+                            )));
+                        }
                     }
                 }
             } else {
@@ -315,11 +321,11 @@ pub fn evaluate<M: ControllerMapper>(
 
         let mapped = match mapper.evaluate(controller, &resolved_inputs) {
             Ok(values) => values,
-            Err(CoreError::InvalidMapping(message)) => {
+            Err(error) if is_controller_mapping_failure(&error) => {
                 result.diagnostics.push(diagnostic(
                     crate::diagnostic_codes::MAPPING_DOMAIN,
                     DiagnosticSeverity::Error,
-                    message,
+                    error.to_string(),
                     Some(controller_id.clone()),
                     None,
                 )?);
@@ -450,6 +456,13 @@ fn fallback_or_reject(
         FallbackPolicy::Unavailable => Ok((None, Some((code, message)))),
         FallbackPolicy::Reject => Err(error),
     }
+}
+
+fn is_controller_mapping_failure(error: &CoreError) -> bool {
+    matches!(
+        error,
+        CoreError::InvalidMapping(_) | CoreError::NonFiniteValue { .. }
+    )
 }
 
 fn apply_fallback(policy: &FallbackPolicy) -> Option<TypedValue> {
