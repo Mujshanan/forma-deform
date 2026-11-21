@@ -99,6 +99,22 @@ fn legacy_geometry_relative_delta_and_smoothstep_outputs_are_characterized() {
         panic!("expected geometry preview at positive midpoint");
     };
     assert_eq!(offset, Vec2 { x: 4.0, y: 2.0 });
+
+    // The same authored anchors in AbsolutePose mode return the absolute
+    // positive anchor rather than subtracting the neutral anchor.
+    let mut absolute = binding.clone();
+    absolute.mode = ControllerMode::AbsolutePose;
+    let Some(PreviewResult::GeometryDeform { offset, .. }) =
+        absolute.evaluate(45.0).unwrap()
+    else {
+        panic!("expected absolute geometry preview");
+    };
+    assert_eq!(offset, Vec2 { x: 9.0, y: 5.0 });
+
+    // Disabled legacy bindings intentionally produce no preview output.
+    let mut disabled = binding.clone();
+    disabled.enabled = false;
+    assert_eq!(disabled.evaluate(0.0).unwrap(), None);
 }
 
 #[test]
@@ -119,6 +135,13 @@ fn host_driven_slider_fixture_deserializes_validates_and_preserves_preview() {
     assert_close(output.normalized, 0.75);
     assert_eq!(output.output_frame, Some(7));
     assert_eq!(output.output_value, None);
+
+    let original_json: serde_json::Value =
+        serde_json::from_str(HOST_PARAMS).expect("fixture must be valid JSON");
+    let encoded = serde_json::to_string(&params).expect("Params must serialize");
+    let round_trip_json: serde_json::Value =
+        serde_json::from_str(&encoded).expect("serialized Params must be valid JSON");
+    assert_eq!(round_trip_json, original_json);
 }
 
 #[test]
