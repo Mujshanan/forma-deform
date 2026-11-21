@@ -233,7 +233,9 @@ Create or adapt files in this order:
 | 1.18 | `crates/smart-controller-core/tests/migration_roundtrip_tests.rs` | Fixture → canonical → legacy-compatible round trips where lossless; assert diagnostics for lossy conversions. |
 | 1.19 | `crates/smart-controller-core/tests/diagnostic_registry_tests.rs` | Validate unique stable codes and exact registry fixture coverage. |
 | 1.20 | `crates/smart-controller-core/tests/angle_interpolation_tests.rs` | Wrapped shortest-path, unwrapped linear, antipodal tie and additive-angle semantics. |
-| 1.21 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping V1 regression tests. |\n| 1.22 | `crates/smart-controller-core/src/contribution.rs` | Public typed Contribution record and mode-specific field invariants; composition execution remains Phase 4. |\n| 1.23 | `crates/smart-controller-core/tests/dependency_boundary_tests.rs` | Verify Smart Controller core and Form Deform core remain mutually independent. |
+| 1.21 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping V1 regression tests. |
+| 1.22 | `crates/smart-controller-core/src/contribution.rs` | Public typed Contribution record and mode-specific field invariants; composition execution remains Phase 4. |
+| 1.23 | `crates/smart-controller-core/tests/dependency_boundary_tests.rs` | Verify Smart Controller core and Form Deform core remain mutually independent. |
 
 **Phase 1 exit:** One authoritative model represents all controller behaviours, scalar/2D inputs, nested dependencies and multiple bindings. Schema, migration, diagnostic codes, contribution shape and pure scalar/frame mapping are explicit and covered by compatibility tests.
 
@@ -311,7 +313,9 @@ Potential core additions, only when justified:
 | 6.4 | Host-supported authoring/UI files (Phase 6B only) | Controller editing, pose capture, hierarchy, bindings, diagnostics and preview visualization; contingent on a separate host-capability audit and verified APIs. |
 | 6.5 | `docs/SMART_CONTROLLERS_USER_GUIDE.md` (Phase 6B only) | Animator-facing guide and examples after a verified authoring workflow exists. |
 
-**Phase 6A exit:** Core triangulated/grid mapping is independently tested and host-independent.\n\n**Phase 6B exit:** Only after a separate host-capability audit, animators can author, inspect and reuse controllers through a verified host-supported workflow.
+**Phase 6A exit:** Core triangulated/grid mapping is independently tested and host-independent.
+
+**Phase 6B exit:** Only after a separate host-capability audit, animators can author, inspect and reuse controllers through a verified host-supported workflow.
 
 ## 6. Test and verification policy
 
