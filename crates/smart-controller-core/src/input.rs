@@ -85,6 +85,11 @@ pub struct InputDefinition {
 
 impl InputDefinition {
     pub fn validate(&self) -> Result<(), CoreError> {
+        if let InputSource::LegacyScalar { source_id } = &self.source {
+            if source_id.trim().is_empty() {
+                return Err(CoreError::InvalidModel("legacy scalar input requires a non-empty source_id".into()));
+            }
+        }
         if let InputSource::BoneTransform { bone_id, channel } = &self.source {
             if bone_id.trim().is_empty() {
                 return Err(CoreError::InvalidModel(
