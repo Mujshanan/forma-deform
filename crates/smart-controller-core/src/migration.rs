@@ -194,8 +194,8 @@ pub fn migrate_unversioned_params(source: &Params) -> Result<MigrationOutput, Co
         (InputSource::Manual, FallbackPolicy::UseValue(TypedValue::scalar(value)?))
     } else {
         let bone_id = match (source.driver_layer_id, source.driver_bone_name.as_deref()) {
-            (Some(layer), Some(name)) => format!("layer:{layer}/bone:{name}"),
-            (_, Some(name)) => name.to_owned(),
+            (Some(layer), Some(name)) => format!("params-driver:v1:layer:{layer}:bone:{name}"),
+            (_, Some(name)) => format!("params-driver:v1:bone:{name}"),
             _ => return Err(CoreError::InvalidModel("legacy driver identity is incomplete".into())),
         };
         (InputSource::LegacyScalar { source_id: bone_id }, FallbackPolicy::Reject)
@@ -418,16 +418,17 @@ pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsE
         (InputSource::Manual, FallbackPolicy::UseValue(TypedValue::Scalar(value))) if input.dimension == InputDimension::Scalar =>
             (None, None, Some(value.get())),
         (InputSource::LegacyScalar { source_id }, FallbackPolicy::Reject) if input.dimension == InputDimension::Scalar => {
-            if let Some(rest) = source_id.strip_prefix("layer:") {
-                let (layer, bone) = rest.split_once("/bone:")
+            if let Some(rest) = source_id.strip_prefix("params-driver:v1:layer:") {
+                let (layer, bone) = rest.split_once(":bone:")
                     .ok_or_else(|| CoreError::InvalidModel("legacy driver source identity is malformed".into()))?;
                 let layer_id = layer.parse::<u64>().map_err(|_| CoreError::InvalidModel("legacy driver layer ID is malformed".into()))?;
                 if layer_id == 0 || bone.trim().is_empty() {
                     return Err(CoreError::InvalidModel("legacy driver layer/bone identity is invalid".into()));
                 }
                 (Some(layer_id), Some(bone.to_owned()), None)
-            } else if !source_id.trim().is_empty() {
-                (None, Some(source_id.clone()), None)
+            } else if let Some(bone) = source_id.strip_prefix("params-driver:v1:bone:") {
+                if bone.trim().is_empty() { return Err(CoreError::InvalidModel("legacy driver bone identity is empty".into())); }
+                (None, Some(bone.to_owned()), None)
             } else {
                 return Err(CoreError::InvalidModel("legacy driver source identity is empty".into()));
             }
