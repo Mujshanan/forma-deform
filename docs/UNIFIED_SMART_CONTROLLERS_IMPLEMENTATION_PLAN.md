@@ -200,12 +200,12 @@ The order below is the proposed implementation sequence. Phase 0 inspects existi
 | 0.5 | `crates/smart-controller-core/src/preview.rs` | Inspect | Existing pure preview functions, output types and V1 limitations. |
 | 0.6 | `crates/smart-controller-core/src/validation.rs` | Inspect | Existing validation, error representation and missing edge cases. |
 | 0.7 | `crates/smart-controller-core/src/lib.rs` | Inspect | Public exports, compatibility surface and module layout. |
-| 0.8 | `crates/smart-controller-core/tests/*` | Inspect/add baseline fixtures | Current tests, golden V1 serialized examples, and executable `v1_characterization_tests.rs` capturing current outputs before model changes. |
+| 0.8 | `crates/smart-controller-core/tests/v1_characterization_tests.rs` | Characterize existing V1 behavior | Deserialize and round-trip all three captured fixtures; assert legacy binding outputs, easing, absolute/relative modes, disabled behavior, Slider host/manual input paths, endpoint policies and reversed ranges. |
 | 0.9 | `plugins/smart-controller/src/lib.rs` | Inspect | SDK entry point, bone query parsing, manual input, preview-only behaviour and host assumptions. |
 | 0.10 | `crates/anicraft-plugin-sdk/*` | Inspect | Verified query/command contracts, error behaviour and adapter support. |
 | 0.11 | `docs/SMART_CONTROLLERS_AUDIT.md` | Add | File inventory, reuse map, overlapping models, compatibility matrix, host capability evidence, test gaps and migration risks. |
 
-**Phase 0 exit:** The existing implementation and host boundary are documented; golden fixtures are captured; no existing semantics are removed.
+**Phase 0 exit:** The existing implementation and host boundary are documented; golden fixtures are captured; the executable V1 characterization suite passes on the branch; no existing runtime semantics are removed.
 
 ### Phase 1 — Canonical types, schema, diagnostics, migration and scalar mapping
 
