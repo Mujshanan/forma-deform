@@ -114,7 +114,7 @@ fn unversioned_transform_params_migration_preserves_property_mapping() {
     let migrated = migrate_unversioned_params(&params).unwrap();
     let binding = &migrated.document.controllers[0].bindings[0];
     assert_eq!(binding.mode, BindingMode::RelativeDelta);
-    assert_eq!(binding.base_value.unwrap().as_scalar(), Some(0.0));
+    assert_eq!(binding.base_value.as_ref().unwrap().as_scalar(), Some(0.0));
     assert_eq!(binding.target, TargetMapping::Property {
         target_id: "forearm".into(), property: "rotation".into(), scale: 1.5, additive: true,
     });
