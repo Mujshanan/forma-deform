@@ -869,6 +869,113 @@ mod tests {
     }
 
     #[test]
+    fn unused_external_snapshot_samples_are_still_type_checked() {
+        let graph = ControllerGraph::new(vec![
+            node("controller-a", vec![input_id("input-a")], vec![], true, "binding-a"),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("input-a", FallbackPolicy::Reject),
+            manual_definition("unused-input", FallbackPolicy::Unavailable),
+        ];
+        let snapshot = InputSnapshot::new(5, vec![
+            InputSample::valid(input_id("input-a"), TypedValue::scalar(0.5).unwrap(), Some(5)),
+            InputSample::valid(input_id("unused-input"), TypedValue::vector2(1.0, 2.0).unwrap(), Some(5)),
+        ]).unwrap();
+        let mapper = |_: &Controller, _: &ResolvedInputs| Ok(BTreeMap::new());
+        let result = evaluate(&graph, &definitions, &snapshot, &mapper);
+        assert!(matches!(result, Err(CoreError::InputValueTypeMismatch { .. })));
+    }
+
+    #[test]
+    fn controller_output_samples_cannot_be_injected_through_external_snapshot() {
+        let graph = ControllerGraph::new(vec![
+            node("upstream", vec![input_id("manual")], vec![], true, "up-binding"),
+            node(
+                "downstream",
+                vec![input_id("from-upstream")],
+                vec![controller_id("upstream")],
+                true,
+                "down-binding",
+            ),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            },
+        ];
+        let snapshot = InputSnapshot::new(5, vec![
+            InputSample::valid(input_id("manual"), TypedValue::scalar(0.5).unwrap(), Some(5)),
+            InputSample::valid(input_id("from-upstream"), TypedValue::scalar(99.0).unwrap(), Some(5)),
+        ]).unwrap();
+        let mapper = |_: &Controller, _: &ResolvedInputs| Ok(BTreeMap::new());
+        let result = evaluate(&graph, &definitions, &snapshot, &mapper);
+        assert!(matches!(result, Err(CoreError::InvalidInputSample { .. })));
+    }
+
+    #[test]
+    fn explicit_fallback_can_resolve_an_unavailable_controller_output() {
+        let graph = ControllerGraph::new(vec![
+            node("upstream", vec![input_id("manual")], vec![], true, "up-binding"),
+            node(
+                "downstream",
+                vec![input_id("from-upstream")],
+                vec![controller_id("upstream")],
+                true,
+                "down-binding",
+            ),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::UseValue(TypedValue::scalar(0.125).unwrap()),
+            },
+        ];
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            if controller.id == controller_id("upstream") {
+                Err(CoreError::InvalidMapping("upstream unavailable".into()))
+            } else {
+                Ok(BTreeMap::from([(
+                    controller.bindings[0].id.clone(),
+                    inputs.value(&controller.inputs[0]).unwrap(),
+                )]))
+            }
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("manual", 0.5), &mapper).unwrap();
+        assert_eq!(result.contributions.len(), 1);
+        assert_eq!(result.contributions[0].binding_id, binding_id("down-binding"));
+        assert_eq!(result.contributions[0].value.as_scalar(), Some(0.125));
+        assert!(result.diagnostics.iter().any(|item| item.code == INPUT_UNAVAILABLE));
+    }
+
+    #[test]
+    fn non_finite_mapping_failure_is_local_to_the_controller() {
+        let graph = ControllerGraph::new(vec![
+            node("controller-a", vec![input_id("input-a")], vec![], true, "binding-a"),
+        ]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
+        let mapper = |_: &Controller, _: &ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+            Err(CoreError::NonFiniteValue { context: "mapped output" })
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.5), &mapper).unwrap();
+        assert!(result.contributions.is_empty());
+        assert!(result.unavailable_outputs.contains(&(controller_id("controller-a"), binding_id("binding-a"))));
+        assert!(result.diagnostics.iter().any(|item| item.code == crate::diagnostic_codes::MAPPING_DOMAIN));
+    }
+
+    #[test]
     fn evaluator_rechecks_cycles_even_if_graph_was_built_unchecked() {
         let graph = ControllerGraph::from_unchecked_for_test(vec![
             node("a", vec![input_id("input-a")], vec![controller_id("b")], true, "binding-a"),
