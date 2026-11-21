@@ -675,3 +675,18 @@ Initial adapter foundations are being added:
 - The plugin entry point registers these modules; its existing V1 Slider preview path is unchanged.
 
 **Important remaining work:** Phase 5 is not complete. The adapter still needs full request orchestration, canonical evaluation wiring, target-specific preview planning, adapter-level compatibility regression tests, and documentation reconciliation. The Phase 2 concrete pose/joystick mapper remains a separate prerequisite for general canonical mapping; this increment must not pretend the injected evaluator mapper is a complete production mapper. No mutating target command, playback hook, durable metadata API or Form Deform composition is introduced.
+
+
+### Phase 5 completion implementation update (verification pending)
+
+The Phase 5 adapter now has an end-to-end read-only request path:
+
+- `input_provider.rs` collects all external inputs for one invocation. Manual values are supplied by canonical InputId; bone inputs require an explicit canonical bone-ID → host layer-ID mapping and are fetched through `bone.info`. Repeated inputs on one layer share one response. ControllerOutput inputs are omitted from the external snapshot so the core DAG evaluator resolves them. LegacyScalar inputs and non-rotation bone channels fail closed until an explicit provider mapping exists.
+- Freshness remains invocation-scoped: newly queried/supplied samples have age zero and the snapshot age window is zero. The adapter does not read a clock or infer cross-invocation freshness.
+- `adapter.rs` now exposes `evaluate_host_document_preview`: collect inputs → validate/evaluate the canonical DAG with the injected mapper → compose outputs → build the target preview plan. It remains read-only.
+- `preview_plan.rs` builds a stable TargetId-ordered list containing the exact canonical target mapping, composed TypedValue and capability assessment. It rejects target/value type mismatches and records outputs that have no target definition. It does not invent frame conversion, property setters, or geometry mutation commands.
+- Compatibility wrappers and migration reports remain available; adapter-level tests cover malformed legacy JSON, strict canonical decoding, empty V1 migration/export, and orchestration/no-op behavior.
+
+**Phase 5 implementation scope is complete, pending verification.** The concrete Pose2D/joystick mapper remains a separate Phase 2/core prerequisite and is deliberately injected rather than fabricated here. Host application remains limited by verified capabilities: geometry pin mutation requires the host preview/undo transaction; symbol-frame and generic property setters are not established. No playback/scrubbing hook, durable host metadata API, or Smart Controller/Form Deform composition has been added. Existing V1 Slider execution is unchanged.
+
+**Verification required on the latest Phase 5 commit:** workspace Rust tests, plugin tests, Bun checks/build and all three release WASM builds. AniCraft in-app smoke testing remains external. Rustfmt/Clippy are not claimed unless separately executed.
