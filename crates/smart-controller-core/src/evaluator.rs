@@ -389,6 +389,7 @@ pub fn evaluate<M: ControllerMapper>(
                 BindingMode::RelativeDelta => (CompositionMode::Additive, Some(BaseRef::Authored)),
             };
             let contribution = Contribution {
+                controller_id: controller_id.clone(),
                 binding_id: binding.id.clone(),
                 target_id: binding.target_id.clone(),
                 value,
@@ -396,6 +397,7 @@ pub fn evaluate<M: ControllerMapper>(
                 weight: None,
                 priority: None,
                 base_ref,
+                base_value: if mode == CompositionMode::Additive { binding.base_value } else { None },
             };
             contribution.validate()?;
             outputs.insert((controller_id.clone(), binding.id.clone()), value);
@@ -405,7 +407,7 @@ pub fn evaluate<M: ControllerMapper>(
 
     // Preserve deterministic collection order independent of authored map
     // iteration. Stable sorting retains topological order for equal BindingIds.
-    result.contributions.sort_by(|left, right| left.binding_id.cmp(&right.binding_id));
+    result.contributions.sort_by(|left, right| (&left.binding_id, &left.controller_id).cmp(&(&right.binding_id, &right.controller_id)));
     Ok(result)
 }
 
