@@ -311,7 +311,8 @@ pub fn export_binding_set_v1(document: &CanonicalDocument) -> Result<LegacyExpor
             InputSource::LegacyScalar { source_id } if input.dimension == InputDimension::Scalar && input.fallback == FallbackPolicy::Reject => source_id.clone(),
             _ => return Err(CoreError::InvalidModel(format!("input {} is not a lossless V1 scalar source", input.id))),
         };
-        if input.id.as_str() != format!("legacy-controller:{}", match &input.source { InputSource::LegacyScalar { source_id } => source_id.as_str(), _ => "" }).as_str() {
+        let expected_input_id = format!("legacy-controller:{source_id}");
+        if input.id.as_str() != expected_input_id.as_str() {
             return Err(CoreError::InvalidModel(format!("input {} has no reversible V1 identity", input.id)));
         }
         let canonical = &controller.bindings[0];
