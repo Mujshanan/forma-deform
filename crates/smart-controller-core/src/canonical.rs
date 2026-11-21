@@ -67,6 +67,10 @@ impl Controller {
         if self.dependencies.iter().any(|id| id == &self.id) {
             return Err(CoreError::InvalidGraph(format!("controller {} depends on itself", self.id)));
         }
+        let mut dependency_ids = std::collections::HashSet::new();
+        if self.dependencies.iter().any(|id| !dependency_ids.insert(id)) {
+            return Err(CoreError::InvalidGraph(format!("controller {} contains duplicate dependency edges", self.id)));
+        }
         let mut input_ids = std::collections::HashSet::new();
         if self.inputs.iter().any(|id| !input_ids.insert(id)) {
             return Err(CoreError::InvalidModel(format!("controller {} contains duplicate input references", self.id)));
