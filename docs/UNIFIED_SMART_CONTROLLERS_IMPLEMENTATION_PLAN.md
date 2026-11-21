@@ -581,6 +581,27 @@ Implemented in this increment:
 
 **Important scope boundary:** Phase 2's concrete Pose2D/joystick mapping algorithms have not been implemented as part of this increment. Phase 3 currently receives mapping results through `ControllerMapper`; a production mapper must be supplied by the mapping layer. Unsupported mapping configurations must not be treated as a successful empty output. The trait boundary allows Phase 3 orchestration to be developed and tested without prematurely duplicating Phase 2 mapping semantics.
 
-**Not yet complete:** typed mapping diagnostics for every mapper failure category; a concrete mapping adapter; complete multi-input semantics beyond passing the resolved typed values to the mapper; Phase 4 target composition; and full CI verification. Tests have been authored but are not claimed as executed until a workflow or local Rust toolchain reports results.
+**Remaining beyond this increment:** a concrete mapping adapter backed by the separately specified mapping algorithms; Phase 4 target composition; and host integration (which remains outside the core evaluator). The mapper receives all declared inputs as a typed, ID-keyed collection. Controller-local mapping-domain and non-finite calculation failures are diagnosed and invalidate that controller's outputs; unexpected mapper contract/internal errors abort the evaluation. The latest Phase 3A/3B commit is CI-verified as recorded below.
 
 **Preserved boundaries:** Smart Controller V1 remains preview-only. The evaluator is pure and host-independent. CCC-01.5 remains unchanged: no Smart Controller output is combined with Form Deform pin-deformation evaluation.
+
+
+### 12.1 Phase 3A/3B hardening and verification
+
+**Verified commit:** `1eaea3fd92752ce557af77c3c2c151045d724a28`  
+**CI run:** https://github.com/Mujshanan/forma-deform/actions/runs/44927336954
+
+Hardening completed:
+
+- Complete structural preflight validates all controller nodes, all input definitions and references, all supplied snapshot samples against their declared dimensions, and rejects externally injected samples for controller-output inputs.
+- Disabled controllers do not require runtime samples and do not invoke the mapper, while their graph/configuration references remain structurally validated.
+- `FallbackPolicy::Reject` consistently aborts when a required external or controller-output input is unavailable. `Unavailable` skips the consumer with diagnostics; `UseValue` uses only its explicitly configured, dimension-validated fallback.
+- `InvalidMapping` and `NonFiniteValue` from a mapper are controller-local failures: all that controller's outputs become unavailable, diagnostics are emitted, and independent branches can continue. Unexpected mapper errors and unknown emitted BindingIds remain evaluation errors.
+- Missing or target-incompatible binding outputs are marked unavailable and diagnosed. Contributions are collected but never target-composed.
+- Determinism test compares equivalent graphs with different insertion orders and snapshots with different sample orders.
+- Added coverage for mapping failure propagation, Reject and explicit fallback behavior, non-finite mapping errors, unknown output bindings, unused-sample type validation, controller-output snapshot injection, empty/all-disabled graphs, stale input fallback, and cycle defense.
+
+**Evaluator-specific tests:** 16 authored and executed successfully.  
+**Workspace verification:** `cargo test --workspace` passed with 133 tests total. Bun typecheck, Bun tests (9/9), and Bun build passed. Release WASM builds passed for bone-query, form-deform, and smart-controller plugins. The complete GitHub Actions job concluded successfully.
+
+**Not claimed:** rustfmt and Clippy were not run by this workflow. No Phase 3 PR or merge has been created. V1 remains preview-only; CCC-01.5 and Form Deform evaluation independence are unchanged.
