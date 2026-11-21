@@ -34,6 +34,11 @@ impl Contribution {
             CompositionMode::WeightedBlend => self.weight.is_some_and(|w| w.is_finite() && w >= 0.0) && self.priority.is_none() && self.base_ref.is_none(),
             CompositionMode::PriorityOverride => self.priority.is_some() && self.weight.is_none() && self.base_ref.is_none(),
         };
+        if let Some(BaseRef::Input(id)) = &self.base_ref {
+            if id.trim().is_empty() {
+                return Err(CoreError::InvalidModel("contribution input base reference must not be empty".into()));
+            }
+        }
         if !valid {
             return Err(CoreError::InvalidModel(format!("invalid fields for {:?} contribution", self.mode)));
         }
