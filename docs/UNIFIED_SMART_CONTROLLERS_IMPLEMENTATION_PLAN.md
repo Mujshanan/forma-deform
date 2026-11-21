@@ -84,7 +84,7 @@ The schema defines four modes:
 - **Replace**
 - **Additive**
 - **WeightedBlend**
-- **Priority**
+- **PriorityOverride**
 
 An unimplemented or unsupported mode must return a clear typed error. Never silently fall back to Replace or no-op.
 
@@ -264,7 +264,7 @@ The exact module split may be adjusted after Phase 0. Do not retain duplicate sc
 | 3.4 | `crates/smart-controller-core/src/lib.rs` | Public evaluator and result exports after API review. |
 | 3.5 | `crates/smart-controller-core/tests/graph_tests.rs` | Chains, independent nodes, diamond DAG, deterministic ties, self-loop, indirect cycle and evaluator-side unchecked-cycle defence. |
 | 3.6 | `crates/smart-controller-core/tests/evaluation_tests.rs` | Memoization, identical-snapshot determinism, disabled/unavailable dependencies, missing/stale/NaN inputs, fallback and diagnostics. |
-| 3.7 | `crates/smart-controller-core/tests/no_op_graph_tests.rs` | Empty graph, all-disabled graph and target with no eligible contributions. |
+| 3.7 | `crates/smart-controller-core/tests/no_op_graph_tests.rs` | Empty graph and all-disabled graph; zero-eligible-contribution targets are covered by Phase 4 composition tests. |
 
 Evaluation memoization is local to one call. No global caches, last-value state, wall-clock reads or random values are permitted.
 
