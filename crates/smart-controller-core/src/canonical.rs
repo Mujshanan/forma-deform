@@ -129,13 +129,15 @@ impl Controller {
                     if binding.mode != BindingMode::AbsolutePose =>
                     return Err(CoreError::InvalidModel(format!("frame target binding {} must use AbsolutePose", binding.id))),
                 TargetMapping::GeometryDeform { .. } if binding.mode == BindingMode::RelativeDelta
+                    && (binding.composition.is_none() || matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)))
                     && !matches!(binding.base_value.as_ref(), Some(TypedValue::Vector2(_))) =>
-                    return Err(CoreError::InvalidModel(format!("relative geometry binding {} requires a Vector2 base", binding.id))),
+                    return Err(CoreError::InvalidModel(format!("relative geometry binding {} requires a Vector2 authored base", binding.id))),
                 TargetMapping::Property { additive, .. } if *additive != (binding.mode == BindingMode::RelativeDelta) =>
                     return Err(CoreError::InvalidModel(format!("property target additive flag conflicts with binding mode for {}", binding.id))),
                 TargetMapping::Property { .. } if binding.mode == BindingMode::RelativeDelta
+                    && (binding.composition.is_none() || matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)))
                     && !matches!(binding.base_value.as_ref(), Some(TypedValue::Scalar(_))) =>
-                    return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar base", binding.id))),
+                    return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar authored base", binding.id))),
                 TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, .. } if *action_layer_id == 0 || end_frame <= start_frame =>
                     return Err(CoreError::InvalidModel("frame range requires a nonzero layer and increasing endpoints".into())),
                 TargetMapping::SymbolFrame { symbol_instance_id, .. } if symbol_instance_id.trim().is_empty() =>
