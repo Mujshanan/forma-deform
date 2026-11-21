@@ -9,6 +9,7 @@ pub mod input;
 pub mod legacy;
 pub mod mapping;
 pub mod model;
+pub mod migration;
 pub mod preview;
 pub mod schema;
 pub mod validation;
