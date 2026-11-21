@@ -170,6 +170,50 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn canonical_preview_orchestration_accepts_empty_document_as_noop() {
+        let document = smart_controller_core::migration::CanonicalDocument::from_json(
+            r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
+        ).unwrap();
+        let snapshot = InputSnapshot::new(0, vec![]).unwrap();
+        let mapper = |_controller: &smart_controller_core::canonical::Controller,
+                      _inputs: &smart_controller_core::evaluator::ResolvedInputs|
+         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+            panic!("mapper must not run for an empty document");
+        };
+        let plan = evaluate_document_preview(
+            &document,
+            &snapshot,
+            &mapper,
+            &smart_controller_core::composition::CompositionContext::default(),
+        ).unwrap();
+        assert!(plan.evaluation.evaluation.contributions.is_empty());
+        assert!(plan.evaluation.composition.outputs.is_empty());
+        assert!(plan.targets.is_empty());
+    }
+
+    #[test]
+    fn canonical_preview_orchestration_rejects_invalid_document_before_mapping() {
+        let document = smart_controller_core::migration::CanonicalDocument::from_json(
+            r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
+        ).unwrap();
+        let snapshot = InputSnapshot::new(0, vec![]).unwrap();
+        let mapper = |_controller: &smart_controller_core::canonical::Controller,
+                      _inputs: &smart_controller_core::evaluator::ResolvedInputs|
+         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+            panic!("mapper must not run for an invalid document");
+        };
+        let mut invalid = document;
+        invalid.schema.version = 99;
+        assert!(evaluate_document_preview(
+            &invalid,
+            &snapshot,
+            &mapper,
+            &smart_controller_core::composition::CompositionContext::default(),
+        ).is_err());
+    }
+
     #[test]
     fn parses_keyed_pose_angle_in_degrees_as_unwrapped_radians() {
         let response = json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
