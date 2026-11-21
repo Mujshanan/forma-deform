@@ -143,6 +143,23 @@ mod tests {
         assert!(sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing, false).is_err());
     }
 
+
+    #[test]
+    fn caller_selects_wrapped_angle_semantics_and_snapshot_is_invocation_scoped() {
+        let response = json!({"armatures":[{"bones":[{"id":42,"angle":270.0}]}]});
+        let wrapped = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly, true).unwrap();
+        assert!(wrapped.value.unwrap().as_angle().unwrap().is_wrapped());
+
+        let snapshot = snapshot_from_bone_info(
+            &[definition()],
+            &response,
+            BoneAnglePolicy::KeyedPoseOnly,
+            false,
+        ).unwrap();
+        assert_eq!(snapshot.max_age_ticks(), 0);
+        assert_eq!(snapshot.get(&definition().id).unwrap().age_ticks, Some(0));
+    }
+
     #[test]
     fn missing_bone_and_malformed_response_fail_closed() {
         assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
