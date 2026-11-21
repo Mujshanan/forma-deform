@@ -233,9 +233,9 @@ Create or adapt files in this order:
 | 1.18 | `crates/smart-controller-core/tests/migration_roundtrip_tests.rs` | Fixture → canonical → legacy-compatible round trips where lossless; assert diagnostics for lossy conversions. |
 | 1.19 | `crates/smart-controller-core/tests/diagnostic_registry_tests.rs` | Validate unique stable codes and exact registry fixture coverage. |
 | 1.20 | `crates/smart-controller-core/tests/angle_interpolation_tests.rs` | Wrapped shortest-path, unwrapped linear, antipodal tie and additive-angle semantics. |
-| 1.21 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping V1 regression tests. |
+| 1.21 | `crates/smart-controller-core/tests/range_mapping_tests.rs` | Reversed ranges, endpoints, clamping, easing and frame mapping V1 regression tests. |\n| 1.22 | `crates/smart-controller-core/src/contribution.rs` | Public typed Contribution record and mode-specific field invariants; composition execution remains Phase 4. |\n| 1.23 | `crates/smart-controller-core/tests/dependency_boundary_tests.rs` | Verify Smart Controller core and Form Deform core remain mutually independent. |
 
-**Phase 1 exit:** One authoritative model represents all controller behaviours, scalar/2D inputs, nested dependencies and multiple bindings. Schema and errors are explicit.
+**Phase 1 exit:** One authoritative model represents all controller behaviours, scalar/2D inputs, nested dependencies and multiple bindings. Schema, migration, diagnostic codes, contribution shape and pure scalar/frame mapping are explicit and covered by compatibility tests.
 
 ### Phase 2 — Input contracts and pose mapping
 
@@ -250,7 +250,7 @@ Create or adapt files in this order:
 
 The exact module split may be adjusted after Phase 0. Do not retain duplicate scalar mapping implementations merely because their original files differ.
 
-**Phase 2 exit:** Slider and joystick use the same mapping infrastructure; bone-driven and manual inputs resolve through the same input contract.
+**Phase 2 exit:** Slider and joystick use the same mapping infrastructure; typed pose interpolation and angle semantics are tested; bone-driven and manual inputs resolve through the same input contract.
 
 ### Phase 3 — Pure DAG evaluation
 
@@ -266,7 +266,7 @@ The exact module split may be adjusted after Phase 0. Do not retain duplicate sc
 
 Evaluation memoization is local to one call. No global caches, last-value state, wall-clock reads or random values are permitted.
 
-**Phase 3 exit:** Valid graphs evaluate deterministically; shared nodes are evaluated once per invocation; invalid cycles fail safely.
+**Phase 3 exit:** Valid graphs follow the four-stage evaluation pipeline deterministically; shared nodes are evaluated once per invocation; invalid cycles fail safely; empty and all-disabled graph outcomes are documented.
 
 ### Phase 4 — Bindings and composition
 
@@ -278,7 +278,7 @@ Evaluation memoization is local to one call. No global caches, last-value state,
 | 4.4 | `crates/smart-controller-core/tests/composition_tests.rs` | All modes, unsupported modes, zero weights, equal priority, conflicting Replace, additive bases and type mismatch. |
 | 4.5 | `crates/smart-controller-core/tests/binding_tests.rs` | Multiple outputs, multiple contributors, target identity and unavailable target cases. |
 
-**Phase 4 exit:** Outputs are typed and deterministic; composition never relies on incidental iteration order or silent fallback.
+**Phase 4 exit:** Outputs are typed and deterministic; composition-mode conflicts, Replace conflicts, invalid weights and no-eligible-contribution outcomes are explicit; accumulation never relies on incidental iteration order or silent fallback.
 
 ### Phase 5 — Plugin adapter and compatibility integration
 
@@ -311,7 +311,7 @@ Potential core additions, only when justified:
 | 6.4 | Host-supported authoring/UI files (Phase 6B only) | Controller editing, pose capture, hierarchy, bindings, diagnostics and preview visualization; contingent on a separate host-capability audit and verified APIs. |
 | 6.5 | `docs/SMART_CONTROLLERS_USER_GUIDE.md` (Phase 6B only) | Animator-facing guide and examples after a verified authoring workflow exists. |
 
-**Phase 6 exit:** Animators can author, inspect and reuse controllers through a verified host-supported workflow.
+**Phase 6A exit:** Core triangulated/grid mapping is independently tested and host-independent.\n\n**Phase 6B exit:** Only after a separate host-capability audit, animators can author, inspect and reuse controllers through a verified host-supported workflow.
 
 ## 6. Test and verification policy
 
@@ -343,11 +343,11 @@ Do not alter the existing Form Deform deformation formula or behaviour as part o
 
 ## 8. PR sequence
 
-1. **PR 1 — Canonical model and schema:** errors, identities, values, input/model types, graph representation, serialization and validation.
-2. **PR 2 — Input and mapping:** scalar mapping consolidation, frame mapping and five-pose 2D mapping.
-3. **PR 3 — DAG evaluator:** deterministic topological ordering, cycle protection, memoization, diagnostics and pure evaluation.
-4. **PR 4 — Bindings and composition:** typed targets, output collection and explicit composition semantics.
-5. **PR 5 — Plugin integration and migration:** thin host adapter, V1 migration and preview compatibility.
+1. **PR 1 — Characterization and canonical contracts:** V1 output baselines, typed model/schema, diagnostics, migration converters and pure range/frame mapping.
+2. **PR 2 — Pose mapping:** typed Pose2D, angle interpolation, joystick regions and boundaries.
+3. **PR 3 — DAG evaluator:** four-stage evaluation, deterministic ordering, cycle protection, memoization and diagnostics.
+4. **PR 4 — Bindings and composition:** common contributions, conflict handling and target composition post-pass.
+5. **PR 5 — Plugin compatibility integration:** thin adapter wiring to tested core migration/evaluation, preserving V1 preview behaviour.
 6. **PR 6A — Core mapping extensions:** triangulated and grid mapping without host UI dependencies.
 7. **PR 6B — Host authoring:** contingent on a separate, current host-capability audit.
 
