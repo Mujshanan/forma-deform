@@ -58,6 +58,17 @@ impl CanonicalDocument {
         crate::graph::ControllerGraph::new(self.controllers.clone())?;
         Ok(())
     }
+
+    pub fn to_json(&self) -> Result<String, CoreError> {
+        self.validate()?;
+        serde_json::to_string_pretty(self).map_err(|e| CoreError::Serialization(e.to_string()))
+    }
+
+    pub fn from_json(source: &str) -> Result<Self, CoreError> {
+        let document: Self = serde_json::from_str(source).map_err(|e| CoreError::Serialization(e.to_string()))?;
+        document.validate()?;
+        Ok(document)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -250,4 +261,21 @@ pub fn migrate_unversioned_params(source: &Params) -> Result<MigrationOutput, Co
         document,
         report: MigrationReport { source_format: "unversioned_params".into(), notices, losses },
     })
+}
+
+
+/// Detect and migrate either a versioned BindingSet V1 or the unversioned Params
+/// object. The discriminator is structural; unknown fields remain rejected by
+/// the selected strict deserializer.
+pub fn migrate_json(source: &str) -> Result<MigrationOutput, CoreError> {
+    let value: serde_json::Value = serde_json::from_str(source)
+        .map_err(|e| CoreError::Serialization(e.to_string()))?;
+    if value.get("schema_version").is_some() || value.get("bindings").is_some() {
+        let set = BindingSet::from_json(source).map_err(|e| CoreError::Serialization(e.to_string()))?;
+        migrate_binding_set_v1(&set)
+    } else {
+        let params: Params = serde_json::from_value(value)
+            .map_err(|e| CoreError::Serialization(e.to_string()))?;
+        migrate_unversioned_params(&params)
+    }
 }
