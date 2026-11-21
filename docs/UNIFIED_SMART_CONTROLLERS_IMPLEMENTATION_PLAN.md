@@ -665,7 +665,7 @@ Phase 4 is complete at `f08185f043141ac3f476bd2301dbcabd72d9bebb`.
 - Rustfmt/Clippy were not part of this run. No PR or merge was created.
 - Composition remains a pure core operation. It does not mutate the host or combine Smart Controller output with Form Deform pin evaluation.
 
-## 17. Phase 5 adapter integration — started, not complete
+## 17. Phase 5 adapter integration — merged
 
 Initial adapter foundations are being added:
 
@@ -674,7 +674,7 @@ Initial adapter foundations are being added:
 - `plugins/smart-controller/src/compatibility.rs`: delegates legacy BindingSet and unversioned Params decoding/migration to the core migration API and preserves MigrationReport.
 - The plugin entry point registers these modules; its existing V1 Slider preview path is unchanged.
 
-**Important remaining work:** Phase 5 is not complete. The adapter still needs full request orchestration, canonical evaluation wiring, target-specific preview planning, adapter-level compatibility regression tests, and documentation reconciliation. The Phase 2 concrete pose/joystick mapper remains a separate prerequisite for general canonical mapping; this increment must not pretend the injected evaluator mapper is a complete production mapper. No mutating target command, playback hook, durable metadata API or Form Deform composition is introduced.
+**Scope boundary:** Phase 5 adapter implementation was merged through PR #11 at `9003088254d7301522eef474ff560db2eca81860`. The concrete Phase 2 pose/joystick mapper remains a separate prerequisite; the injected evaluator mapper is not a complete production mapper. No mutating target command, playback hook, durable metadata API or Form Deform composition was introduced.
 
 
 ### Phase 5 completion implementation update (verification pending)
@@ -689,7 +689,7 @@ The Phase 5 adapter now has an end-to-end read-only request path:
 
 **Phase 5 implementation scope is complete, pending verification.** The concrete Pose2D/joystick mapper remains a separate Phase 2/core prerequisite and is deliberately injected rather than fabricated here. Host application remains limited by verified capabilities: geometry pin mutation requires the host preview/undo transaction; symbol-frame and generic property setters are not established. No playback/scrubbing hook, durable host metadata API, or Smart Controller/Form Deform composition has been added. Existing V1 Slider execution is unchanged.
 
-**Verification required on the latest Phase 5 commit:** workspace Rust tests, plugin tests, Bun checks/build and all three release WASM builds. AniCraft in-app smoke testing remains external. Rustfmt/Clippy are not claimed unless separately executed.
+**Verification correction:** the initial Phase 5 merge CI did not pass. While beginning Phase 6A, CI exposed two adapter compile errors and an outdated test that contradicted the intended missing-input fallback contract. Those were corrected on the Phase 6A branch. The full workflow subsequently passed on `3ef3f57e55ae6165885edf6588a704670bf08f9d`: 191 Rust tests, Bun typecheck, Bun tests, Bun build, and all three release WASM plugin builds. AniCraft in-app smoke testing remains external. Rustfmt/Clippy are not included in that workflow and are not claimed.
 
 
 ## 18. Phase 6A implementation — in progress
@@ -728,4 +728,4 @@ Implemented on `feat/smart-controller-phase6a-mapping`:
 - `mapping/advanced/mod.rs` with the common `PoseMapping2D` trait
 - `tests/advanced_pose_tests.rs` with coverage for barycentric interpolation, boundary handling, degenerate meshes, overlap ambiguity, bilinear interpolation, grid validation, and wrapped angles.
 
-**Not yet verified:** Rust compilation/tests, workspace tests, WASM builds, and CI. The new mapping types are pure reusable core APIs; they are not yet selected by a concrete production `ControllerMapper` or serialized as new canonical `MappingConfig` variants. That integration is intentionally not smuggled into schema v1. Any serialized mapping representation requires an explicit schema/version compatibility decision. Phase 6B host authoring remains deferred pending a separate verified host-capability audit.
+**Verification:** GitHub Actions run [44934254912](https://github.com/Mujshanan/forma-deform/actions/runs/44934254912) passed on `3ef3f57e55ae6165885edf6588a704670bf08f9d`: 191 Rust tests (including 17 advanced-pose tests), Bun typecheck, Bun tests (9/9), Bun build, and release WASM builds for bone-query, form-deform and smart-controller. Rustfmt/Clippy are not part of the workflow. AniCraft in-app smoke testing remains external. The new mapping types are pure reusable core APIs; they are not yet selected by a concrete production `ControllerMapper` or serialized as new canonical `MappingConfig` variants. That integration is intentionally not smuggled into schema v1. Any serialized mapping representation requires an explicit schema/version compatibility decision. Phase 6B host authoring remains deferred pending a separate verified host-capability audit.
