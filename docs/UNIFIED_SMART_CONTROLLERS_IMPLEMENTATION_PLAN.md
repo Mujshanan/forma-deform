@@ -1,12 +1,12 @@
 # Unified Smart Controllers — Architecture and Implementation Plan
 
-**Status:** Phase 1 implementation in progress — foundational types  
+**Status:** Phase 4 implementation in progress — target composition and conflict handling  
 **Target repository:** `Mujshanan/forma-deform`  
-**Branch:** `feat/smart-controller-phase1-foundation`  
+**Branch:** `feat/smart-controller-phase3-evaluator`  
 **Core:** `smart-controller-core`  
 **Host adapter:** `plugins/smart-controller`  
 **Scope:** Architecture, implementation sequence and file-level build order  
-**Execution status:** Phase 0 characterization verified at `17e58fd`; Phase 1 foundational types are implemented on the feature branch. Phase 1 Rust tests have not yet been executed.
+**Execution status:** Phase 1 is merged. Phase 3 evaluator hardening passed CI at `c83182d`. Phase 4 composition implementation is in progress on the branch above; its tests are pending CI.
 
 ---
 
@@ -605,3 +605,32 @@ Hardening completed:
 **Workspace verification:** `cargo test --workspace` passed with 135 tests total. Bun typecheck, Bun tests (9/9), and Bun build passed. Release WASM builds passed for bone-query, form-deform, and smart-controller plugins. The complete GitHub Actions job concluded successfully.
 
 **Not claimed:** rustfmt and Clippy were not run by this workflow. No Phase 3 PR or merge has been created. V1 remains preview-only; CCC-01.5 and Form Deform evaluation independence are unchanged.
+
+
+## 13. Phase 4 implementation log
+
+### 13.1 Composition core and binding policy
+
+**Branch:** `feat/smart-controller-phase3-evaluator`  
+**Base:** verified Phase 3 implementation `c83182d8c5039977baaf0b8fcac2317066368a09`  
+**Status:** implementation started; CI verification pending.
+
+Implemented in this increment:
+
+- Added a pure `composition.rs` post-pass that groups contributions by canonical TargetId and processes targets in BTreeMap order.
+- Added explicit source identity to each contribution: ControllerId plus BindingId. Since binding IDs are only unique within one controller, deterministic contribution ordering is `(BindingId, ControllerId)`.
+- Added an explicit authored base value to additive contributions. Existing RelativeDelta bindings preserve their legacy default: Additive with BaseRef::Authored and their configured base value.
+- Added optional per-binding CompositionConfig while retaining old canonical documents through a serde-defaulted optional field. Existing AbsolutePose bindings default to Replace; RelativeDelta bindings default to Additive(Authored).
+- Canonical bindings can now explicitly select Replace, Additive, WeightedBlend or PriorityOverride, with validation of mode-specific fields and compatibility with AbsolutePose/RelativeDelta.
+- Additive resolves exactly one explicit base reference (Authored, Neutral target base, or named input base), requires all contributions to agree on that reference and base value, and accumulates in canonical contribution order.
+- WeightedBlend normalizes positive weights; zero weights are excluded. Negative/non-finite weights and overflow are typed errors. If all weights are zero, no target value is emitted and the stable no-eligible diagnostic is returned.
+- PriorityOverride selects the highest numeric priority. Equal priorities select the lexicographically smallest BindingId, then ControllerId as a necessary deterministic secondary key.
+- Multiple Replace contributions, mixed composition modes, missing additive bases, incompatible types and ambiguous wrapped-angle weighted means return typed composition conflicts.
+- Scalar and Vector2 additive/blend paths are implemented. Additive wrapped angles normalize to [-π, π); weighted wrapped angles use a circular mean and reject the undefined opposing-direction case.
+- Added `evaluate_and_compose` as a pure orchestration convenience: it first runs the existing Phase 3 evaluator, then the composition post-pass. It does not read or mutate host state.
+
+**Tests authored:** composition mode tests, Replace conflicts, Additive bases, positive/zero/invalid WeightedBlend weights, incompatible values, angle edge cases, PriorityOverride tie-breaking, insertion-order determinism, and evaluator-to-composition integration. Canonical binding composition validation tests are also added.
+
+**Not yet verified:** no Phase 4 test/build pass is claimed until the current branch's GitHub Actions run completes. Rustfmt and Clippy are not yet verified. No PR or merge has been created.
+
+**Preserved boundaries:** composition consumes only Smart Controller contributions. It does not compose with Form Deform pin outputs, change the Form Deform formula, or make V1 playback-capable.
