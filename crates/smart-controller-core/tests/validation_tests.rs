@@ -4,7 +4,7 @@ fn slider() -> Params {
     Params {
         mode: Mode::Slider,
         driver_layer_id: Some(2),
-        driver_bone_name: Some("Head".into()),
+        driver_bone_id: Some(12),
         action_layer_id: Some(3),
         min_rotation_deg: Some(-45.0),
         max_rotation_deg: Some(45.0),
@@ -17,6 +17,24 @@ fn slider() -> Params {
         additive: false,
         manual_value: None,
     }
+}
+#[test]
+fn slider_requires_driver_bone_id_when_not_using_manual_input() {
+    let mut p = slider();
+    p.driver_bone_id = None;
+    assert!(validate(&p).unwrap_err().contains("driver_bone_id"));
+}
+#[test]
+fn slider_rejects_zero_driver_bone_id() {
+    let mut p = slider();
+    p.driver_bone_id = Some(0);
+    assert!(validate(&p).unwrap_err().contains("greater than zero"));
+}
+#[test]
+fn manual_input_must_be_finite() {
+    let mut p = slider();
+    p.manual_value = Some(f64::NAN);
+    assert!(validate(&p).unwrap_err().contains("finite"));
 }
 #[test]
 fn slider_requires_action_layer() {
@@ -50,7 +68,7 @@ fn transform_requires_target_bone_property_and_scale() {
 fn explicit_manual_input_does_not_require_a_host_bone() {
     let mut p = slider();
     p.driver_layer_id = None;
-    p.driver_bone_name = None;
+    p.driver_bone_id = None;
     p.manual_value = Some(12.0);
     assert!(validate(&p).is_ok());
 }
