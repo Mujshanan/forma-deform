@@ -2,6 +2,7 @@
 pub mod canonical;
 pub mod contribution;
 pub mod diagnostic_codes;
+pub mod endpoint;
 pub mod error;
 pub mod graph;
 pub mod ids;
