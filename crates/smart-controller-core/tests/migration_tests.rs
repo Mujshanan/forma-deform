@@ -37,7 +37,7 @@ fn binding_set_migration_preserves_geometry_anchors_range_easing_and_mode() {
     });
     let binding = &controller.bindings[0];
     assert_eq!(binding.mode, BindingMode::RelativeDelta);
-    assert_eq!(binding.base_value.unwrap().as_vector2().unwrap().x(), 1.0);
+    assert_eq!(binding.base_value.as_ref().unwrap().as_vector2().unwrap().x(), 1.0);
     assert_eq!(binding.target, TargetMapping::GeometryDeform {
         element_id: "arm-shape".into(), pin_id: "wrist".into(),
         negative_offset: [-4.0, 2.0], neutral_offset: [1.0, 1.0], positive_offset: [8.0, 5.0],
@@ -102,7 +102,7 @@ fn unversioned_slider_params_migration_preserves_frame_mapping() {
     assert_eq!(migrated.document.controllers[0].bindings[0].target, TargetMapping::FrameRange {
         action_layer_id: 5, start_frame: 1, end_frame: 12, endpoint_policy: EndpointPolicy::Inclusive,
     });
-    assert!(matches!(migrated.document.inputs[0].source, smart_controller_core::input::InputSource::Manual));
+    assert!(matches!(&migrated.document.inputs[0].source, smart_controller_core::input::InputSource::Manual));
     migrated.document.validate().unwrap();
 }
 
