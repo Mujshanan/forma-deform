@@ -14,6 +14,17 @@ pub fn migrate_binding_set_json(source: &str) -> Result<MigrationOutput, CoreErr
     let binding_set: BindingSet = serde_json::from_str(source)
         .map_err(|error| CoreError::Serialization(error.to_string()))?;
     migrate_binding_set_v1(&binding_set)
+    #[test]
+    fn empty_v1_binding_set_migrates_and_exports_losslessly() {
+        let legacy = BindingSet::new(vec![]).unwrap();
+        let source = serde_json::to_string(&legacy).unwrap();
+        let migrated = migrate_legacy_json(&source).unwrap();
+        assert!(migrated.report.is_lossless());
+        let (exported, report) = export_binding_set_v1_json(&migrated.document).unwrap();
+        assert!(report.report.is_lossless());
+        let roundtrip = BindingSet::from_json(&exported).unwrap();
+        assert!(roundtrip.bindings.is_empty());
+    }
 }
 
 pub fn migrate_params_json(source: &str) -> Result<MigrationOutput, CoreError> {
@@ -54,6 +65,7 @@ pub fn decode_canonical_json(source: &str) -> Result<CanonicalDocument, CoreErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smart_controller_core::legacy::BindingSet;
 
     #[test]
     fn malformed_legacy_inputs_return_serialization_errors() {
