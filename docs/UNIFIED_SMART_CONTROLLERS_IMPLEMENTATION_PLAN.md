@@ -636,3 +636,17 @@ Implemented in this increment:
 **Not verified:** Rustfmt and Clippy were not run by this workflow. Host in-app smoke tests remain separate. No PR or merge has been created.
 
 **Preserved boundaries:** composition consumes only Smart Controller contributions. It does not compose with Form Deform pin outputs, change the Form Deform formula, or make V1 playback-capable.
+
+
+### 13.2 Phase 4 typed-angle target compatibility and final verification
+
+**Verified commit:** `f08185f043141ac3f476bd2301dbcabd72d9bebb`  
+**CI run:** https://github.com/Mujshanan/forma-deform/actions/runs/44931731464
+
+A post-pass review found that the evaluator's target compatibility gate allowed only Scalar values for Property targets, which prevented Angle values from reaching the already angle-aware composition layer. Property targets now accept Scalar or Angle values; SymbolFrame and FrameRange remain Scalar, and GeometryDeform remains Vector2. Authored additive Property bases may likewise be Scalar or Angle, with exact value-type compatibility enforced during composition.
+
+Added an end-to-end `evaluate_and_compose` regression test proving an Angle value survives mapping output validation and weighted composition. The first run exposed a boundary-normalization issue at exactly +π; wrapped weighted-angle results are now normalized to the established [-π, π) interval.
+
+**Final verification:** 153 workspace Rust tests passed; Bun typecheck, Bun tests (9/9), Bun build, and release WASM builds for bone-query, form-deform, and smart-controller all passed. The workflow completed successfully. Rustfmt and Clippy are not included in this workflow and are not claimed as passing.
+
+Phase 4 remains core-only. No host state is mutated; no Smart Controller contribution is combined with Form Deform pin-deformation output; V1 remains preview-only. No PR or merge has been created.
