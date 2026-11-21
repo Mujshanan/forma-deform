@@ -102,7 +102,7 @@ Additive contributions must identify their reference base explicitly (neutral, a
 
 Weighted blend must define non-negative weight semantics, normalization, zero-total-weight behaviour and unavailable-contribution handling. Initial recommendation: non-negative weights, normalized over eligible contributions, with explicit unavailable/error behaviour when total weight is zero.
 
-Priority uses explicit numeric priority. Equal priorities use canonical binding ID as a deterministic tie-breaker.
+PriorityOverride uses explicit numeric priority. Equal priorities use canonical binding ID as a deterministic tie-breaker.
 
 Conflicting Replace contributions to one target must use an explicit precedence rule or return a conflict error; they must never overwrite each other accidentally.
 
@@ -267,7 +267,7 @@ Evaluation memoization is local to one call. No global caches, last-value state,
 | Order | File | Required content |
 |---:|---|---|
 | 4.1 | `crates/smart-controller-core/src/binding.rs` | Host-independent target identity, property identity, typed output and binding-level configuration. |
-| 4.2 | `crates/smart-controller-core/src/composition.rs` | Replace, Additive, WeightedBlend and Priority contracts; deterministic ordering; explicit base references; conflict and unsupported-mode errors. |
+| 4.2 | `crates/smart-controller-core/src/composition.rs` | Replace, Additive, WeightedBlend and PriorityOverride contracts; deterministic ordering; explicit base references; conflict and unsupported-mode errors. |
 | 4.3 | `crates/smart-controller-core/src/evaluation.rs` | Integrate evaluated controller values with binding collection and final target output generation without host mutation. |
 | 4.4 | `crates/smart-controller-core/tests/composition_tests.rs` | All modes, unsupported modes, zero weights, equal priority, conflicting Replace, additive bases and type mismatch. |
 | 4.5 | `crates/smart-controller-core/tests/binding_tests.rs` | Multiple outputs, multiple contributors, target identity and unavailable target cases. |
@@ -342,7 +342,7 @@ Do not alter the existing Form Deform deformation formula or behaviour as part o
 3. **PR 3 — DAG evaluator:** deterministic topological ordering, cycle protection, memoization, diagnostics and pure evaluation.
 4. **PR 4 — Bindings and composition:** typed targets, output collection and explicit composition semantics.
 5. **PR 5 — Plugin integration and migration:** thin host adapter, V1 migration and preview compatibility.
-6. **PR 6 — Authoring and advanced features:** verified UI workflow, templates, triangulated and grid mapping.
+6. **PR 6A — Core mapping extensions:** triangulated and grid mapping without host UI dependencies.\n7. **PR 6B — Host authoring:** contingent on a separate, current host-capability audit.
 
 Each PR must have a bounded scope, tests, documentation and acceptance evidence. Do not merge without explicit authorization.
 
@@ -363,3 +363,129 @@ The system is complete when:
 - Form Deform remains independent
 
 **Principle:** Build one controller engine with composable input, mapping, graph, evaluation and binding capabilities. Extend it through reusable abstractions rather than creating independent controller implementations.
+
+
+## 10. Normative clarifications adopted before implementation
+
+This section resolves underspecified contracts in the initial proposal. Where earlier sections use shorter or less precise wording, this section is authoritative. These are design decisions for the implementation plan, not authorization to change source code.
+
+### 10.1 Typed pose and value interpolation
+
+A `Pose2D` is an ordered collection of typed binding values, conceptually `Vec<(BindingId, TypedValue)>`. It is not an animation frame, host-state override or opaque trait object. Interpolation is **per binding/property**. Every participating pose must provide compatible values for the same binding identity; missing or incompatible values produce a typed mapping error.
+
+The initial value algebra distinguishes finite scalars, required vector values and angles. Angle values carry explicit semantics equivalent to `Angle { radians: f64, wrapped: bool }`:
+
+- Wrapped angles interpolate along the shortest angular path.
+- Unwrapped angles interpolate linearly.
+- Wrapped deltas use a documented half-open interval; exactly antipodal ties resolve in one fixed, documented direction.
+- Unsupported value kinds or incompatible pose schemas return typed errors.
+
+Composition follows the same angle semantics: wrapped-angle additive deltas normalize consistently; unwrapped angles remain ordinary scalar deltas. Never infer angle semantics from property names or host conventions.
+
+### 10.2 Four-stage evaluation pipeline
+
+Evaluation has four globally ordered stages:
+
+```text
+Input resolution
+      |
+      v
+Node evaluation (topological order; canonical ControllerId tie-break)
+      |
+      v
+Binding/contribution collection
+      |
+      v
+Target composition (post-pass, after all nodes finish)
+      |
+      v
+EvaluationResult
+```
+
+1. **Input resolution:** resolve and validate the complete input snapshot before evaluating any node. No node observes a partially resolved snapshot.
+2. **Node evaluation:** evaluate enabled nodes in deterministic topological order. A disabled node emits no value and marks its outputs unavailable. A dependent node requiring such an output follows its declared fallback policy or receives a typed unavailable-input diagnostic/error. Never substitute implicit zero, neutral or cached values.
+3. **Contribution collection:** collect successful typed binding contributions without composing targets during node traversal.
+4. **Composition post-pass:** resolve target bases, validate all contributions and their modes, then compose each target in deterministic order.
+
+Fatal graph/configuration failures abort evaluation. Recoverable input/binding failures are isolated to affected outputs where the contract permits; diagnostics identify the affected node, input, binding or target.
+
+### 10.3 Contribution model and mode conflicts
+
+All modes consume one common record, conceptually:
+
+```rust
+struct Contribution {
+    binding_id: BindingId,
+    target: TargetId,
+    value: TypedValue,
+    mode: CompositionMode,
+    weight: Option<f64>,
+    priority: Option<i64>,
+    base_ref: Option<BaseRef>,
+}
+```
+
+Mode-irrelevant fields must be absent and are validated as such. Contributions to one target must all assert the same mode; mixed modes return typed `CompositionModeConflict`. Never select a mode by traversal order or silently coerce contributions.
+
+The canonical priority mode name is `PriorityOverride`, selecting the highest explicit numeric priority with canonical BindingId as the deterministic tie-breaker. Earlier use of `Priority` is shorthand only and must not become the serialized schema name.
+
+Additive contributions identify an explicit base/reference contract and accumulate in canonical BindingId order. WeightedBlend eligibility requires a successfully produced valid value and a finite weight greater than zero. Zero-weight contributions are excluded without error. Disabled/unavailable contributions are excluded and diagnosed where relevant. Negative or non-finite weights are typed errors. If no eligible contributions remain, emit no target value and attach a stable diagnostic; do not invent zero or a base value.
+
+Multiple Replace contributions to one target must use an explicitly declared deterministic precedence policy or return a typed conflict. Prefer the conflict error initially unless a separate policy is approved.
+
+### 10.4 Snapshot freshness
+
+Freshness is part of the input snapshot, not a hidden adapter setting or wall-clock lookup. Each input sample carries monotonic `age_ticks: u64`; the snapshot carries `max_age_ticks: u64`. Both use the same host-provided tick domain. A sample is stale exactly when `age_ticks > max_age_ticks`; equality is fresh. The adapter derives age from verified host sequencing/tick information; the core never reads time.
+
+If the host cannot provide meaningful age, freshness must be represented explicitly as unknown/unavailable. The adapter must not fabricate a tick value or silently mark unknown data fresh; the configured fallback/unavailable policy applies.
+
+### 10.5 Floating-point determinism
+
+Sort contributions by canonical BindingId before Additive or WeightedBlend accumulation, and process targets by canonical TargetId. Reject NaN and infinity at every public numeric boundary. Tests use the initial combined absolute/relative tolerance:
+
+`abs(actual - expected) <= 1e-9 * max(1, abs(actual), abs(expected))`.
+
+This is a comparison rule, not permission to reorder arithmetic or conceal unstable algorithms. Identical inputs must follow the same operation order.
+
+### 10.6 Stable diagnostic registry
+
+Phase 1 establishes the public diagnostic-code registry before evaluator implementation. Codes are stable identifiers independent of human-readable messages and are covered by a checked-in fixture, for example `crates/smart-controller-core/tests/fixtures/diagnostic_codes_v1.json`. Cover missing/stale/invalid/unavailable inputs, graph invalidity/cycles, mapping domain/type errors, composition conflicts/invalid weights/no eligible contributions, and skipped/disabled outputs. Adding codes is compatible; changing an existing code's meaning requires an explicit API/schema decision.
+
+### 10.7 Shared-node validation and cycle defense
+
+A canonical node may have multiple incoming parent edges, but it cannot contain parent-scoped configuration. Parent-specific behaviour belongs in explicit input contexts or separate canonical nodes. Validation rejects parent-scoped configuration on a node referenced by multiple parents.
+
+The production graph builder validates edges and cycles. The evaluator independently defends against cycles. Tests construct malformed graphs through a `#[cfg(test)]` unchecked builder; no unchecked production API is exposed.
+
+### 10.8 No-op and unavailable outcomes
+
+These are valid documented outcomes, not fatal errors:
+
+- Empty graph: empty outputs and diagnostics.
+- All controllers disabled: empty outputs plus disabled/skipped diagnostics.
+- Target with no eligible contributions: no output for that target plus a no-eligible-contribution diagnostic.
+
+A dependent node requiring an unavailable upstream value follows its explicit fallback policy or reports unavailable required input. No implicit zero, neutral or last-value substitution is allowed.
+
+### 10.9 Core portability and Form Deform independence
+
+`smart-controller-core` must build for the repository's supported WASM target and must not use wall-clock APIs, random sources, filesystem/environment/process APIs, network access or host SDK commands. Keep dependencies minimal and audited; initially allow only required serialization/error/value crates (for example `serde` and `thiserror`) plus Rust standard/core facilities. Any new dependency requires portability, license and necessity review.
+
+CI includes a dependency-boundary check proving neither `smart-controller-core` nor `form-deform-core` depends on the other, plus the WASM build check. This separation is a hard architectural boundary.
+
+### 10.10 Phase sequencing and acceptance corrections
+
+- **Phase 0:** add executable V1 characterization tests against captured fixtures and current preview/binding outputs. Fixtures alone do not prove compatibility. Record expected outputs before changing public models.
+- **Phase 1:** establish typed values/angles, Pose2D's value contract, schema, diagnostic registry, legacy-to-canonical converters and round-trip/loss diagnostics for both legacy formats. Move pure `range.rs` and `frame.rs` primitives into Phase 1 to prove V1 scalar/frame equivalence early.
+- **Phase 2:** implement Pose2D/joystick mapping using the typed interpolation contracts established in Phase 1.
+- **Phase 3:** implement the four-stage evaluator, contribution collection, unchecked-cycle defense and no-op cases. Composition remains a separate post-pass.
+- **Phase 4:** complete target composition and conflict handling using the common contribution record.
+- **Phase 5:** the host adapter wires already-tested migration and canonical evaluation into the host boundary; it does not invent migration rules.
+- **Phase 6A:** core-only triangulated/grid mapping extensions, independently testable without host UI.
+- **Phase 6B:** host authoring/UI work is deferred and contingent on a fresh, concrete host-capability audit.
+
+The V1 characterization suite covers legacy three-anchor interpolation, easing, targets/modes, disabled bindings, BindingSet serialization, Slider endpoints, reversed ranges, and manual-input and bone-query parameter paths. Migration tests prove fixture → canonical representation → legacy-compatible representation where lossless and diagnose every non-round-trippable field.
+
+Required test files include `v1_characterization_tests.rs`, `migration_roundtrip_tests.rs`, `angle_interpolation_tests.rs`, `pose2d_tests.rs`, `composition_conflict_tests.rs`, `freshness_tests.rs`, `diagnostic_registry_tests.rs`, `graph_tests.rs` (including unchecked-cycle defence), `no_op_graph_tests.rs` and `dependency_boundary_tests.rs`.
+
+The implementation sequence is therefore: Phase 0 characterization; Phase 1 model/schema/diagnostics/migration plus pure range/frame mapping; Phase 2 pose mapping; Phase 3 graph/evaluation; Phase 4 composition; Phase 5 adapter integration; Phase 6A core mapping extensions; Phase 6B host authoring only after capability verification.
