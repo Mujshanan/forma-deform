@@ -455,7 +455,7 @@ pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsE
         params,
         report: MigrationReport {
             source_format: "canonical_v1".into(),
-            notices: vec!["All canonical fields were representable in the unversioned Params format; export was lossless.".into()],
+            notices: vec!["All fields present in this canonical document were representable in Params. Consult the original migration report for any legacy fields already omitted during import.".into()],
             losses: vec![],
         },
     })
