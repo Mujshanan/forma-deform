@@ -10,7 +10,13 @@ use smart_controller_core::{
     value::TypedValue,
 };
 
-use crate::targets::{assess_target, TargetCapability};
+use crate::targets::{assess_target, query_geometry_info, verify_geometry_pin, TargetCapability};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostTargetVerification {
+    NotAttempted,
+    Verified,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TargetPreviewItem {
@@ -18,6 +24,8 @@ pub struct TargetPreviewItem {
     pub target: TargetMapping,
     pub value: TypedValue,
     pub capability: TargetCapability,
+    /// True only after a read-only host identity query confirms the exact pin.
+    pub host_verification: HostTargetVerification,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -65,12 +73,41 @@ pub fn build_target_preview_plan(
         plan.items.push(TargetPreviewItem {
             target_id: target_id.clone(),
             capability: assess_target(&target),
+            host_verification: HostTargetVerification::NotAttempted,
             target,
             value: *value,
         });
     }
     plan.items.sort_by(|left, right| left.target_id.cmp(&right.target_id));
     plan.unresolved_targets.sort();
+    Ok(plan)
+}
+
+/// Build the preview plan and verify every GeometryDeform target against
+/// the host's read-only warp.info response. The exact element/pin IDs are
+/// checked; array order is never treated as identity. No mutation is issued.
+pub fn build_host_target_preview_plan(
+    document: &CanonicalDocument,
+    result: &ComposedEvaluationResult,
+) -> Result<TargetPreviewPlan, String> {
+    let mut plan = build_target_preview_plan(document, result)?;
+    let mut element_responses = std::collections::BTreeMap::new();
+
+    for item in &mut plan.items {
+        if let TargetMapping::GeometryDeform { element_id, pin_id, .. } = &item.target {
+            let element_numeric = element_id.parse::<u64>()
+                .map_err(|_| format!("geometry target element ID '{element_id}' is not numeric"))?;
+            let response = if let Some(response) = element_responses.get(&element_numeric) {
+                response.clone()
+            } else {
+                let response = query_geometry_info(element_id, None)?;
+                element_responses.insert(element_numeric, response.clone());
+                response
+            };
+            verify_geometry_pin(&response, element_id, pin_id)?;
+            item.host_verification = HostTargetVerification::Verified;
+        }
+    }
     Ok(plan)
 }
 
