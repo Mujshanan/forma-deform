@@ -177,7 +177,7 @@ pub fn evaluate<M: ControllerMapper>(
     let mut preflight = BTreeMap::new();
     let mut diagnostics = Vec::new();
     for (id, definition) in &definition_map {
-        if matches!(definition.source, InputSource::ControllerOutput { .. }) {
+        if matches!(&definition.source, InputSource::ControllerOutput { .. }) {
             preflight.insert(id.clone(), PreflightInput {
                 definition: definition.clone(),
                 resolved: None,
@@ -440,5 +440,240 @@ fn target_accepts_value(target: &TargetMapping, value: TypedValue) -> bool {
         TargetMapping::SymbolFrame { .. } | TargetMapping::FrameRange { .. } | TargetMapping::Property { .. } =>
             matches!(value, TypedValue::Scalar(_)),
         TargetMapping::GeometryDeform { .. } => matches!(value, TypedValue::Vector2(_)),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        canonical::{ControllerBinding, MappingConfig},
+        ids::TargetId,
+        input::{BoneTransformChannel, InputDimension, InputSample},
+    };
+    use std::{cell::Cell, collections::BTreeMap};
+
+    fn input_id(value: &str) -> InputId { InputId::new(value).unwrap() }
+    fn controller_id(value: &str) -> ControllerId { ControllerId::new(value).unwrap() }
+    fn binding_id(value: &str) -> BindingId { BindingId::new(value).unwrap() }
+
+    fn binding(id: &str) -> ControllerBinding {
+        ControllerBinding {
+            id: binding_id(id),
+            target_id: TargetId::new(format!("target-{id}")).unwrap(),
+            target: TargetMapping::Property {
+                target_id: format!("property-{id}"),
+                property: "value".into(),
+                scale: 1.0,
+                additive: false,
+            },
+            mode: BindingMode::AbsolutePose,
+            base_value: None,
+        }
+    }
+
+    fn node(id: &str, inputs: Vec<InputId>, dependencies: Vec<ControllerId>, enabled: bool, binding: &str) -> Controller {
+        Controller {
+            id: controller_id(id),
+            enabled,
+            inputs,
+            dependencies,
+            mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+            bindings: vec![binding(binding)],
+            parent_scoped: false,
+        }
+    }
+
+    fn manual_definition(id: &str, fallback: FallbackPolicy) -> InputDefinition {
+        InputDefinition {
+            id: input_id(id),
+            source: InputSource::Manual,
+            dimension: InputDimension::Scalar,
+            fallback,
+        }
+    }
+
+    fn snapshot(id: &str, value: f64) -> InputSnapshot {
+        InputSnapshot::new(5, vec![InputSample::valid(
+            input_id(id),
+            TypedValue::scalar(value).unwrap(),
+            Some(5),
+        )]).unwrap()
+    }
+
+    #[test]
+    fn evaluates_nodes_in_order_and_returns_uncomposed_contributions() {
+        let graph = ControllerGraph::new(vec![node("controller-a", vec![input_id("input-a")], vec![], true, "binding-a")]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                inputs.value(&controller.inputs[0]).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.75), &mapper).unwrap();
+        assert_eq!(result.contributions.len(), 1);
+        assert_eq!(result.contributions[0].value.as_scalar(), Some(0.75));
+        assert_eq!(result.contributions[0].mode, CompositionMode::Replace);
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn complete_input_preflight_happens_before_any_node_evaluation() {
+        let graph = ControllerGraph::new(vec![
+            node("a", vec![input_id("input-a")], vec![], true, "binding-a"),
+            node("b", vec![input_id("input-b")], vec![], true, "binding-b"),
+        ]).unwrap();
+        let definitions = vec![
+            manual_definition("input-a", FallbackPolicy::Reject),
+            manual_definition("input-b", FallbackPolicy::Reject),
+        ];
+        let calls = Cell::new(0);
+        let mapper = |_: &Controller, _: &ResolvedInputs| {
+            calls.set(calls.get() + 1);
+            Ok(BTreeMap::new())
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.5), &mapper);
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[test]
+    fn controller_output_inputs_follow_declared_dependencies() {
+        let upstream = node("upstream", vec![input_id("manual")], vec![], true, "up-binding");
+        let downstream = node(
+            "downstream",
+            vec![input_id("from-upstream")],
+            vec![controller_id("upstream")],
+            true,
+            "down-binding",
+        );
+        let graph = ControllerGraph::new(vec![downstream, upstream]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            },
+        ];
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            let input = inputs.value(&controller.inputs[0]).unwrap().as_scalar().unwrap();
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                TypedValue::scalar(input + 1.0).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("manual", 2.0), &mapper).unwrap();
+        assert_eq!(result.contributions.len(), 2);
+        let downstream_value = result.contributions.iter()
+            .find(|item| item.binding_id == binding_id("down-binding"))
+            .unwrap().value.as_scalar();
+        assert_eq!(downstream_value, Some(4.0));
+    }
+
+    #[test]
+    fn disabled_controller_output_is_unavailable_not_a_cached_value() {
+        let upstream = node("upstream", vec![input_id("manual")], vec![], false, "up-binding");
+        let mut downstream = node(
+            "downstream",
+            vec![input_id("from-upstream")],
+            vec![controller_id("upstream")],
+            true,
+            "down-binding",
+        );
+        downstream.bindings[0].target = TargetMapping::Property {
+            target_id: "downstream-property".into(),
+            property: "value".into(),
+            scale: 1.0,
+            additive: true,
+        };
+        downstream.bindings[0].mode = BindingMode::RelativeDelta;
+        downstream.bindings[0].base_value = Some(TypedValue::scalar(0.0).unwrap());
+        let graph = ControllerGraph::new(vec![downstream, upstream]).unwrap();
+        let definitions = vec![
+            manual_definition("manual", FallbackPolicy::Reject),
+            InputDefinition {
+                id: input_id("from-upstream"),
+                source: InputSource::ControllerOutput {
+                    controller_id: controller_id("upstream"),
+                    binding_id: binding_id("up-binding"),
+                },
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Unavailable,
+            },
+        ];
+        let mapper = |_: &Controller, _: &ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+            panic!("downstream must not evaluate without its required input")
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("manual", 1.0), &mapper).unwrap();
+        assert!(result.contributions.is_empty());
+        assert!(result.unavailable_outputs.contains(&(controller_id("upstream"), binding_id("up-binding"))));
+        assert!(result.diagnostics.iter().any(|item| item.code == INPUT_UNAVAILABLE));
+    }
+
+    #[test]
+    fn empty_graph_is_a_clean_no_op() {
+        let graph = ControllerGraph::new(vec![]).unwrap();
+        let snapshot = InputSnapshot::new(0, vec![]).unwrap();
+        let mapper = |_: &Controller, _: &ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+            panic!("empty graph must not invoke mapper")
+        };
+        let result = evaluate(&graph, &[], &snapshot, &mapper).unwrap();
+        assert!(result.contributions.is_empty());
+        assert!(result.diagnostics.is_empty());
+        assert!(result.unavailable_outputs.is_empty());
+    }
+
+    #[test]
+    fn stale_input_uses_only_the_explicit_fallback() {
+        let graph = ControllerGraph::new(vec![node("a", vec![input_id("input-a")], vec![], true, "binding-a")]).unwrap();
+        let definitions = vec![manual_definition(
+            "input-a",
+            FallbackPolicy::UseValue(TypedValue::scalar(0.25).unwrap()),
+        )];
+        let stale = InputSnapshot::new(4, vec![InputSample::valid(
+            input_id("input-a"),
+            TypedValue::scalar(99.0).unwrap(),
+            Some(5),
+        )]).unwrap();
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                inputs.value(&controller.inputs[0]).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &stale, &mapper).unwrap();
+        assert_eq!(result.contributions[0].value.as_scalar(), Some(0.25));
+        assert!(result.diagnostics.iter().any(|item| item.code == INPUT_STALE));
+    }
+
+    #[test]
+    fn evaluator_rechecks_cycles_even_if_graph_was_built_unchecked() {
+        let graph = ControllerGraph::from_unchecked_for_test(vec![
+            node("a", vec![input_id("input-a")], vec![controller_id("b")], true, "binding-a"),
+            node("b", vec![input_id("input-b")], vec![controller_id("a")], true, "binding-b"),
+        ]);
+        let calls = Cell::new(0);
+        let mapper = |_: &Controller, _: &ResolvedInputs| {
+            calls.set(calls.get() + 1);
+            Ok(BTreeMap::new())
+        };
+        let result = evaluate(
+            &graph,
+            &[
+                manual_definition("input-a", FallbackPolicy::Unavailable),
+                manual_definition("input-b", FallbackPolicy::Unavailable),
+            ],
+            &InputSnapshot::new(0, vec![]).unwrap(),
+            &mapper,
+        );
+        assert!(matches!(result, Err(CoreError::CycleDetected(_))));
+        assert_eq!(calls.get(), 0);
     }
 }
