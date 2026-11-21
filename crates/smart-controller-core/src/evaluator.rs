@@ -401,7 +401,7 @@ pub fn evaluate<M: ControllerMapper>(
                 weight,
                 priority,
                 base_ref,
-                base_value: if mode == CompositionMode::Additive && matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)) || (binding.composition.is_none() && mode == CompositionMode::Additive) { binding.base_value } else { None },
+                base_value: if mode == CompositionMode::Additive && matches!(base_ref.as_ref(), Some(BaseRef::Authored)) { binding.base_value } else { None },
             };
             contribution.validate()?;
             outputs.insert((controller_id.clone(), binding.id.clone()), value);
