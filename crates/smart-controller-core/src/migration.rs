@@ -208,7 +208,7 @@ pub fn migrate_unversioned_params(source: &Params) -> Result<MigrationOutput, Co
                     action_layer_id: layer,
                     start_frame: start,
                     end_frame: end,
-                    endpoint_policy: source.endpoint_policy.unwrap_or_default(),
+                    endpoint_policy: source.endpoint_policy,
                 },
                 BindingMode::AbsolutePose,
                 None,
@@ -389,7 +389,7 @@ pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsE
         return Err(CoreError::InvalidModel("document is not representable as one legacy Params object".into()));
     }
     let controller = &document.controllers[0];
-    if controller.id.as_str() != "legacy-params-controller" || controller.enabled == false ||
+    if controller.id.as_str() != "legacy-params-controller" || !controller.enabled ||
         controller.parent_scoped || !controller.dependencies.is_empty() || controller.inputs.len() != 1 || controller.bindings.len() != 1 {
         return Err(CoreError::InvalidModel("controller identity or structure is not reversible to Params".into()));
     }
@@ -431,7 +431,7 @@ pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsE
                 binding.target_id.as_str() != format!("action-layer:{action_layer_id}").as_str() {
                 return Err(CoreError::InvalidModel("frame target is not a reversible Params slider".into()));
             }
-            (Mode::Slider, Some(*action_layer_id), Some(*start_frame), Some(*end_frame), Some(*endpoint_policy), None, None, None, false)
+            (Mode::Slider, Some(*action_layer_id), Some(*start_frame), Some(*end_frame), *endpoint_policy, None, None, None, false)
         }
         TargetMapping::Property { target_id, property, scale, additive } => {
             let expected_mode = if *additive { BindingMode::RelativeDelta } else { BindingMode::AbsolutePose };
