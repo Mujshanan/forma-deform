@@ -426,13 +426,20 @@ The proposed file-level build order remains usable, with these refinements:
 | Host capability report | Reconciled with existing SDK audit in Section 5 |
 | Test coverage/gap report | Complete in Section 7 |
 | Migration risks | Complete in Sections 8–10 |
-| Golden fixture baseline | Not yet created; required before model replacement |
+| Golden fixture baseline | Captured as three JSON inputs under `crates/smart-controller-core/tests/fixtures/`; runtime deserialization/round-trip verification remains pending |
 | Runtime test/build evidence | Not collected; commands not executed |
 | AniCraft in-app smoke test | Not performed |
 
-**Phase 0 status: source/document audit completed; verification baseline remains pending.**
+**Phase 0 status: source/document audit and initial fixture capture completed; executable verification remains pending.**
 
-Phase 0 can be considered complete for architectural discovery, but it is not a green light to begin destructive refactoring. Before Phase 1 changes existing public models, the team should capture the golden fixtures and confirm the identity/schema decisions.
+Captured fixtures:
+- `legacy_binding_set_v1.json` — representative version-1 binding set with SymbolFrame and GeometryDeform targets.
+- `legacy_params_slider_unversioned.json` — current host-driven Slider Params payload.
+- `legacy_params_slider_manual_unversioned.json` — current manual-input Slider Params payload.
+
+The two Params fixtures are deliberately labelled unversioned: the current `Params` structure has no schema envelope/version field. The fixtures are source-derived compatibility inputs, not proof that deserialization or round-trip tests passed. They must be loaded by tests and verified before any model migration. The BindingSet fixture must likewise be checked against the current Serde representation by an executable test.
+
+Phase 0 is complete for architectural discovery and baseline capture, but executable fixture verification remains a prerequisite before Phase 1 changes existing public models. Confirm identity and schema decisions before implementation.
 
 ## 12. Explicit non-authorization
 
