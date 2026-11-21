@@ -559,3 +559,28 @@ Added the following Phase 1 work on this branch:
 
 
 The explicit dependency-boundary test is now present at crates/smart-controller-core/tests/dependency_boundary_tests.rs. It checks both crate manifests (including normal, dev, build and target-specific dependency sections) and fails if either core directly depends on the other.
+
+
+## 12. Phase 3 evaluator orchestration — in progress
+
+**Branch:** `feat/smart-controller-phase3-evaluator`  
+**Base:** Phase 1 squash merge `9e5b57f08fbd6f5b25de8ec1bb401692b1e4749b`
+
+The first Phase 3 increment adds `evaluator.rs` and exports the module from `smart-controller-core`.
+
+Implemented in this increment:
+
+- A host-independent `ControllerMapper` boundary so the evaluator owns orchestration while mapping algorithms remain independently implemented.
+- Full preflight of the graph, controller-local invariants, input definitions, snapshot samples, input references, and controller-output dependency declarations before the first mapper call.
+- Explicit external input resolution with stale/missing/invalid/unavailable diagnostics and the configured `UseValue`, `Unavailable`, or `Reject` fallback policy.
+- Controller-output input resolution from successful upstream binding outputs only. Disabled or skipped producer outputs are unavailable; no cached or fabricated value is substituted.
+- Deterministic topological node evaluation with a second evaluator-side cycle check.
+- Binding contribution collection with target/value compatibility validation. Absolute-pose bindings currently produce Replace contributions; relative-delta bindings produce Additive contributions with an explicit authored base reference.
+- No target composition or host mutation. The result is an uncomposed contribution list for the separate Phase 4 post-pass.
+- Empty-graph and all-disabled no-op behavior, unavailable dependency propagation, explicit fallback use, stale input fallback, full-snapshot preflight, and unchecked-cycle defense tests.
+
+**Important scope boundary:** Phase 2's concrete Pose2D/joystick mapping algorithms have not been implemented as part of this increment. Phase 3 currently receives mapping results through `ControllerMapper`; a production mapper must be supplied by the mapping layer. Unsupported mapping configurations must not be treated as a successful empty output. The trait boundary allows Phase 3 orchestration to be developed and tested without prematurely duplicating Phase 2 mapping semantics.
+
+**Not yet complete:** typed mapping diagnostics for every mapper failure category; a concrete mapping adapter; complete multi-input semantics beyond passing the resolved typed values to the mapper; Phase 4 target composition; and full CI verification. Tests have been authored but are not claimed as executed until a workflow or local Rust toolchain reports results.
+
+**Preserved boundaries:** Smart Controller V1 remains preview-only. The evaluator is pure and host-independent. CCC-01.5 remains unchanged: no Smart Controller output is combined with Form Deform pin-deformation evaluation.
