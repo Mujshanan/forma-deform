@@ -78,8 +78,8 @@ pub fn evaluate_host_document_preview<M: ControllerMapper>(
     mapper: &M,
     composition_context: &CompositionContext,
 ) -> Result<HostPreviewSession, String> {
-    let snapshot = crate::input_provider::collect_host_input_snapshot(
-        &document.inputs,
+    let snapshot = crate::input_provider::collect_document_input_snapshot(
+        document,
         host_context,
     )?;
     let plan = evaluate_document_preview(document, &snapshot, mapper, composition_context)
