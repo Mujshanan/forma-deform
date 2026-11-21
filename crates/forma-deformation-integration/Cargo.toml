@@ -1,0 +1,10 @@
+[package]
+name = "forma-deformation-integration"
+version = "0.1.0"
+edition = "2024"
+description = "Host-independent orchestration boundary for independent controller and pin-deformation evaluation"
+license = "MIT"
+
+[dependencies]
+form-deform-core = { path = "../form-deform-core" }
+smart-controller-core = { path = "../smart-controller-core" }
