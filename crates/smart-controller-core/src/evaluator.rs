@@ -519,8 +519,10 @@ fn mark_controller_outputs_unavailable(
 
 fn target_accepts_value(target: &TargetMapping, value: TypedValue) -> bool {
     match target {
-        TargetMapping::SymbolFrame { .. } | TargetMapping::FrameRange { .. } | TargetMapping::Property { .. } =>
+        TargetMapping::SymbolFrame { .. } | TargetMapping::FrameRange { .. } =>
             matches!(value, TypedValue::Scalar(_)),
+        TargetMapping::Property { .. } =>
+            matches!(value, TypedValue::Scalar(_) | TypedValue::Angle(_)),
         TargetMapping::GeometryDeform { .. } => matches!(value, TypedValue::Vector2(_)),
     }
 }
