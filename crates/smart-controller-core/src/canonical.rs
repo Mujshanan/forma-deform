@@ -1,6 +1,7 @@
 //! Canonical, host-independent controller configuration.
 use crate::{
     error::CoreError,
+    model::EndpointPolicy,
     ids::{BindingId, ControllerId, InputId, TargetId},
     legacy::{ControllerMode, EaseCurve, InputRange},
     value::TypedValue,
@@ -23,6 +24,7 @@ pub enum MappingConfig {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TargetMapping {
     SymbolFrame { symbol_instance_id: String, negative_frame: u32, neutral_frame: u32, positive_frame: u32 },
+    FrameRange { action_layer_id: u64, start_frame: u32, end_frame: u32, endpoint_policy: EndpointPolicy },
     GeometryDeform { element_id: String, pin_id: String, negative_offset: [f64; 2], neutral_offset: [f64; 2], positive_offset: [f64; 2] },
     Property { target_id: String, property: String, scale: f64, additive: bool },
 }
@@ -75,6 +77,8 @@ impl Controller {
                 return Err(CoreError::InvalidModel(format!("base value is only valid for relative binding {}", binding.id)));
             }
             match &binding.target {
+                TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, .. } if *action_layer_id == 0 || end_frame <= start_frame =>
+                    return Err(CoreError::InvalidModel("frame range requires a nonzero layer and increasing endpoints".into())),
                 TargetMapping::SymbolFrame { symbol_instance_id, .. } if symbol_instance_id.trim().is_empty() =>
                     return Err(CoreError::InvalidModel("symbol frame target requires an identity".into())),
                 TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, neutral_offset, positive_offset } => {
