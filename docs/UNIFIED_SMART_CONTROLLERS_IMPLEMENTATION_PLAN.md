@@ -670,7 +670,7 @@ Phase 4 is complete at `f08185f043141ac3f476bd2301dbcabd72d9bebb`.
 Initial adapter foundations are being added:
 
 - `plugins/smart-controller/src/adapter.rs`: parses the verified read-only `bone.info` response by stable numeric bone ID; converts degrees to radians; makes spring-swing inclusion and wrapped/unwrapped angle semantics explicit; produces same-invocation input samples without reading a clock.
-- `plugins/smart-controller/src/targets.rs`: assesses host target capabilities without issuing commands. Geometry pin application is marked command-preview-only (`warp.info` / `warp.pin_move`); symbol-frame, frame-range and generic property targets remain calculation-only.
+- `plugins/smart-controller/src/targets.rs`: assesses host target capabilities without issuing mutating commands, queries the documented read-only `warp.info` endpoint, and verifies geometry targets against numeric element/pin IDs rather than array positions. Geometry pin application is marked command-preview-only (`warp.pin_move`); symbol-frame, frame-range and generic property targets remain calculation-only.
 - `plugins/smart-controller/src/compatibility.rs`: delegates legacy BindingSet and unversioned Params decoding/migration to the core migration API and preserves MigrationReport.
 - The plugin entry point registers these modules; its existing V1 Slider preview path is unchanged.
 
