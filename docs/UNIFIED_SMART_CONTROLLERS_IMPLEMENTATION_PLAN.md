@@ -601,7 +601,7 @@ Hardening completed:
 - Determinism test compares equivalent graphs with different insertion orders and snapshots with different sample orders.
 - Added coverage for mapping failure propagation, Reject and explicit fallback behavior, non-finite mapping errors, unknown output bindings, unused-sample type validation, controller-output snapshot injection, empty/all-disabled graphs, stale input fallback, and cycle defense.
 
-**Evaluator-specific tests:** 16 authored and executed successfully.  
-**Workspace verification:** `cargo test --workspace` passed with 133 tests total. Bun typecheck, Bun tests (9/9), and Bun build passed. Release WASM builds passed for bone-query, form-deform, and smart-controller plugins. The complete GitHub Actions job concluded successfully.
+**Evaluator-specific tests:** 18 authored and executed successfully.  
+**Workspace verification:** `cargo test --workspace` passed with 135 tests total. Bun typecheck, Bun tests (9/9), and Bun build passed. Release WASM builds passed for bone-query, form-deform, and smart-controller plugins. The complete GitHub Actions job concluded successfully.
 
 **Not claimed:** rustfmt and Clippy were not run by this workflow. No Phase 3 PR or merge has been created. V1 remains preview-only; CCC-01.5 and Form Deform evaluation independence are unchanged.
