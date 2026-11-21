@@ -20,3 +20,43 @@ pub const ALL_CODES: &[&str] = &[
     COMPOSITION_CONFLICT, COMPOSITION_WEIGHT_INVALID, COMPOSITION_NO_ELIGIBLE,
     CONTROLLER_DISABLED, OUTPUT_SKIPPED,
 ];
+
+use crate::{error::CoreError, ids::{ControllerId, InputId, TargetId}};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticSeverity { Info, Warning, Error }
+
+/// Public structured diagnostic. The code is stable; the message is explanatory
+/// and must never be used as a machine-readable discriminator.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Diagnostic {
+    pub code: String,
+    pub severity: DiagnosticSeverity,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_id: Option<ControllerId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_id: Option<InputId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<TargetId>,
+}
+
+impl Diagnostic {
+    pub fn new(code: impl Into<String>, severity: DiagnosticSeverity, message: impl Into<String>) -> Result<Self, CoreError> {
+        let code = code.into();
+        if !ALL_CODES.contains(&code.as_str()) {
+            return Err(CoreError::InvalidModel(format!("unregistered diagnostic code: {code}")));
+        }
+        Ok(Self {
+            code, severity, message: message.into(),
+            controller_id: None, input_id: None, target_id: None,
+        })
+    }
+
+    pub fn with_controller(mut self, id: ControllerId) -> Self { self.controller_id = Some(id); self }
+    pub fn with_input(mut self, id: InputId) -> Self { self.input_id = Some(id); self }
+    pub fn with_target(mut self, id: TargetId) -> Self { self.target_id = Some(id); self }
+}
