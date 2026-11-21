@@ -570,3 +570,12 @@ Migration tests now cover exact BindingSet round-trip, Params slider/transform r
 
 
 The dependency-boundary test now checks both core crate manifests for direct normal/dev/build/target-specific dependencies in either direction. This test is authored but has not been executed with Cargo.
+
+
+## 15. Phase 3 evaluator orchestration — implementation in progress
+
+The branch `feat/smart-controller-phase3-evaluator` adds a core-only evaluator orchestration API. It performs graph/snapshot preflight before mapper execution, evaluates nodes in deterministic topological order, resolves controller-output dependencies from successful upstream binding outputs, and returns uncomposed contributions plus diagnostics.
+
+The mapping algorithm is injected through `ControllerMapper`. This deliberately avoids implementing Pose2D/joystick mapping as an unreviewed side effect of Phase 3; the planned Phase 2 mapping work remains a prerequisite for a complete production mapper. The evaluator does not apply target composition, write host state, or call Form Deform.
+
+Tests have been authored for full preflight-before-evaluation, dependency ordering, disabled/unavailable outputs, empty/all-disabled no-op cases, stale-input fallback, and evaluator-side cycle defense. **These tests are pending execution**; no Phase 3 CI pass is claimed at this point.
