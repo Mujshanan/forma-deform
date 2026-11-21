@@ -27,3 +27,20 @@ fn graph_rejects_missing_dependency_and_cycles() {
 fn empty_graph_is_valid() {
     assert!(ControllerGraph::new(vec![]).unwrap().is_empty());
 }
+
+#[test]
+fn graph_rejects_duplicate_dependency_edges() {
+    assert!(ControllerGraph::new(vec![node("a", &["b", "b"]), node("b", &[])]).is_err());
+}
+
+#[test]
+fn graph_rejects_parent_scoped_configuration_on_a_shared_node() {
+    let mut shared = node("shared", &[]);
+    shared.parent_scoped = true;
+    let graph = ControllerGraph::new(vec![
+        node("parent-a", &["shared"]),
+        node("parent-b", &["shared"]),
+        shared,
+    ]);
+    assert!(graph.is_err());
+}
