@@ -1,6 +1,6 @@
 //! Explicit migrations from persisted V1 controller formats to the canonical document.
 use crate::{
-    canonical::{BindingMode, Controller, ControllerBinding, MappingConfig, TargetMapping},
+    canonical::{BindingMode, Controller, ControllerBinding, EasingConfig, MappingConfig, TargetMapping},
     error::CoreError,
     ids::{BindingId, ControllerId, InputId, TargetId},
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
@@ -136,7 +136,7 @@ pub fn migrate_binding_set_v1(source: &BindingSet) -> Result<MigrationOutput, Co
             enabled: binding.enabled,
             inputs: vec![input_id],
             dependencies: vec![],
-            mapping: MappingConfig::LegacyThreeAnchor { input_range: binding.input_range, easing: binding.easing },
+            mapping: MappingConfig::ThreeAnchorRange { minimum: binding.input_range.minimum, neutral: binding.input_range.neutral, maximum: binding.input_range.maximum, easing: match binding.easing { crate::legacy::EaseCurve::Linear => EasingConfig::Linear, crate::legacy::EaseCurve::Smoothstep => EasingConfig::Smoothstep } },
             bindings: vec![canonical_binding],
             parent_scoped: false,
         };
