@@ -539,3 +539,20 @@ Added without removing the V1 Params or legacy.rs APIs:
 **Important incomplete work:** No legacy BindingSet/Params migration registry or loss-reporting converters have been implemented yet. Canonical model serialization dispatch and golden canonical model round-trip coverage are also outstanding. The canonical types are additive alongside the legacy models; the competing APIs have deliberately not yet been replaced.
 
 **Execution:** No Phase 1 Cargo tests have been run in this environment. Treat every newly authored test as pending until CI or a Rust toolchain executes them. Phase 1 exit is not met.
+
+
+### 11.3 Migration, diagnostics and mapping-contract increment
+
+Added the following Phase 1 work on this branch:
+
+- migration.rs now migrates versioned BindingSet V1 and unversioned Params JSON into the canonical document. migrate_json dispatches by the legacy document shape and uses strict deserialization.
+- Migration outputs include a structured report with notices and explicit losses. Unversioned Params receives deterministic migration IDs, which are called out as migration identities rather than durable authored identities.
+- export_binding_set_v1 and export_unversioned_params provide reverse conversion only when the canonical document retains the exact legacy-representable shape. Unsupported or altered canonical data is rejected rather than silently discarded.
+- BindingSet V1 → canonical → BindingSet V1 round-trip tests assert exact equality. Params → canonical → Params tests cover slider, transform, absent optional endpoint policy and bone-driven input identities.
+- Canonical JSON now has validated to_json/from_json entry points, schema-version checks, unknown-field rejection and round-trip tests.
+- diagnostic_codes.rs now exposes structured diagnostics with registered stable codes, severity, explanatory message and optional controller/input/target context.
+- Canonical mapping types no longer depend on legacy V1 types. Legacy mapping data is translated into canonical-owned range/easing types.
+- Pure range/frame/easing functions reject non-finite and overflowing public inputs. New range/frame parity tests compare the scalar/frame results against the characterized V1 functions.
+- Graph validation rejects duplicate dependency edges; tests cover shared-node parent-scoped configuration.
+
+**Remaining Phase 1 work:** add the explicit core/Form Deform dependency-boundary test and finish a complete source-level review. Then run core/workspace tests, formatting, Clippy and WASM builds on this branch. None of the Phase 1 tests have been executed in this environment, so they remain pending. No competing V1 API has been removed.
