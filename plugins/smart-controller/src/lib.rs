@@ -2,6 +2,8 @@
 //! it does not drive the timeline during playback or mutate the document.
 pub mod adapter;
 pub mod compatibility;
+pub mod input_provider;
+pub mod preview_plan;
 pub mod targets;
 
 use anicraft_plugin_sdk as ac;
