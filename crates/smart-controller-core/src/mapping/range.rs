@@ -7,7 +7,9 @@ pub struct ThreePointRange { pub minimum: Scalar, pub neutral: Scalar, pub maxim
 impl ThreePointRange {
     pub fn new(minimum: f64, neutral: f64, maximum: f64) -> Result<Self, CoreError> {
         let (minimum, neutral, maximum) = (Scalar::new(minimum)?, Scalar::new(neutral)?, Scalar::new(maximum)?);
-        if neutral.get() <= minimum.get() || maximum.get() <= neutral.get() {
+        let lower_span = neutral.get() - minimum.get();
+        let upper_span = maximum.get() - neutral.get();
+        if !lower_span.is_finite() || !upper_span.is_finite() || lower_span <= 0.0 || upper_span <= 0.0 {
             return Err(CoreError::InvalidMapping("three-point range must be strictly ordered".into()));
         }
         Ok(Self { minimum, neutral, maximum })
