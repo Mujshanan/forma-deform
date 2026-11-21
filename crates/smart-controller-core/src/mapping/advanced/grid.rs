@@ -82,6 +82,9 @@ fn validate_axis(values: &[f64], name: &str) -> Result<(), CoreError> {
     if values.windows(2).any(|pair| pair[0] >= pair[1]) {
         return Err(CoreError::InvalidMapping(format!("grid {name} coordinates must be strictly increasing")));
     }
+    if values.windows(2).any(|pair| !(pair[1] - pair[0]).is_finite()) {
+        return Err(CoreError::InvalidMapping(format!("grid {name} coordinate intervals must be finite")));
+    }
     Ok(())
 }
 
