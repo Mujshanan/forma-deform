@@ -97,7 +97,7 @@ fn unversioned_slider_params_migration_preserves_frame_mapping() {
         start: -30.0, end: 30.0,
     });
     assert_eq!(migrated.document.controllers[0].bindings[0].target, TargetMapping::FrameRange {
-        action_layer_id: 5, start_frame: 1, end_frame: 12, endpoint_policy: EndpointPolicy::Inclusive,
+        action_layer_id: 5, start_frame: 1, end_frame: 12, endpoint_policy: Some(EndpointPolicy::Inclusive),
     });
     assert!(matches!(&migrated.document.inputs[0].source, smart_controller_core::input::InputSource::Manual));
     migrated.document.validate().unwrap();
