@@ -102,13 +102,13 @@ impl TriangulatedMapping {
     pub fn boundary_policy(&self) -> MeshBoundaryPolicy { self.boundary }
 
     pub fn evaluate(&self, point: Vector2) -> Result<Pose2D, CoreError> {
-        let mut candidates = self.containing_triangles(point);
+        let mut candidates = self.containing_triangles(point)?;
         if candidates.is_empty() {
             if self.boundary == MeshBoundaryPolicy::Reject {
                 return Err(CoreError::InvalidMapping("query point lies outside the triangulated pose mesh".into()));
             }
             let projected = self.closest_mesh_point(point)?;
-            candidates = self.containing_triangles(projected);
+            candidates = self.containing_triangles(projected)?;
         }
         candidates.sort_by_key(|(key, _, _)| *key);
 
@@ -126,13 +126,15 @@ impl TriangulatedMapping {
         Ok(first)
     }
 
-    fn containing_triangles(&self, point: Vector2) -> Vec<([usize; 3], Triangle, [f64; 3])> {
-        self.triangles.iter().copied().filter_map(|triangle| {
+    fn containing_triangles(&self, point: Vector2) -> Result<Vec<([usize; 3], Triangle, [f64; 3])>, CoreError> {
+        let mut candidates = Vec::new();
+        for triangle in self.triangles.iter().copied() {
             let weights = self.barycentric(point, triangle);
-            if weights.iter().all(|weight| *weight >= -BARYCENTRIC_EPSILON) {
-                normalize_weights(weights).ok().map(|weights| (triangle.canonical_key(), triangle, weights))
-            } else { None }
-        }).collect()
+            if weights.iter().all(|weight| weight.is_finite() && *weight >= -BARYCENTRIC_EPSILON) {
+                candidates.push((triangle.canonical_key(), triangle, normalize_weights(weights)?));
+            }
+        }
+        Ok(candidates)
     }
 
     fn interpolate_triangle(&self, triangle: Triangle, weights: [f64; 3]) -> Result<Pose2D, CoreError> {
