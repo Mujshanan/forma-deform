@@ -1,0 +1,447 @@
+# Smart Controllers — Phase 0 Existing Implementation Audit
+
+**Repository:** `Mujshanan/forma-deform`  
+**Audit branch:** `docs/unified-smart-controllers-plan`  
+**Audit scope:** Existing Smart Controller core, plugin adapter, AniCraft SDK boundary, tests, documentation and Form Deform separation  
+**Audit type:** Static source and repository-document review  
+**Status:** Phase 0 audit report — implementation not started
+
+> This report records what the inspected source currently does. It does not claim that tests or builds were executed. The GitHub source inspection did not provide a local Rust execution environment.
+
+---
+
+## 1. Executive summary
+
+The repository contains a useful foundation for the unified Smart Controllers design, but it does not yet implement that design.
+
+The most important finding is that `smart-controller-core` currently exposes **two overlapping model directions**:
+
+1. A substantial legacy three-anchor binding/evaluation API in `src/legacy.rs`.
+2. A newer Slider/Transform parameter model split across `model.rs`, `mapping.rs`, `preview.rs` and `validation.rs`.
+
+These models are not yet one canonical controller representation. The legacy API already contains useful three-anchor interpolation, stable binding IDs, target variants, enabled state, validation, collection management and versioned JSON. The newer model provides the current plugin's Slider/Transform preview path and endpoint-aware frame mapping.
+
+The recommended strategy is therefore **consolidate and evolve, not rewrite**. Preserve tested V1 semantics through explicit compatibility fixtures and migration tests before retiring or changing either model.
+
+The current plugin is a thin command adapter in broad terms and is explicitly preview-only. The inspected SDK and repository audit document do not establish continuous playback evaluation, durable arbitrary binding persistence, or a verified nested-symbol frame setter.
+
+No source files were changed as part of Phase 0.
+
+## 2. Scope and evidence
+
+### 2.1 Files and repository areas inspected
+
+**Workspace and CI**
+- `Cargo.toml`
+- `.github/workflows/ci.yml`
+
+**Smart Controller core**
+- `crates/smart-controller-core/Cargo.toml`
+- `crates/smart-controller-core/src/lib.rs`
+- `crates/smart-controller-core/src/legacy.rs`
+- `crates/smart-controller-core/src/model.rs`
+- `crates/smart-controller-core/src/mapping.rs`
+- `crates/smart-controller-core/src/preview.rs`
+- `crates/smart-controller-core/src/validation.rs`
+- `crates/smart-controller-core/tests/mapping_tests.rs`
+- `crates/smart-controller-core/tests/validation_tests.rs`
+
+**Plugin and SDK**
+- `plugins/smart-controller/Cargo.toml`
+- `plugins/smart-controller/src/lib.rs`
+- `plugins/smart-controller/tests/plugin_suite.rs`
+- `plugins/smart-controller/README.md`
+- `crates/anicraft-plugin-sdk/Cargo.toml`
+- `crates/anicraft-plugin-sdk/src/lib.rs`
+- `crates/anicraft-plugin-sdk/UPSTREAM.md`
+
+**Form Deform and project documentation**
+- `crates/form-deform-core/src/lib.rs`
+- `plugins/form-deform/src/lib.rs`
+- `docs/SMART_CONTROLLER_PLAN.md`
+- `docs/ANICRAFT_SDK_AUDIT.md`
+- `docs/CAPABILITIES.md`
+- `README.md`
+- `docs/UNIFIED_SMART_CONTROLLERS_IMPLEMENTATION_PLAN.md`
+
+The source directories were also listed to establish current file inventory.
+
+### 2.2 Verification limitation
+
+This was a static review of source and repository documentation. The following commands were **not run** during this audit:
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace`
+- package-specific Rust tests
+- WASM release builds
+- AniCraft in-app smoke tests
+
+Existing CI configuration lists workspace tests and WASM builds, but the presence of those commands in a workflow is not evidence that the current branch passed them. Phase 0 therefore records test files and coverage visible in source, not a successful execution result.
+
+## 3. Current source inventory
+
+### 3.1 Workspace
+
+The Rust workspace currently contains:
+
+- `smart-controller-core`
+- `form-deform-core`
+- `anicraft-plugin-sdk`
+- `bone-query` plugin
+- `form-deform` plugin
+- `smart-controller` plugin
+
+The Smart Controller core is a normal Rust library using Serde and Serde JSON. It has no direct AniCraft or WASM dependency.
+
+### 3.2 Smart Controller core files
+
+| File | Current responsibility | Audit assessment |
+|---|---|---|
+| `src/lib.rs` | Public module declarations and re-exports | Small facade; currently exports both model directions |
+| `src/legacy.rs` | Three-anchor binding model, evaluation, validation, collection and JSON | Strong reusable foundation; preserve during consolidation |
+| `src/model.rs` | Slider/Transform `Params`, `Mode`, `EndpointPolicy` | Useful current plugin model, but overlaps conceptually with legacy model |
+| `src/mapping.rs` | Rotation normalization, frame mapping and scalar transform | Reusable scalar primitives; additive argument is not implemented here |
+| `src/preview.rs` | Pure Slider and Transform preview calculations | Reusable preview logic; V1 host adapter exposes Slider only |
+| `src/validation.rs` | Mode-specific parameter validation | Useful, but returns unstructured `String` errors |
+| `tests/mapping_tests.rs` | Endpoint and reversed-range tests | Focused baseline coverage |
+| `tests/validation_tests.rs` | Required field and mode validation tests | Focused baseline coverage |
+
+### 3.3 Legacy API capabilities
+
+The legacy implementation currently provides:
+
+- `InputRange` with negative, neutral and positive anchors.
+- Strictly ordered finite input range validation.
+- Linear and Smoothstep easing.
+- Absolute Pose and Relative Delta modes.
+- Symbol-frame and geometry-deformation target variants.
+- Stable binding ID and controller ID fields.
+- Enabled/disabled binding state.
+- Finite-value and target validation.
+- Duplicate binding ID detection.
+- Binding-set lookup, insert, update and remove operations.
+- A `BindingSet` JSON representation with `schema_version`.
+- Deterministic evaluation of one explicit scalar input.
+- Interpolation between negative, neutral and positive anchors.
+
+This is the richest existing reusable controller logic and should be treated as a compatibility source for the canonical model.
+
+**Important limitation:** `BindingSet` versioning currently validates one supported version. The inspected implementation does not provide a version-to-version migration registry or legacy upgrader.
+
+### 3.4 Newer Slider/Transform model
+
+The newer `Params` model currently contains:
+
+- Slider and Transform modes.
+- Driver layer ID and bone name.
+- Action layer ID.
+- Minimum and maximum rotation.
+- Action start and end frames.
+- Endpoint policy.
+- Target bone name and property.
+- Scale and additive flag.
+- Optional manual input value.
+
+Its comment describes host identity resolution as an adapter responsibility, but the model still carries numeric host layer IDs and host-oriented concepts. This is a boundary-design tension to resolve: decide which IDs are stable domain references and which belong only in the plugin adapter.
+
+The newer model is not a recursive graph. It has no canonical controller node identity, nested dependency references, general input collection or multiple typed output bindings.
+
+### 3.5 Mapping and preview
+
+Current mapping functions:
+
+- Normalize rotation to `[0, 1]).
+- Permit reversed endpoints.
+- Clamp input to the endpoint range.
+- Map normalized values to inclusive or exclusive frame ranges.
+- Calculate a scaled scalar transform value.
+
+The `additive` argument to `transform_value` is explicitly ignored/reserved. This confirms that additive composition is not implemented by the core mapping function.
+
+The preview layer provides:
+
+- Slider preview with normalized input and mapped frame.
+- Transform preview with normalized input and scaled output value.
+- Notes describing endpoint policy and deferred host application.
+
+The Transform function is a pure calculation foundation; the plugin rejects Transform mode in V1.
+
+## 4. Reusability findings
+
+### Finding R1 — Legacy binding engine is the strongest reusable foundation
+
+**Priority:** High  
+**Evidence:** `legacy.rs`
+
+Retain and adapt its three-anchor interpolation, stable binding IDs, target variants, validation, and collection operations.
+
+Do not copy its implementation into a second controller engine. Instead, map its existing concepts into the future canonical model through explicit compatibility conversion.
+
+### Finding R2 — Two competing model directions must be reconciled
+
+**Priority:** Critical  
+**Evidence:** `legacy.rs`, `model.rs`, `preview.rs`, `lib.rs`
+
+The legacy `ControllerBinding` / `BindingSet` model and newer `Params` / `Mode` model represent overlapping concepts with different structures and semantics.
+
+Examples:
+- Legacy uses a binding ID and controller ID; newer Params has no canonical controller ID.
+- Legacy uses three-anchor ranges; newer Slider uses two rotation endpoints and frame endpoints.
+- Legacy binds directly to SymbolFrame or GeometryDeform; newer Params carries layer/bone/property fields.
+- Legacy has AbsolutePose/RelativeDelta; newer model has Slider/Transform and an additive flag.
+
+**Recommendation:** Phase 1 must define one canonical graph/model and explicit conversion paths. Do not delete either existing API until compatibility and migration tests pass.
+
+### Finding R3 — Shared scalar mapping can be consolidated
+
+**Priority:** High  
+**Evidence:** `legacy.rs`, `mapping.rs`, `preview.rs`
+
+There are two related but different scalar mapping approaches:
+- Legacy negative/neutral/positive interpolation.
+- Newer normalized rotation-to-frame/scalar mapping.
+
+They should share validated primitives where semantics match, but they must not be forced into one formula where their ranges or target semantics differ.
+
+### Finding R4 — Duplicate vector types exist
+
+**Priority:** Medium  
+**Evidence:** `legacy.rs` and `form-deform-core/src/lib.rs`
+
+Both crates define a `Vec2` with public `x` and `y` fields. They serve different domain contracts today.
+
+Do not couple the two cores merely to remove a small duplicate type. First decide whether a tiny shared math/value crate is justified by actual reuse and dependency direction. It is also acceptable to retain separate value types and convert at an explicit boundary.
+
+### Finding R5 — Error representation is inconsistent
+
+**Priority:** High  
+**Evidence:** `legacy.rs` versus `mapping.rs`, `preview.rs`, `validation.rs`
+
+The legacy API has a typed `ControllerError`; the newer mapping, preview and validation APIs mostly return `Result<_, String>`.
+
+The canonical API should use structured error types with stable variants/codes. Human-readable messages should be generated at the plugin/UI boundary.
+
+### Finding R6 — No controller DAG or shared-node evaluation exists
+
+**Priority:** Critical  
+**Evidence:** Current core module inventory and model structures
+
+There is no graph type, dependency validator, topological ordering, memoization, cycle handling or recursive controller evaluator.
+
+The approved DAG design is new functionality. It should be implemented as a distinct graph/evaluation responsibility rather than embedded into mapping functions or the plugin.
+
+### Finding R7 — No joystick or general 2D pose mapping exists
+
+**Priority:** High  
+**Evidence:** Existing mapping and preview modules
+
+The legacy API has a 2D target offset, but its driver input is scalar. This is not a 2D joystick input or a 2D pose interpolator.
+
+The five-pose joystick, boundary policies, triangle selection and barycentric interpolation are new capabilities.
+
+### Finding R8 — Composition is incomplete
+
+**Priority:** Critical  
+**Evidence:** `mapping.rs`, `preview.rs`, `legacy.rs`
+
+The existing `additive` flag is not applied by `transform_value`. The inspected core does not implement the approved Replace, Additive, WeightedBlend and Priority composition engine.
+
+Do not interpret the current additive flag as evidence that additive composition is already supported.
+
+### Finding R9 — Plugin is a thin but monolithic adapter
+
+**Priority:** Medium  
+**Evidence:** `plugins/smart-controller/src/lib.rs`
+
+The plugin currently:
+- Deserializes `Params`.
+- Calls core validation.
+- Rejects Transform mode in V1.
+- Uses manual input when supplied.
+- Otherwise invokes `bone.info`.
+- Resolves the named bone's angle.
+- Calls pure Slider preview.
+- Serializes and logs the result.
+
+The adapter has a small local bone response parser. This is reasonable at current size. Do not prematurely create a host-support crate; extract helpers only when multiple plugins demonstrably need the same abstraction and the ownership boundary is clear.
+
+## 5. Host and SDK capability findings
+
+### 5.1 Existing SDK boundary
+
+The vendored `anicraft-plugin-sdk` exposes the ABI v1 guest helpers, including:
+
+- `command(id, params)`
+- `document()`
+- `selected_elements(paths)`
+- `log(message)`
+- plugin/exporter ABI macros
+- exporter-specific movie/frame helpers
+
+Native host-call stand-ins return errors, which supports testing pure core code natively. They do not simulate a functioning AniCraft host.
+
+The SDK is already a shared crate used by the plugins. Continue using it; do not introduce a second host communication layer.
+
+### 5.2 Host capability conclusions
+
+The existing `docs/ANICRAFT_SDK_AUDIT.md` records the inspected AniCraft contract. For this Smart Controller plan, retain these constraints:
+
+| Capability | Audit conclusion |
+|---|---|
+| On-demand `bone.info` query | Documented and used by current adapter |
+| Manual input preview | Supported by current plugin |
+| Continuous custom playback/scrubbing evaluator | Not established by current command-plugin ABI |
+| Durable arbitrary plugin-owned document metadata | Not established by inspected SDK |
+| Nested symbol instance displayed-frame setter | Not established by inspected command reference |
+| Host mutation for Form Deform pin movement | Available as an explicit command; separate from Smart Controller V1 preview |
+
+The Smart Controller plugin must not claim live playback, persistent controller storage or symbol-frame visual application until the host surface is independently verified and implemented.
+
+### 5.3 SDK provenance
+
+The vendored SDK has an explicit upstream source path, pinned commit and update procedure in `UPSTREAM.md`. Preserve this provenance and do not silently track upstream main.
+
+## 6. Form Deform boundary review
+
+### 6.1 Core separation
+
+`form-deform-core` owns a separate deterministic pin-position formula:
+
+`neutral_position + (current_angle - neutral_angle) * gain_per_degree`
+
+It validates finite inputs and returns an absolute stage-space pin position. It is not the same calculation as legacy three-anchor controller interpolation.
+
+Keep this evaluator independent.
+
+### 6.2 Integration-test discrepancy requiring resolution
+
+`plugins/smart-controller/tests/plugin_suite.rs` currently evaluates a legacy Smart Controller geometry binding, takes its relative offset, uses that offset to construct the neutral position passed into `form-deform-core`, and then evaluates Form Deform.
+
+This test is a mathematical cross-crate integration example, not a runtime plugin composition pipeline. However, its current naming and comments can be read as endorsing controller-output-to-Form-Deform composition.
+
+That is ambiguous against the accepted CCC-01.5 rule: Smart Controller binding evaluation and Form Deform pin evaluation remain independent until FDM v2 explicitly defines multi-source composition semantics.
+
+**Recommendation:** Do not silently delete the test or change either formula in Phase 0. In a later explicitly scoped test/documentation change, clarify that the test only checks independent pure calculations and value conversion, or replace it with independent regression tests that do not imply composition. Any actual composition requires a separate approved FDM v2 decision.
+
+## 7. Test coverage inventory and gaps
+
+### 7.1 Existing coverage visible in source
+
+| Area | Existing coverage | Gap |
+|---|---|---|
+| Legacy interpolation | Embedded unit tests in `legacy.rs` | No golden compatibility fixture inventory established |
+| Legacy binding collection | Embedded tests for binding set behaviour | No canonical graph migration tests |
+| Rotation mapping | Reversed range tests | No general property/fuzz coverage |
+| Frame mapping | Inclusive/exclusive and degenerate helper tests | No full plugin endpoint regression fixture |
+| Parameter validation | Slider/Transform required fields and manual input | String errors; no structured diagnostics |
+| Plugin bone lookup | Name lookup and malformed response tests | No host-invocation test double for `bone.info` request/error contract |
+| Cross-crate suite | Smart Controller legacy math plus Form Deform calculation | Clarify against CCC-01.5 as described above |
+| DAG | None identified | Entire feature absent |
+| Joystick / 2D mapping | None identified | Entire feature absent |
+| Composition | None identified | Entire feature absent |
+| Schema migration | Current version check only in legacy BindingSet | No migration path or golden schema fixtures identified |
+| Stale input / diagnostics | None identified | Entire policy and implementation absent |
+| Determinism / memoization | Pure scalar functions exist | No graph determinism or diamond memoization tests |
+
+### 7.2 Baseline fixture requirement
+
+Before replacing or reshaping the legacy model, capture representative serialized examples and expected outputs for:
+
+- SymbolFrame negative, neutral and positive anchors.
+- GeometryDeform AbsolutePose.
+- GeometryDeform RelativeDelta.
+- Linear and Smoothstep easing.
+- Disabled binding.
+- BindingSet round trip.
+- Duplicate binding ID rejection.
+- New Slider exclusive and inclusive endpoints.
+- Reversed rotation range.
+- Manual input and bone-query parameter paths.
+
+Fixtures should be committed under a stable test fixture directory in the implementation phase. This audit did not create fabricated fixture files or claim fixture tests passed.
+
+## 8. Compatibility and migration matrix
+
+| Existing concept | Proposed destination | Migration / compatibility action |
+|---|---|---|
+| Legacy `ControllerBinding` | Canonical Controller + Binding representation | Write explicit converter; preserve IDs and target semantics |
+| Legacy `BindingSet` schema v1 | Versioned canonical schema | Add fixture and upgrader; reject unknown unsupported versions clearly |
+| Legacy three-anchor `InputRange` | Shared scalar range/anchor mapping | Preserve strict neutral-between-endpoints semantics |
+| Legacy Linear/Smoothstep | Shared easing module | Preserve output values with regression tests |
+| Legacy AbsolutePose / RelativeDelta | Explicit output/reference semantics | Do not equate with Replace/Additive without formal mapping |
+| Legacy SymbolFrame target | Host-independent target descriptor | Host adapter resolves target; actual frame application remains unverified |
+| Legacy GeometryDeform target | Host-independent target descriptor | Keep independent of Form Deform evaluation |
+| New `Params` Slider | Canonical input + frame mapping + binding | Preserve inclusive/exclusive endpoint behaviour |
+| New `Params` Transform | Canonical property mapping | Keep host application deferred until verified |
+| New `additive` flag | Explicit composition configuration | Do not treat current ignored flag as implemented semantics |
+| Plugin JSON manifest | Host-facing request schema | Keep adapter compatibility until migration is tested |
+
+## 9. Findings by priority
+
+### Critical — Resolve before Phase 1 API is locked
+
+1. Define the canonical model that reconciles legacy three-anchor bindings and newer Slider/Transform Params.
+2. Define stable domain identities separately from host-specific IDs.
+3. Establish schema envelope/version/migration strategy that can ingest the existing BindingSet v1 and current Params JSON as appropriate.
+4. Specify DAG node identity and dependency semantics.
+5. Define typed output/binding ownership and composition semantics.
+6. Clarify the Smart Controller/Form Deform integration test's intent against CCC-01.5.
+
+### High — Address in early implementation phases
+
+1. Consolidate mapping primitives without changing existing results.
+2. Replace string errors with structured typed errors.
+3. Implement 2D joystick mapping and explicit boundary rules.
+4. Add explicit input validity/freshness/fallback representation.
+5. Add deterministic graph evaluation and per-invocation memoization.
+6. Add golden serialization and evaluation fixtures.
+
+### Medium — Address when justified
+
+1. Consider common vector primitives only if a dependency-neutral shared crate offers real reuse.
+2. Extract shared host query parsing only if there is proven cross-plugin reuse.
+3. Split plugin adapter modules when the unified plugin grows beyond its current small entry point.
+4. Keep documentation and CI package names synchronized with actual workspace package names.
+
+## 10. Recommended Phase 1 adjustments
+
+The proposed file-level build order remains usable, with these refinements:
+
+1. **Do not immediately replace `model.rs` or `legacy.rs`.** First introduce canonical types alongside compatibility conversion, then migrate callers after tests prove equivalence.
+2. **Decide identity ownership before defining `ids.rs`.** Distinguish controller, binding, input, graph-node and host-target identities.
+3. **Keep the core independent of host layer IDs.** Adapter-resolved stable references should enter through explicit snapshots or opaque host-independent source identities.
+4. **Do not put every enum in one universal `Value`.** Define a minimal typed value system with explicit compatibility rules.
+5. **Treat `BindingSet` v1 and `Params` JSON as separate legacy input formats** unless evidence proves they are one persisted format.
+6. **Make schema migration deterministic and loss-aware.** Unknown fields/data must not be silently discarded; current `deny_unknown_fields` behaviour should be accounted for.
+7. **Separate graph validation from evaluation.** The evaluator must still defend itself against invalid graphs.
+8. **Preserve V1 plugin output and preview-only behaviour** until the unified plugin adapter has compatibility tests.
+
+## 11. Phase 0 exit assessment
+
+| Deliverable | Status |
+|---|---|
+| Source inventory | Complete for inspected Smart Controller/core/plugin/SDK/Form Deform files |
+| Reusability report | Complete in Sections 3–4 |
+| Compatibility matrix | Complete in Section 8 |
+| Host capability report | Reconciled with existing SDK audit in Section 5 |
+| Test coverage/gap report | Complete in Section 7 |
+| Migration risks | Complete in Sections 8–10 |
+| Golden fixture baseline | Not yet created; required before model replacement |
+| Runtime test/build evidence | Not collected; commands not executed |
+| AniCraft in-app smoke test | Not performed |
+
+**Phase 0 status: source/document audit completed; verification baseline remains pending.**
+
+Phase 0 can be considered complete for architectural discovery, but it is not a green light to begin destructive refactoring. Before Phase 1 changes existing public models, the team should capture the golden fixtures and confirm the identity/schema decisions.
+
+## 12. Explicit non-authorization
+
+This audit does not authorize:
+
+- Source implementation or refactoring.
+- Changes to Form Deform formulas or runtime behaviour.
+- Combining Smart Controller outputs with Form Deform pin evaluation.
+- Host API changes in AniCraft.
+- PR creation, review approval or merge.
+
+The accepted CCC-01.5 separation remains in force.
