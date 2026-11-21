@@ -177,3 +177,40 @@ fn grid_mapping_interpolates_wrapped_angles_using_shortest_path() {
     let angle = result.get(&BindingId::new("rotation").unwrap()).unwrap().as_angle().unwrap();
     assert!((angle.radians().abs() - std::f64::consts::PI).abs() < 1.0e-6);
 }
+
+
+#[test]
+fn triangulated_mapping_is_continuous_across_a_shared_mesh_edge() {
+    let mapping = TriangulatedMapping::new(
+        vec![
+            TriangulatedPose::new(point(0.0, 0.0), pose(0.0)),
+            TriangulatedPose::new(point(1.0, 0.0), pose(10.0)),
+            TriangulatedPose::new(point(1.0, 1.0), pose(20.0)),
+            TriangulatedPose::new(point(0.0, 1.0), pose(30.0)),
+        ],
+        vec![Triangle::new(0, 1, 2), Triangle::new(0, 2, 3)],
+        MeshBoundaryPolicy::Reject,
+    ).unwrap();
+    let result = mapping.evaluate(point(0.5, 0.5)).unwrap();
+    assert!((scalar(&result) - 10.0).abs() < 1.0e-9);
+}
+
+#[test]
+fn triangulated_mapping_rejects_duplicate_and_unreferenced_topology() {
+    let vertices = vec![
+        TriangulatedPose::new(point(0.0, 0.0), pose(0.0)),
+        TriangulatedPose::new(point(1.0, 0.0), pose(1.0)),
+        TriangulatedPose::new(point(0.0, 1.0), pose(2.0)),
+        TriangulatedPose::new(point(2.0, 2.0), pose(3.0)),
+    ];
+    assert!(TriangulatedMapping::new(
+        vertices.clone(),
+        vec![Triangle::new(0, 1, 2), Triangle::new(2, 1, 0)],
+        MeshBoundaryPolicy::Reject,
+    ).is_err());
+    assert!(TriangulatedMapping::new(
+        vertices,
+        vec![Triangle::new(0, 1, 2)],
+        MeshBoundaryPolicy::Reject,
+    ).is_err());
+}
