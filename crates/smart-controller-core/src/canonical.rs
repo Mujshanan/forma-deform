@@ -4,6 +4,7 @@ use crate::{
     endpoint::EndpointPolicy,
     ids::{BindingId, ControllerId, InputId, TargetId},
     value::TypedValue,
+    contribution::{BaseRef, CompositionMode},
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,12 +38,28 @@ pub enum BindingMode { AbsolutePose, RelativeDelta }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct CompositionConfig {
+    pub mode: CompositionMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<BaseRef>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControllerBinding {
     pub id: BindingId,
     pub target_id: TargetId,
     pub target: TargetMapping,
     pub mode: BindingMode,
     pub base_value: Option<TypedValue>,
+    /// Optional explicit composition policy. Absent means the legacy mapping:
+    /// AbsolutePose -> Replace; RelativeDelta -> Additive(Authored).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition: Option<CompositionConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -80,24 +97,47 @@ impl Controller {
             if !ids.insert(binding.id.clone()) {
                 return Err(CoreError::InvalidModel(format!("duplicate binding ID {}", binding.id)));
             }
-            if binding.mode == BindingMode::RelativeDelta && binding.base_value.is_none() {
+            if binding.mode == BindingMode::RelativeDelta && binding.composition.is_none() && binding.base_value.is_none() {
                 return Err(CoreError::InvalidModel(format!("relative binding {} requires an explicit base value", binding.id)));
             }
             if binding.mode == BindingMode::AbsolutePose && binding.base_value.is_some() {
                 return Err(CoreError::InvalidModel(format!("base value is only valid for relative binding {}", binding.id)));
+            }
+            if let Some(config) = &binding.composition {
+                let valid = match config.mode {
+                    CompositionMode::Replace => binding.mode == BindingMode::AbsolutePose && config.weight.is_none() && config.priority.is_none() && config.base_ref.is_none() && binding.base_value.is_none(),
+                    CompositionMode::Additive => binding.mode == BindingMode::RelativeDelta && config.weight.is_none() && config.priority.is_none() && match config.base_ref.as_ref() {
+                        Some(BaseRef::Authored) => binding.base_value.is_some(),
+                        Some(BaseRef::Neutral | BaseRef::Input(_)) => binding.base_value.is_none(),
+                        None => false,
+                    },
+                    CompositionMode::WeightedBlend => binding.mode == BindingMode::AbsolutePose && config.weight.is_some_and(|w| w.is_finite() && w >= 0.0) && config.priority.is_none() && config.base_ref.is_none() && binding.base_value.is_none(),
+                    CompositionMode::PriorityOverride => binding.mode == BindingMode::AbsolutePose && config.priority.is_some() && config.weight.is_none() && config.base_ref.is_none() && binding.base_value.is_none(),
+                };
+                if config.mode == CompositionMode::WeightedBlend && config.weight.is_some_and(|w| !w.is_finite() || w < 0.0) {
+                    return Err(CoreError::CompositionWeightInvalid { binding_id: binding.id.to_string() });
+                }
+                if let Some(BaseRef::Input(input_id)) = &config.base_ref {
+                    if input_id.trim().is_empty() { return Err(CoreError::InvalidModel("composition input base reference must not be empty".into())); }
+                }
+                if !valid {
+                    return Err(CoreError::InvalidModel(format!("invalid composition configuration for binding {}", binding.id)));
+                }
             }
             match &binding.target {
                 TargetMapping::SymbolFrame { .. } | TargetMapping::FrameRange { .. }
                     if binding.mode != BindingMode::AbsolutePose =>
                     return Err(CoreError::InvalidModel(format!("frame target binding {} must use AbsolutePose", binding.id))),
                 TargetMapping::GeometryDeform { .. } if binding.mode == BindingMode::RelativeDelta
+                    && (binding.composition.is_none() || matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)))
                     && !matches!(binding.base_value.as_ref(), Some(TypedValue::Vector2(_))) =>
-                    return Err(CoreError::InvalidModel(format!("relative geometry binding {} requires a Vector2 base", binding.id))),
+                    return Err(CoreError::InvalidModel(format!("relative geometry binding {} requires a Vector2 authored base", binding.id))),
                 TargetMapping::Property { additive, .. } if *additive != (binding.mode == BindingMode::RelativeDelta) =>
                     return Err(CoreError::InvalidModel(format!("property target additive flag conflicts with binding mode for {}", binding.id))),
                 TargetMapping::Property { .. } if binding.mode == BindingMode::RelativeDelta
-                    && !matches!(binding.base_value.as_ref(), Some(TypedValue::Scalar(_))) =>
-                    return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar base", binding.id))),
+                    && (binding.composition.is_none() || matches!(binding.composition.as_ref().and_then(|config| config.base_ref.as_ref()), Some(BaseRef::Authored)))
+                    && !matches!(binding.base_value.as_ref(), Some(TypedValue::Scalar(_) | TypedValue::Angle(_))) =>
+                    return Err(CoreError::InvalidModel(format!("relative property binding {} requires a scalar authored base", binding.id))),
                 TargetMapping::FrameRange { action_layer_id, start_frame, end_frame, .. } if *action_layer_id == 0 || end_frame <= start_frame =>
                     return Err(CoreError::InvalidModel("frame range requires a nonzero layer and increasing endpoints".into())),
                 TargetMapping::SymbolFrame { symbol_instance_id, .. } if symbol_instance_id.trim().is_empty() =>

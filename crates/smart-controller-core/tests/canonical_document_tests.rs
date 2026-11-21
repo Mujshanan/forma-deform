@@ -1,5 +1,6 @@
 use smart_controller_core::{
-    canonical::{BindingMode, Controller, ControllerBinding, MappingConfig, TargetMapping},
+    canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
+    contribution::{BaseRef, CompositionMode},
     ids::{BindingId, ControllerId, InputId, TargetId},
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
     migration::CanonicalDocument,
@@ -27,6 +28,7 @@ fn producer_binding() -> ControllerBinding {
         },
         mode: BindingMode::AbsolutePose,
         base_value: None,
+        composition: None,
     }
 }
 
@@ -75,4 +77,66 @@ fn controller_output_inputs_require_declared_producer_dependencies() {
 #[test]
 fn controller_output_inputs_must_reference_an_existing_binding() {
     assert!(document(true, false).validate().is_err());
+}
+
+#[test]
+fn explicit_binding_composition_configuration_is_validated_by_mode() {
+    let mut weighted = controller("weighted", "input", vec![], vec![producer_binding()]);
+    weighted.bindings[0].composition = Some(CompositionConfig {
+        mode: CompositionMode::WeightedBlend,
+        weight: Some(0.75),
+        priority: None,
+        base_ref: None,
+    });
+    weighted.validate_local().unwrap();
+
+    let mut priority = controller("priority", "input", vec![], vec![producer_binding()]);
+    priority.bindings[0].composition = Some(CompositionConfig {
+        mode: CompositionMode::PriorityOverride,
+        weight: None,
+        priority: Some(10),
+        base_ref: None,
+    });
+    priority.validate_local().unwrap();
+
+    let mut neutral_additive = controller("additive", "input", vec![], vec![producer_binding()]);
+    neutral_additive.bindings[0].mode = BindingMode::RelativeDelta;
+    neutral_additive.bindings[0].target = TargetMapping::Property {
+        target_id: "arm".into(), property: "rotation".into(), scale: 1.0, additive: true,
+    };
+    neutral_additive.bindings[0].composition = Some(CompositionConfig {
+        mode: CompositionMode::Additive,
+        weight: None,
+        priority: None,
+        base_ref: Some(BaseRef::Neutral),
+    });
+    neutral_additive.validate_local().unwrap();
+
+    weighted.bindings[0].composition.as_mut().unwrap().weight = Some(f64::NAN);
+    assert!(weighted.validate_local().is_err());
+
+    priority.bindings[0].composition.as_mut().unwrap().priority = None;
+    assert!(priority.validate_local().is_err());
+
+    neutral_additive.bindings[0].composition.as_mut().unwrap().base_ref = None;
+    assert!(neutral_additive.validate_local().is_err());
+}
+
+#[test]
+fn optional_composition_config_round_trips_and_old_documents_still_deserialize() {
+    let mut current = document(true, true);
+    current.controllers[0].bindings[0].composition = Some(CompositionConfig {
+        mode: CompositionMode::WeightedBlend,
+        weight: Some(0.5),
+        priority: None,
+        base_ref: None,
+    });
+    let json = current.to_json().unwrap();
+    let decoded = CanonicalDocument::from_json(&json).unwrap();
+    assert_eq!(decoded, current);
+
+    let mut old_json: serde_json::Value = serde_json::from_str(&json).unwrap();
+    old_json["controllers"][0]["bindings"][0].as_object_mut().unwrap().remove("composition");
+    let decoded_old = CanonicalDocument::from_json(&serde_json::to_string(&old_json).unwrap()).unwrap();
+    assert!(decoded_old.controllers[0].bindings[0].composition.is_none());
 }

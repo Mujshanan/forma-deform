@@ -154,6 +154,7 @@ pub fn migrate_binding_set_v1(source: &BindingSet) -> Result<MigrationOutput, Co
                 ControllerMode::RelativeDelta => BindingMode::RelativeDelta,
             },
             base_value,
+            composition: None,
         };
         let controller = Controller {
             id: controller_id,
@@ -239,7 +240,7 @@ pub fn migrate_unversioned_params(source: &Params) -> Result<MigrationOutput, Co
             )
         }
     };
-    let binding = ControllerBinding { id: binding_id, target_id, target, mode, base_value };
+    let binding = ControllerBinding { id: binding_id, target_id, target, mode, base_value, composition: None };
     let controller = Controller {
         id: controller_id,
         enabled: true,

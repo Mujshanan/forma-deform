@@ -35,3 +35,28 @@ Manual input overrides the host query. A missing or malformed bone response is a
     cargo test -p smart-controller-core
     cargo test -p anicraft-smart-controller-plugin
     cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+
+
+## Unified adapter foundations (Phase 5)
+
+The adapter now has isolated modules for:
+
+- Parsing the verified `bone.info` response by numeric bone ID, with explicit spring-swing and angle-wrapping choices.
+- Assessing target capability and verifying exact geometry pin identity through read-only `warp.info`.
+- Delegating legacy BindingSet / Params migration to `smart-controller-core` while retaining its migration report.
+
+The adapter also exposes `evaluate_document_preview`, which validates a canonical document, runs the evaluator and composition post-pass through an injected mapper, and returns target capability assessments in deterministic target order. It performs no host writes. Compatibility helpers support legacy-format detection and guarded reverse export to V1 BindingSet / Params while retaining migration reports.\n\nThese modules are foundations only. The existing V1 Slider command still uses its original preview path. Geometry pin mutation is not issued by the new adapter; the documented `warp.pin_move` path requires a host preview/undo transaction. Symbol-frame display, generic property application, playback evaluation and durable document persistence remain unverified or unsupported.
+
+
+### Canonical preview adapter (Phase 5)
+
+The adapter exposes a read-only canonical preview path:
+
+1. Supply manual values keyed by canonical InputId and an explicit bone-ID → AniCraft layer-ID map.
+2. The input provider queries each required layer once with the read-only `bone.info` command, parses stable numeric bone IDs, and creates an invocation-scoped snapshot.
+3. The core evaluator resolves ControllerOutput dependencies, evaluates the graph and performs the independent composition pass using an injected ControllerMapper.
+4. The target preview planner returns composed values paired with their canonical target mappings and capability assessments in TargetId order.
+
+The provider currently supports Manual and BoneTransform Rotation inputs. LegacyScalar sources and Translation/Scale bone channels require an explicit provider implementation and fail closed. Wrapped-angle semantics and spring-swing inclusion are explicit caller choices.
+
+The preview plan is descriptive data only. The host-driven path verifies GeometryDeform element/pin identity with read-only `warp.info`; it does not call target setters or mutate the document. Geometry pin application still requires the host preview/undo transaction; symbol-frame and generic property setters remain unverified. The concrete Pose2D/joystick mapper is a separate core prerequisite and must be supplied through the mapper boundary. No playback, scrubbing, durable document persistence, or Form Deform composition is claimed.

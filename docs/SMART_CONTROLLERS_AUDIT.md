@@ -570,3 +570,57 @@ Migration tests now cover exact BindingSet round-trip, Params slider/transform r
 
 
 The dependency-boundary test now checks both core crate manifests for direct normal/dev/build/target-specific dependencies in either direction. This test is authored but has not been executed with Cargo.
+
+
+## 15. Phase 3 evaluator orchestration — implementation in progress
+
+The branch `feat/smart-controller-phase3-evaluator` adds a core-only evaluator orchestration API. It performs graph/snapshot preflight before mapper execution, evaluates nodes in deterministic topological order, resolves controller-output dependencies from successful upstream binding outputs, and returns uncomposed contributions plus diagnostics.
+
+The mapping algorithm is injected through `ControllerMapper`. This deliberately avoids implementing Pose2D/joystick mapping as an unreviewed side effect of Phase 3; the planned Phase 2 mapping work remains a prerequisite for a complete production mapper. The evaluator does not apply target composition, write host state, or call Form Deform.
+
+Phase 3A/3B hardening added full structural/input-snapshot preflight, consistent fallback semantics, controller-local mapping failure handling, unavailable-output diagnostics, unknown-binding rejection, and deterministic output tests. Eighteen evaluator tests now execute successfully. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44927336954 passed on commit `1eaea3fd92752ce557af77c3c2c151045d724a28`: 135 workspace Rust tests passed; Bun typecheck, 9/9 Bun tests and Bun build passed; all three release WASM plugin builds passed. rustfmt and Clippy were not part of the workflow and are not claimed as passing.
+
+The evaluator remains a core-only orchestration layer with injected `ControllerMapper`; target composition and host integration remain deferred. Smart Controller V1 remains preview-only and CCC-01.5 remains unchanged. No PR or merge has been created.
+
+
+## 13. Phase 4 composition implementation update
+
+The historical Phase 0 audit above is retained as a record of the original source review. The following is a later implementation update, not a rewrite of that audit.
+
+Phase 4 work has started on `feat/smart-controller-phase3-evaluator`:
+
+- A pure target composition post-pass now groups by TargetId and deterministically orders contributions by BindingId, then ControllerId.
+- Contributions carry their originating ControllerId and an explicit authored base value when applicable.
+- Canonical ControllerBinding now has an optional CompositionConfig. Existing documents without this field retain the established AbsolutePose → Replace and RelativeDelta → Additive(Authored) behavior.
+- The four configured modes are represented: Replace, Additive, WeightedBlend and PriorityOverride.
+- Additive requires a single consistent explicit base reference; WeightedBlend normalizes positive weights and treats all-zero weights as no output plus diagnostic; PriorityOverride uses highest priority and canonical identity tie-breaking.
+- Conflicting modes, multiple Replace contributions, invalid weights, unavailable additive bases, incompatible types and ambiguous circular angle means return typed errors.
+- The new evaluate-and-compose API runs the Phase 3 evaluator and the Phase 4 post-pass sequentially, with no host mutation.
+
+Fifteen composition-module tests and two canonical binding/serialization tests execute successfully. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44929171315 passed on commit `da644fa1bf91aab74a716524895145375595547f`: 152 workspace Rust tests passed, Bun typecheck/tests (9/9)/build passed, and all three release WASM plugin builds passed. The successful job log contained no compiler warnings or errors. Rustfmt and Clippy were not part of this workflow and are not claimed as passing.
+
+CCC-01.5 remains unchanged: this composition pass does not combine Smart Controller binding outputs with Form Deform pin-deformation outputs. V1 remains preview-only. No PR or merge has been created.
+
+
+### Phase 4 final verification addendum
+
+The composition layer's final review identified and corrected a target-type gate that prevented Angle values from reaching Property targets. Property targets now accept Scalar and Angle values, while SymbolFrame/FrameRange remain Scalar and GeometryDeform remains Vector2. Authored additive Property bases can be Scalar or Angle; composition enforces exact compatibility.
+
+An end-to-end evaluator-plus-composition test now verifies Angle property output. Its first run caught a +π normalization boundary issue in wrapped weighted-angle composition; the output is now normalized to [-π, π).
+
+Final verified commit: `f08185f043141ac3f476bd2301dbcabd72d9bebb`. GitHub Actions run https://github.com/Mujshanan/forma-deform/actions/runs/44931731464 passed: 153 workspace Rust tests; Bun typecheck, tests (9/9), build; and release WASM builds for bone-query, form-deform and smart-controller. Rustfmt and Clippy were not run. Phase 4 remains a pure core post-pass, with no host mutation and no composition with Form Deform pin outputs. No PR or merge has been created.
+
+
+---
+
+## 16. Phase 5 adapter implementation update
+
+The following adapter foundations are now present on `feat/smart-controller-phase3-evaluator`:
+
+- `plugins/smart-controller/src/adapter.rs` consumes a previously fetched `bone.info` JSON response, identifies a bone by its numeric stable ID, reads its degree-valued keyed angle, and optionally adds the separately reported spring swing. The caller must explicitly choose whether spring swing is included and whether the resulting Angle is wrapped or unwrapped. Missing IDs, malformed responses, absent angles, and absent requested swing fail closed.
+- Input snapshots use a zero age tick only for samples queried in the same invocation; the adapter does not read a clock or claim freshness across invocations.
+- `plugins/smart-controller/src/targets.rs` records capability status, queries the documented read-only `warp.info` command, and validates exact numeric element/pin identities. It does not invoke `warp.pin_move`; that mutation remains preview-transaction-only. Symbol-frame, frame-range and generic property application remain unverified/calculation-only.
+- `plugins/smart-controller/src/compatibility.rs` delegates legacy JSON decoding and migration to the core migration API; migration notices and losses remain available to callers.
+- `plugins/smart-controller/src/lib.rs` exports these modules. Existing V1 Slider preview execution is unchanged.
+
+Canonical preview orchestration is now wired: `evaluate_document_preview` validates the document, builds the controller DAG, invokes the core evaluator/composition with an injected mapper, and returns deterministically sorted target capability entries without writing host state. Compatibility now includes legacy-format auto-detection and guarded reverse exports to V1 BindingSet / Params, preserving migration reports. Tests cover empty-document no-op, invalid schema fail-before-mapper, and lossless empty BindingSet migration/export roundtrip.\n\nPhase 5 is still in progress. The host still needs a complete per-document input collection/provider layer, the concrete Phase 2 pose/joystick mapper, target-specific preview payload generation and in-app verification. No mutating command is invoked; no playback/scrubbing, persistence or Smart Controller/Form Deform composition capability is claimed. Latest branch changes do not yet have a verified CI run. No mutating command is invoked by the new modules. No playback/scrubbing, persistence or Smart Controller/Form Deform composition capability is claimed.

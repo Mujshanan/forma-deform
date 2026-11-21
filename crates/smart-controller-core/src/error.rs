@@ -32,6 +32,7 @@ pub enum CoreError {
     InvalidGraph(String),
     CycleDetected(Vec<String>),
     CompositionConflict { target_id: String, reason: String },
+    CompositionWeightInvalid { binding_id: String },
     UnsupportedCompositionMode(String),
     UnsupportedSchemaVersion(u32),
     Serialization(String),
@@ -63,6 +64,7 @@ impl fmt::Display for CoreError {
             Self::InvalidMapping(message) => write!(f, "invalid mapping: {message}"),
             Self::InvalidGraph(message) => write!(f, "invalid controller graph: {message}"),
             Self::CycleDetected(ids) => write!(f, "controller dependency cycle detected: {}", ids.join(" -> ")),
+            Self::CompositionWeightInvalid { binding_id } => write!(f, "invalid composition weight for binding {binding_id}"),
             Self::CompositionConflict { target_id, reason } => {
                 write!(f, "composition conflict for target {target_id}: {reason}")
             }
