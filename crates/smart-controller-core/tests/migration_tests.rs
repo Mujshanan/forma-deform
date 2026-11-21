@@ -1,6 +1,6 @@
 use smart_controller_core::{
     legacy::{BindingSet, ControllerBinding as LegacyBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, Vec2},
-    migration::{migrate_binding_set_v1, migrate_unversioned_params},
+    migration::{migrate_binding_set_v1, migrate_json, migrate_unversioned_params},
     model::{EndpointPolicy, Mode, Params},
     canonical::{BindingMode, EasingConfig, MappingConfig, TargetMapping},
 };
@@ -135,8 +135,8 @@ fn params_migration_reports_fields_that_cannot_apply_to_the_selected_mode() {
 #[test]
 fn canonical_document_round_trips_through_versioned_json() {
     let migrated = migrate_binding_set_v1(&BindingSet::new(vec![legacy_geometry()]).unwrap()).unwrap();
-    let json = serde_json::to_string_pretty(&migrated.document).unwrap();
-    let decoded: smart_controller_core::migration::CanonicalDocument = serde_json::from_str(&json).unwrap();
+    let json = migrated.document.to_json().unwrap();
+    let decoded = smart_controller_core::migration::CanonicalDocument::from_json(&json).unwrap();
     assert_eq!(decoded, migrated.document);
     decoded.validate().unwrap();
 }
@@ -152,4 +152,22 @@ fn canonical_document_rejects_unknown_fields_and_unsupported_versions() {
     let mut value: serde_json::Value = serde_json::to_value(&migrated.document).unwrap();
     value["unexpected"] = serde_json::json!(true);
     assert!(serde_json::from_value::<smart_controller_core::migration::CanonicalDocument>(value).is_err());
+}
+
+#[test]
+fn migration_dispatch_detects_both_legacy_formats() {
+    let binding_set = BindingSet::new(vec![legacy_geometry()]).unwrap();
+    let binding_json = binding_set.to_json().unwrap();
+    assert_eq!(migrate_json(&binding_json).unwrap().report.source_format, "binding_set_v1");
+
+    let params_json = serde_json::to_string(&slider_params()).unwrap();
+    assert_eq!(migrate_json(&params_json).unwrap().report.source_format, "unversioned_params");
+}
+
+#[test]
+fn migration_dispatch_rejects_unsupported_binding_schema_versions() {
+    let binding_set = BindingSet::new(vec![legacy_geometry()]).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&binding_set.to_json().unwrap()).unwrap();
+    value["schema_version"] = serde_json::json!(2);
+    assert!(migrate_json(&serde_json::to_string(&value).unwrap()).is_err());
 }
