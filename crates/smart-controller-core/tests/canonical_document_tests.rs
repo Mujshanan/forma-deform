@@ -4,7 +4,6 @@ use smart_controller_core::{
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
     migration::CanonicalDocument,
     schema::{SchemaIdentity, CURRENT_SCHEMA_VERSION, SCHEMA_NAME},
-    value::TypedValue,
 };
 
 fn controller(id: &str, input_id: &str, dependencies: Vec<ControllerId>, bindings: Vec<ControllerBinding>) -> Controller {
