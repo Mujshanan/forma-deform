@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use smart_controller_core::{
     BoneTransformChannel, InputDefinition, InputId, InputSample, InputSnapshot,
-    InputSource, TypedValue,
+    InputSource, TypedValue, InputValidity,
     migration::CanonicalDocument,
 };
 
@@ -56,9 +56,12 @@ pub fn collect_host_input_snapshot(
         definition.validate().map_err(|error| error.to_string())?;
         let sample = match &definition.source {
             InputSource::Manual => {
-                let value = context.manual_values.get(&definition.id).copied()
-                    .ok_or_else(|| format!("manual input {} has no supplied value", definition.id))?;
-                InputSample::valid(definition.id.clone(), value, Some(0))
+                match context.manual_values.get(&definition.id).copied() {
+                    Some(value) if definition.dimension.accepts(value) =>
+                        InputSample::valid(definition.id.clone(), value, Some(0)),
+                    Some(_) => InputSample::invalid(definition.id.clone()),
+                    None => InputSample::missing(definition.id.clone()),
+                }
             }
             InputSource::BoneTransform { bone_id, channel } => {
                 if *channel != BoneTransformChannel::Rotation {
@@ -70,14 +73,24 @@ pub fn collect_host_input_snapshot(
                 let layer_id = *context.bone_layers.get(bone_id)
                     .ok_or_else(|| format!("bone input {} has no explicit layer mapping for bone {}", definition.id, bone_id))?;
                 if !responses.contains_key(&layer_id) {
-                    responses.insert(layer_id, query_bone_info(layer_id, None)?);
+                    if let Ok(response) = query_bone_info(layer_id, None) {
+                        responses.insert(layer_id, response);
+                    } else {
+                        // A failed host read is explicitly unavailable; the
+                        // core applies the authored fallback policy.
+                        samples.push(InputSample::unavailable(definition.id.clone()));
+                        continue;
+                    }
                 }
-                sample_bone_rotation(
+                match sample_bone_rotation(
                     definition,
                     responses.get(&layer_id).expect("response inserted"),
                     context.bone_angle_policy,
                     context.wrapped_angles,
-                )?
+                ) {
+                    Ok(sample) => sample,
+                    Err(_) => InputSample::invalid(definition.id.clone()),
+                }
             }
             InputSource::ControllerOutput { .. } => continue,
             InputSource::LegacyScalar { source_id } => {
@@ -132,6 +145,26 @@ mod tests {
         assert_eq!(snapshot.samples.len(), 1);
         assert_eq!(snapshot.get(&manual_id).unwrap().age_ticks, Some(0));
         assert_eq!(snapshot.max_age_ticks(), 0);
+    }
+
+    #[test]
+    fn missing_manual_input_is_reported_to_core_for_fallback_resolution() {
+        let definition = InputDefinition {
+            id: InputId::new("optional-manual").unwrap(),
+            source: InputSource::Manual,
+            dimension: InputDimension::Scalar,
+            fallback: FallbackPolicy::UseValue(TypedValue::scalar(3.0).unwrap()),
+        };
+        let context = HostInputContext {
+            manual_values: BTreeMap::new(),
+            bone_layers: BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
+        };
+        let snapshot = collect_host_input_snapshot(&[definition.clone()], &context).unwrap();
+        let sample = snapshot.get(&definition.id).unwrap();
+        assert_eq!(sample.validity, InputValidity::Missing);
+        assert!(sample.value.is_none());
     }
 
     #[test]
