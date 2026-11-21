@@ -7,7 +7,6 @@
 use anicraft_plugin_sdk as ac;
 
 use smart_controller_core::{
-    canonical::TargetMapping,
     composition::{evaluate_and_compose, CompositionContext, ComposedEvaluationResult},
     evaluator::ControllerMapper,
     graph::ControllerGraph,
