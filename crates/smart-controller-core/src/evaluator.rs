@@ -178,6 +178,12 @@ pub fn evaluate<M: ControllerMapper>(
     let mut diagnostics = Vec::new();
     for (id, definition) in &definition_map {
         if matches!(&definition.source, InputSource::ControllerOutput { .. }) {
+            if snapshot.get(id).is_some() {
+                return Err(CoreError::InvalidInputSample {
+                    input_id: id.to_string(),
+                    reason: "controller-output inputs must be resolved from the dependency graph, not the external snapshot",
+                });
+            }
             preflight.insert(id.clone(), PreflightInput {
                 definition: definition.clone(),
                 resolved: None,
@@ -450,7 +456,7 @@ mod tests {
     use crate::{
         canonical::{ControllerBinding, MappingConfig},
         ids::TargetId,
-        input::{BoneTransformChannel, InputDimension, InputSample},
+        input::{InputDimension, InputSample},
     };
     use std::{cell::Cell, collections::BTreeMap};
 
