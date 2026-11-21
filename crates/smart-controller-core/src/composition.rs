@@ -407,6 +407,64 @@ mod tests {
     }
 
     #[test]
+    fn evaluate_and_compose_preserves_angle_typed_property_values() {
+        let mut controller = Controller {
+            id: ControllerId::new("angle-controller").unwrap(),
+            enabled: true,
+            inputs: vec![InputId::new("angle-input").unwrap()],
+            dependencies: vec![],
+            mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+            bindings: vec![ControllerBinding {
+                id: BindingId::new("angle-binding").unwrap(),
+                target_id: id("angle-target"),
+                target: TargetMapping::Property {
+                    target_id: "arm".into(),
+                    property: "rotation".into(),
+                    scale: 1.0,
+                    additive: false,
+                },
+                mode: BindingMode::AbsolutePose,
+                base_value: None,
+                composition: None,
+            }],
+            parent_scoped: false,
+        };
+        controller.bindings[0].composition = Some(CompositionConfig {
+            mode: CompositionMode::WeightedBlend,
+            weight: Some(1.0),
+            priority: None,
+            base_ref: None,
+        });
+        let graph = ControllerGraph::new(vec![controller]).unwrap();
+        let definitions = vec![InputDefinition {
+            id: InputId::new("angle-input").unwrap(),
+            source: InputSource::Manual,
+            dimension: InputDimension::Scalar,
+            fallback: FallbackPolicy::Reject,
+        }];
+        let snapshot = InputSnapshot::new(1, vec![
+            InputSample::valid(InputId::new("angle-input").unwrap(), scalar(0.0), Some(1)),
+        ]).unwrap();
+        let mapper = |controller: &Controller, _: &crate::evaluator::ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                TypedValue::angle(std::f64::consts::PI, true)?,
+            )]))
+        };
+        let result = evaluate_and_compose(
+            &graph,
+            &definitions,
+            &snapshot,
+            &mapper,
+            &CompositionContext::default(),
+        ).unwrap();
+        assert_eq!(
+            result.composition.outputs.get(&id("angle-target")),
+            Some(&TypedValue::angle(-std::f64::consts::PI, true).unwrap()),
+        );
+    }
+
+    #[test]
     fn replace_emits_the_single_contribution() {
         let item = contribution("controller-a", "binding-a", scalar(4.0), CompositionMode::Replace);
         let result = compose(&[item], &CompositionContext::default()).unwrap();
