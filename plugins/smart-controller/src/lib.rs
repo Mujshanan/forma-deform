@@ -1,5 +1,9 @@
 //! Thin AniCraft adapter. V1 calculates and logs a deterministic Slider preview;
 //! it does not drive the timeline during playback or mutate the document.
+pub mod adapter;
+pub mod compatibility;
+pub mod targets;
+
 use anicraft_plugin_sdk as ac;
 use serde_json::{Value, json};
 use smart_controller_core::{Mode, Params, preview_slider, validation};
