@@ -68,4 +68,47 @@ mod tests {
     fn non_finite_values_are_rejected() {
         assert_eq!(evaluate_pin_position(spec(), f64::NAN), Err(DeformError::NonFiniteInput));
     }
+
+    #[test]
+    fn every_non_finite_spec_component_is_rejected() {
+        let mut invalid = spec();
+        invalid.neutral_position.x = f64::INFINITY;
+        assert_eq!(evaluate_pin_position(invalid, 0.0), Err(DeformError::NonFiniteInput));
+
+        let mut invalid = spec();
+        invalid.neutral_position.y = f64::NAN;
+        assert_eq!(evaluate_pin_position(invalid, 0.0), Err(DeformError::NonFiniteInput));
+
+        let mut invalid = spec();
+        invalid.neutral_angle_degrees = f64::NEG_INFINITY;
+        assert_eq!(evaluate_pin_position(invalid, 0.0), Err(DeformError::NonFiniteInput));
+
+        let mut invalid = spec();
+        invalid.gain_per_degree.x = f64::NAN;
+        assert_eq!(evaluate_pin_position(invalid, 0.0), Err(DeformError::NonFiniteInput));
+
+        let mut invalid = spec();
+        invalid.gain_per_degree.y = f64::INFINITY;
+        assert_eq!(evaluate_pin_position(invalid, 0.0), Err(DeformError::NonFiniteInput));
+    }
+
+    #[test]
+    fn angle_delta_overflow_is_reported() {
+        let mut invalid = spec();
+        invalid.neutral_angle_degrees = -f64::MAX;
+        assert_eq!(
+            evaluate_pin_position(invalid, f64::MAX),
+            Err(DeformError::ArithmeticOverflow)
+        );
+    }
+
+    #[test]
+    fn result_overflow_is_reported() {
+        let mut invalid = spec();
+        invalid.gain_per_degree.x = f64::MAX;
+        assert_eq!(
+            evaluate_pin_position(invalid, 2.0),
+            Err(DeformError::ArithmeticOverflow)
+        );
+    }
 }
