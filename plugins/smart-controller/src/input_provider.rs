@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use smart_controller_core::{
     BoneTransformChannel, InputDefinition, InputId, InputSample, InputSnapshot,
     InputSource, TypedValue,
+    migration::CanonicalDocument,
 };
 
 use crate::adapter::{query_bone_info, sample_bone_rotation, BoneAnglePolicy};
@@ -21,6 +22,25 @@ pub struct HostInputContext {
     pub bone_angle_policy: BoneAnglePolicy,
     /// Angle wrapping is authored semantic metadata, never inferred from a host angle.
     pub wrapped_angles: bool,
+}
+
+/// Collect only external inputs referenced by enabled controllers in a
+/// validated document. Disabled controller inputs are intentionally not
+/// queried or required; ControllerOutput inputs remain DAG-owned.
+pub fn collect_document_input_snapshot(
+    document: &CanonicalDocument,
+    context: &HostInputContext,
+) -> Result<InputSnapshot, String> {
+    document.validate().map_err(|error| error.to_string())?;
+    let active: std::collections::BTreeSet<InputId> = document.controllers.iter()
+        .filter(|controller| controller.enabled)
+        .flat_map(|controller| controller.inputs.iter().cloned())
+        .collect();
+    let definitions: Vec<InputDefinition> = document.inputs.iter()
+        .filter(|definition| active.contains(&definition.id))
+        .cloned()
+        .collect();
+    collect_host_input_snapshot(&definitions, context)
 }
 
 /// Collect all external inputs before evaluation. ControllerOutput inputs are
@@ -112,6 +132,23 @@ mod tests {
         assert_eq!(snapshot.samples.len(), 1);
         assert_eq!(snapshot.get(&manual_id).unwrap().age_ticks, Some(0));
         assert_eq!(snapshot.max_age_ticks(), 0);
+    }
+
+    #[test]
+    fn disabled_controller_inputs_are_not_required_or_queried() {
+        let input_id = InputId::new("disabled-manual").unwrap();
+        let document = CanonicalDocument::from_json(
+            r#"{"schema":{"name":"smart-controller","version":1},"inputs":[{"id":"disabled-manual","source":{"kind":"manual"},"dimension":"scalar","fallback":{"kind":"reject"}}],"controllers":[{"id":"disabled","enabled":false,"inputs":["disabled-manual"],"dependencies":[],"mapping":{"kind":"range1_d","minimum":0.0,"neutral":1.0,"maximum":2.0},"bindings":[],"parent_scoped":false}]}"#,
+        ).unwrap();
+        let context = HostInputContext {
+            manual_values: BTreeMap::new(),
+            bone_layers: BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
+        };
+        let snapshot = collect_document_input_snapshot(&document, &context).unwrap();
+        assert!(snapshot.samples.is_empty());
+        assert!(snapshot.get(&input_id).is_none());
     }
 
     #[test]
