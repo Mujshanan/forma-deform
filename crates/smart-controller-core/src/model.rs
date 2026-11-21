@@ -25,7 +25,7 @@ pub struct Params {
     #[serde(default)]
     pub driver_layer_id: Option<u64>,
     #[serde(default)]
-    pub driver_bone_name: Option<String>,
+    pub driver_bone_id: Option<u64>,
     #[serde(default)]
     pub action_layer_id: Option<u64>,
     #[serde(default)]
