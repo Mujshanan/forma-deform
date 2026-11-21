@@ -869,6 +869,61 @@ mod tests {
     }
 
     #[test]
+    fn missing_one_of_multiple_binding_outputs_is_explicitly_unavailable() {
+        let mut controller = node(
+            "controller-a",
+            vec![input_id("input-a")],
+            vec![],
+            true,
+            "binding-a",
+        );
+        controller.bindings.push(binding("binding-b"));
+        let graph = ControllerGraph::new(vec![controller]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
+        let mapper = |controller: &Controller, inputs: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                inputs.value(&controller.inputs[0]).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.75), &mapper).unwrap();
+        assert_eq!(result.contributions.len(), 1);
+        assert!(result.unavailable_outputs.contains(&(controller_id("controller-a"), binding_id("binding-b"))));
+        assert!(result.diagnostics.iter().any(|item| item.code == OUTPUT_SKIPPED));
+    }
+
+    #[test]
+    fn target_type_mismatch_rejects_only_the_incompatible_binding_output() {
+        let mut controller = node(
+            "controller-a",
+            vec![input_id("input-a")],
+            vec![],
+            true,
+            "binding-a",
+        );
+        controller.bindings[0].target = TargetMapping::GeometryDeform {
+            element_id: "element-a".into(),
+            pin_id: "pin-a".into(),
+            negative_offset: [-1.0, 0.0],
+            neutral_offset: [0.0, 0.0],
+            positive_offset: [1.0, 0.0],
+        };
+        let graph = ControllerGraph::new(vec![controller]).unwrap();
+        let definitions = vec![manual_definition("input-a", FallbackPolicy::Reject)];
+        let mapper = |controller: &Controller, _: &ResolvedInputs| {
+            Ok(BTreeMap::from([(
+                controller.bindings[0].id.clone(),
+                TypedValue::scalar(0.5).unwrap(),
+            )]))
+        };
+        let result = evaluate(&graph, &definitions, &snapshot("input-a", 0.5), &mapper).unwrap();
+        assert!(result.contributions.is_empty());
+        assert!(result.unavailable_outputs.contains(&(controller_id("controller-a"), binding_id("binding-a"))));
+        assert!(result.diagnostics.iter().any(|item| item.code == MAPPING_TYPE));
+        assert!(result.diagnostics.iter().any(|item| item.code == OUTPUT_SKIPPED));
+    }
+
+    #[test]
     fn unused_external_snapshot_samples_are_still_type_checked() {
         let graph = ControllerGraph::new(vec![
             node("controller-a", vec![input_id("input-a")], vec![], true, "binding-a"),
