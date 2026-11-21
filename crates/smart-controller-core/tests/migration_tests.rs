@@ -131,3 +131,25 @@ fn params_migration_reports_fields_that_cannot_apply_to_the_selected_mode() {
     assert!(!migrated.report.is_lossless());
     assert!(migrated.report.losses.iter().any(|loss| loss.contains("Slider-only")));
 }
+
+#[test]
+fn canonical_document_round_trips_through_versioned_json() {
+    let migrated = migrate_binding_set_v1(&BindingSet::new(vec![legacy_geometry()]).unwrap()).unwrap();
+    let json = serde_json::to_string_pretty(&migrated.document).unwrap();
+    let decoded: smart_controller_core::migration::CanonicalDocument = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded, migrated.document);
+    decoded.validate().unwrap();
+}
+
+#[test]
+fn canonical_document_rejects_unknown_fields_and_unsupported_versions() {
+    let migrated = migrate_binding_set_v1(&BindingSet::new(vec![legacy_geometry()]).unwrap()).unwrap();
+    let mut value: serde_json::Value = serde_json::to_value(&migrated.document).unwrap();
+    value["schema"]["version"] = serde_json::json!(99);
+    let decoded: smart_controller_core::migration::CanonicalDocument = serde_json::from_value(value).unwrap();
+    assert!(decoded.validate().is_err());
+
+    let mut value: serde_json::Value = serde_json::to_value(&migrated.document).unwrap();
+    value["unexpected"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<smart_controller_core::migration::CanonicalDocument>(value).is_err());
+}
