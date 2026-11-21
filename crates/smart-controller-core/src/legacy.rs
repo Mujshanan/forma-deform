@@ -4,22 +4,10 @@
 //! Host identity resolution, persistence, and display belong in an adapter crate.
 
 use serde::{Deserialize, Serialize};
+pub use forma_geometry::Vec2;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Vec2 {
-    pub x: f64,
-    pub y: f64,
-}
-
-impl Vec2 {
-    fn is_finite(self) -> bool {
-        self.x.is_finite() && self.y.is_finite()
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
