@@ -13,12 +13,11 @@ pub fn validate(params: &Params) -> Result<(), String> {
         if layer == 0 {
             return Err("driver_layer_id must be greater than zero".into());
         }
-        let name = params
-            .driver_bone_name
-            .as_deref()
-            .ok_or("driver_bone_name is required when manual_value is absent")?;
-        if name.trim().is_empty() {
-            return Err("driver_bone_name must not be empty".into());
+        let bone_id = params
+            .driver_bone_id
+            .ok_or("driver_bone_id is required when manual_value is absent")?;
+        if bone_id == 0 {
+            return Err("driver_bone_id must be greater than zero".into());
         }
     }
     match params.mode {
