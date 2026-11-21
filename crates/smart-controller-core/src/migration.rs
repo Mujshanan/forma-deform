@@ -47,11 +47,24 @@ impl CanonicalDocument {
                 return Err(CoreError::DuplicateInputId(input.id.to_string()));
             }
         }
+        let controllers_by_id: std::collections::HashMap<_, _> = self.controllers.iter().map(|item| (&item.id, item)).collect();
         for controller in &self.controllers {
             controller.validate_local()?;
             for input_id in &controller.inputs {
                 if !input_ids.contains(input_id) {
                     return Err(CoreError::MissingInput(input_id.to_string()));
+                }
+                let input = self.inputs.iter().find(|item| &item.id == input_id)
+                    .ok_or_else(|| CoreError::MissingInput(input_id.to_string()))?;
+                if let InputSource::ControllerOutput { controller_id, binding_id } = &input.source {
+                    if !controller.dependencies.contains(controller_id) {
+                        return Err(CoreError::InvalidGraph(format!("controller {} consumes output from {} without declaring the dependency", controller.id, controller_id)));
+                    }
+                    let producer = controllers_by_id.get(controller_id)
+                        .ok_or_else(|| CoreError::InvalidGraph(format!("controller output source {} does not exist", controller_id)))?;
+                    if !producer.bindings.iter().any(|binding| &binding.id == binding_id) {
+                        return Err(CoreError::InvalidModel(format!("controller output binding {} does not exist on {}", binding_id, controller_id)));
+                    }
                 }
             }
         }
