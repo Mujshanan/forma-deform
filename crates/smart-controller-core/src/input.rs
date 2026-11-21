@@ -48,7 +48,7 @@ pub enum BoneTransformChannel {
 
 /// Describes where an input originates without importing host SDK types.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum InputSource {
     Manual,
     BoneTransform {
@@ -62,7 +62,7 @@ pub enum InputSource {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case", deny_unknown_fields)]
 pub enum FallbackPolicy {
     /// Do not substitute a value; the input remains unavailable.
     Unavailable,
