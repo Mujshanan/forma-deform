@@ -13,7 +13,6 @@ use crate::{
     error::CoreError,
     ids::{ControllerId, InputId},
     pose::Pose2D,
-    value::Vector2,
 };
 
 use super::{
@@ -111,7 +110,11 @@ impl AdvancedMappingExtension {
             }
 
             let mapping = record.mapping.build()?;
-            validate_pose_bindings(controller, mapping.as_pose_mapping().map_pose_for_schema()?)?;
+            let schema_pose = match &mapping {
+                AdvancedPoseMapping::Grid(mapping) => mapping.poses().first(),
+                AdvancedPoseMapping::Triangulated(mapping) => mapping.vertices().first().map(|vertex| &vertex.pose),
+            }.ok_or_else(|| CoreError::InvalidMapping("advanced mapping has no pose schema".into()))?;
+            validate_pose_bindings(controller, schema_pose)?;
             registry.register(
                 record.controller_id.clone(),
                 record.input_id.clone(),
@@ -237,34 +240,3 @@ fn validate_pose_bindings(
     Ok(())
 }
 
-// Keep the schema check generic over both concrete mapping implementations.
-trait MappingSchemaPose {
-    fn map_pose_for_schema(&self) -> Result<Pose2D, CoreError>;
-}
-
-impl MappingSchemaPose for AdvancedPoseMapping {
-    fn map_pose_for_schema(&self) -> Result<Pose2D, CoreError> {
-        match self {
-            AdvancedPoseMapping::Grid(mapping) => mapping.evaluate(Vector2::new(
-                mapping.x_coordinates()[0],
-                mapping.y_coordinates()[0],
-            )?),
-            AdvancedPoseMapping::Triangulated(mapping) => {
-                let vertex = mapping.vertices().first().ok_or_else(|| {
-                    CoreError::InvalidMapping("triangulated mapping has no vertices".into())
-                })?;
-                mapping.evaluate(vertex.position)
-            }
-        }
-    }
-}
-
-trait AdvancedPoseMappingSchemaAccess {
-    fn as_pose_mapping(&self) -> &AdvancedPoseMapping;
-}
-
-impl AdvancedPoseMappingSchemaAccess for AdvancedPoseMapping {
-    fn as_pose_mapping(&self) -> &AdvancedPoseMapping {
-        self
-    }
-}
