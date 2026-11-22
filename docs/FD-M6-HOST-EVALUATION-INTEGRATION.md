@@ -52,7 +52,7 @@ The pure Forma Deform evaluation returns:
 
 The contract must distinguish **no contribution**, **disabled binding**, **invalid binding**, **missing input**, **stale target**, and **evaluation failure**. A failed controller must not silently reuse a previous frame's output. No partial output set may be published if the host's evaluation policy requires all-or-nothing consistency for a controller dependency graph.
 
-This is a semantic contract, not a proposed public Rust function signature or a claim that the current SDK can supply these values.
+This is a semantic contract, not a claim that the current SDK can supply these values. The staged delivery plan, proposed runtime architecture, host/core boundary, target overlay policy, work packages, and review decisions are in [FD-M6 Implementation Proposal](FD-M6-IMPLEMENTATION-PROPOSAL.md).
 
 ## 4. Determinism and dependency rules
 
