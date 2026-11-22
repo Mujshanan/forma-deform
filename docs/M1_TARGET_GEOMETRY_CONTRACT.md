@@ -1,6 +1,6 @@
 # M1 Proposal — Stable Target Identity and Revisioned Geometry Snapshots
 
-**Status:** Proposed contract for review; not yet an accepted architecture decision
+**Status:** M1 contract semantics drafted and FDM-side primitives implemented; host conformance and architecture acceptance remain pending
 
 ## Implementation progress — FDM-side contract primitives
 
@@ -306,6 +306,120 @@ The following require explicit resolution before calling this contract accepted 
 7. **Coordinate descriptor:** align units, axis orientation, origin, and local-rest semantics with AniCraft's actual geometry conventions.
 8. **Native Asset Warp stage:** source inspection establishes that `Warp.rest` is the authored rest outline and `Shape.path` is the bent outline for a warped shape. Confirm the snapshot adapter uses `Warp.rest` when present and that existing pin edits remain on the native host path.
 9. **Plugin transport:** choose how immutable snapshot payloads cross the current plugin boundary without leaking host implementation types.
+
+## 11. Contract decisions — resolved proposal and host-side blockers
+
+This section closes the FDM-side semantic choices for review. These are proposed contract rules, not claims that AniCraft already implements them. Host-side conformance remains a blocker before an adapter can be written.
+
+### 11.1 Persistent document identity
+
+- `document_id` is a host-issued, opaque UUID (or equivalent collision-resistant persistent identifier) stored in the document's serialized root.
+- Save/reopen, rename, and moving the same document preserve the ID.
+- Duplicate/clone and Save As create a new document identity. The source document remains unchanged.
+- Importing content into an existing document does not import the source document identity. Imported targets receive identities allocated by the destination host.
+- A reference is scoped to exactly one document identity. Matching a numeric target ID in another document is never sufficient.
+- A missing or malformed document identity is an explicit resolution failure; the adapter must not synthesize a stable ID at load time and pretend it was persisted.
+
+This requires a future AniCraft document-model change. No such change is included in this PR.
+
+### 11.2 Persistent target identity and incarnation
+
+The persistent identity tuple is:
+
+`(host_namespace, document_id, target_kind, target_id, generation)`
+
+- `target_id` is opaque to FDM. For the current AniCraft model it may encode a decimal document-scoped `ElementId`; FDM must not parse it or infer identity from its numeric value.
+- `generation` is a host-issued, non-zero incarnation token. It changes when a target is deleted and a new target is created, even if the host reuses the same underlying numeric ID.
+- Rename, reorder, reparent, visibility changes, and selection changes do not change target identity.
+- A target kind change is represented as deletion of the old typed target and creation of a new typed target; it must not silently preserve an incompatible binding.
+- The host must guarantee uniqueness of the full tuple for the lifetime of all persisted references. If the host can formally guarantee never-reused IDs for all supported mutation/import/migration paths, a constant generation may be used only after that guarantee is documented and tested. Until then, generation remains mandatory.
+- FDM-owned IDs, runtime handles, array indices, display names, and pin indices are never substitutes for this tuple.
+
+### 11.3 Initial target and payload scope
+
+- The first host geometry target is a shape/element that exposes canonical authored 2D path geometry.
+- The first payload kind is `Path2D` only. Mesh and point-set payloads are deferred; no implicit tessellation or conversion is permitted.
+- For an unwarped shape, the canonical source is its authored `Shape.path`.
+- For a shape with native Asset Warp, the canonical source is `Warp.rest`, not the bent/shown `Shape.path`.
+- Native Asset Warp pin IDs and pin positions are not part of the source path payload. They are a separate host-owned state/dependency and must not be smuggled into the path fingerprint or geometry revision.
+- The containing shape is the M1 geometry target. A native warp pin is not itself the source-geometry target identity. Any future pin-level binding needs its own explicit stable identity contract.
+
+### 11.4 Revision semantics, including undo/redo
+
+Geometry and topology revisions are independent, target-scoped, non-zero unsigned 64-bit change epochs.
+
+- Both start at 1 when a target's revision history is created.
+- `geometry_revision` advances whenever any canonical Path2D payload field or its coordinate interpretation changes.
+- `topology_revision` advances only when path structure changes: segment count/order, segment kind, endpoint/control-point structure, or closure structure.
+- A topology edit advances both geometry and topology revisions.
+- A coordinate-only edit advances geometry revision only.
+- A transform, hierarchy, display-name, selection, or native Asset Warp pin-only edit does not advance either source-path revision.
+- Undo and redo are new state transitions. If undo restores byte-identical old path content, the fingerprint may return to its earlier value, but geometry revision still advances. If topology is restored/changed, topology revision also advances. Revisions never move backwards or get restored from an undo snapshot.
+- Revisions never wrap. Exhaustion is a hard host error; the host must not reset a counter while references may survive.
+- A host migration that cannot preserve revision history must explicitly invalidate/reissue the document identity or provide a documented migration mapping. It must not silently reset revisions under an unchanged target reference.
+
+A revision is a change epoch, not a content hash and not an undo-history index. Equality means the host asserts no relevant source change since that epoch.
+
+### 11.5 Snapshot atomicity and immutability
+
+- A snapshot is a complete value captured at one logical host-document state.
+- The host must capture target identity, source payload, coordinate descriptor, revisions, and fingerprint atomically under one document read transaction/lock or equivalent consistent snapshot mechanism.
+- FDM receives ownership of an immutable snapshot value (or read-only transport buffer). It can retain it for evaluation, but cannot mutate it or write through to the host.
+- In Rust, snapshot fields are private and consumers access payload only through shared references. Transport implementations must provide equivalent read-only semantics.
+- A snapshot remains unchanged after subsequent host edits. A newer snapshot is a new value with new dependency stamps.
+- A snapshot is not proof that its source remains current. Freshness must be checked against current host state immediately before any future result-application operation.
+
+### 11.6 Fingerprint canonicalization proposal
+
+The initial fingerprint identifier is `anicraft-path2d-sha256-v1`. Its canonical byte stream is defined over:
+
+1. A fixed domain-separation prefix and payload kind/schema version.
+2. The complete coordinate-space descriptor (space kind, stable space ID, dimensionality, source unit, canonical unit, scale, axis orientation, and origin).
+3. The Path2D schema's ordered sequence of path commands/segments, explicit segment-kind tags, all authored endpoint/control values, and closure state.
+
+Numeric rules:
+
+- Coordinates and scale must be finite; NaN and infinities are rejected before hashing.
+- Normalize negative zero to positive zero.
+- Encode finite IEEE-754 binary64 values in a specified byte order (little-endian); do not round, quantize, or stringify floating-point values.
+- Preserve segment ordering and every schema-defined structural distinction. Do not hash object memory, map iteration order, runtime IDs, pointers, or display metadata.
+- Hash the canonical byte stream with SHA-256. The algorithm identifier includes the canonicalization version; any change to the byte stream requires a new identifier.
+
+The precise Path2D field sequence must be pinned to the selected payload schema before the host implementation begins. The fingerprint is a snapshot-content verification token; revisions remain the efficient change epochs. The target identity and revision numbers themselves are not included in the content digest.
+
+### 11.7 Coordinate-space semantics
+
+- The first snapshot space is `TargetLocalRest`: coordinates are in the target's authored rest/source path space, not stage space and not post-warp displayed space.
+- The host must explicitly declare source linear unit, canonical linear unit, conversion scale (canonical units per source unit), axis orientation, origin, and stable coordinate-space ID.
+- FDM must not assume that AniCraft's stage-space `warp.info` coordinates and artwork-space rest coordinates are interchangeable.
+- A coordinate descriptor change changes the interpretation of the payload, so it advances geometry revision and changes the fingerprint.
+- Unknown or unsupported coordinate metadata fails closed. No implicit stage/local conversion is allowed in M1.
+
+The actual AniCraft axis/origin/unit values must be confirmed against source-level tests before adapter implementation; this proposal deliberately does not guess them.
+
+### 11.8 Freshness and failure semantics
+
+- A current snapshot has the exact same full target identity, geometry revision, topology revision, and content fingerprint as the host's current source state.
+- A different target identity is a resolution/identity error, not a merely stale geometry snapshot.
+- Any geometry revision, topology revision, or fingerprint mismatch marks the snapshot stale. A lower current revision is also a mismatch; revision rollback is never treated as current.
+- A topology revision mismatch invalidates topology-dependent mappings even if coordinates happen to compare equal.
+- A fingerprint mismatch with equal revisions is a host consistency/integrity error and must be reported distinctly from an ordinary edit.
+- No automatic rebase, silent retry against different geometry, or acceptance based only on matching fingerprints is permitted.
+
+### 11.9 Remaining host conformance blockers
+
+The FDM-side semantics above are now specified as the M1 proposal. Before implementation against AniCraft, the host must provide evidence for:
+
+1. Persistent document UUID storage and duplicate/Save As/import semantics.
+2. Target incarnation guarantees across deletion, reuse, import, undo/redo, and migration.
+3. A stable shape target-kind/capability contract.
+4. Exact Path2D payload schema and canonical field ordering.
+5. Per-target monotonic revision updates on every mutation path, including undo/redo.
+6. Atomic snapshot acquisition from `Warp.rest` when native Asset Warp exists, otherwise `Shape.path`.
+7. Verified source units, axis orientation, origin, and coordinate-space ID.
+8. A conformance test proving fingerprint stability and mismatch detection.
+
+These are AniCraft-side requirements, not permission to modify AniCraft. They must be separately reviewed and authorized.
 
 ## 12. Non-goals and preserved constraints
 
