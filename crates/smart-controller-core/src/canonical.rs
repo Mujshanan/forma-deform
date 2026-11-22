@@ -65,7 +65,7 @@ pub enum MappingConfig {
     DirectedRange1D { start: f64, end: f64 },
     PoseSet1D { pose_ids: Vec<String> },
     JoystickFivePose { center: String, up: String, right: String, down: String, left: String },
-    PoseGrid(PoseGrid),
+    PoseGrid { axes: Vec<PoseAxis>, pose_ids: Vec<String> },
     Discrete { values: Vec<TypedValue> },
     ThreeAnchorRange { minimum: f64, neutral: f64, maximum: f64, easing: EasingConfig },
 }
@@ -220,7 +220,7 @@ impl Controller {
                     return Err(CoreError::InvalidMapping("five-pose joystick requires five distinct non-empty pose IDs".into()));
                 }
             }
-            MappingConfig::PoseGrid(grid) => grid.validate(self.inputs.len())?,
+            MappingConfig::PoseGrid { axes, pose_ids } => PoseGrid { axes: axes.clone(), pose_ids: pose_ids.clone() }.validate(self.inputs.len())?,
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
             MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, .. } => {
                 if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || !(*neutral - *minimum).is_finite() || !(*maximum - *neutral).is_finite() || minimum >= neutral || neutral >= maximum {
