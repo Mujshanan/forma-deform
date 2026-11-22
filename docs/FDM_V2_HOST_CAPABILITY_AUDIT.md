@@ -28,7 +28,11 @@ Evidence labels:
 5. Warp pins participate in the host timeline: pin positions are keyed at the playhead and tween between keyframes. A move inside a tween keys the frame.
 6. AniCraft also exposes a native 4×4 envelope command for selected shapes/drawing objects. The command reference says symbols, text, groups, and bitmaps cannot be bent with that operation. Its implementation and relation to FDM topology require further review.
 7. The plugin guide documents command plugins as fresh, sandboxed runs that modify documents through host commands and produce one undo step. The existing SDK audit reports no documented arbitrary plugin metadata persistence or continuous custom playback evaluator.
-8. AniCraft's document model has stable numeric ElementId, LayerId, and SymbolId values allocated from a document-local next_id counter. This is a useful host identity foundation, but it is not a cross-cutting geometry revision contract.\n9. AniCraft has layer parenting (ADR 0113): child-layer artwork follows the first object on the parent layer through an affine transform at each frame. This is ordinary transform inheritance, not nonlinear parent-deformation propagation.\n10. Document evaluation is a pure document/frame-to-DisplayList function. The editor caches display lists by document state, scene, frame, and open editing context. The state identity is useful for host cache invalidation but is not a persisted per-target geometry revision.\n11. The current Document and DocumentFile schemas enumerate their fields and expose no generic plugin extension-data collection. The plugin host ABI exposes command, document, elements, and log requests; it has no general authored-data persistence operation.\n12. These capabilities create reuse and adapter opportunities, but do not yet establish the versioned geometry snapshot, FDM topology persistence, nested nonlinear deformation, explicit composition graph, or runtime result contract required by ADM-001–007.
+8. AniCraft's document model has stable numeric ElementId, LayerId, and SymbolId values allocated from a document-local next_id counter. This is a useful host identity foundation, but it is not a cross-cutting geometry revision contract.
+9. AniCraft has layer parenting (ADR 0113): child-layer artwork follows the first object on the parent layer through an affine transform at each frame. This is ordinary transform inheritance, not nonlinear parent-deformation propagation.
+10. Document evaluation is a pure document/frame-to-DisplayList function. The editor caches display lists by document state, scene, frame, and open editing context. The state identity is useful for host cache invalidation but is not a persisted per-target geometry revision.
+11. The current Document and DocumentFile schemas enumerate their fields and expose no generic plugin extension-data collection. The plugin host ABI exposes command, document, elements, and log requests; it has no general authored-data persistence operation.
+12. These capabilities create reuse and adapter opportunities, but do not yet establish the versioned geometry snapshot, FDM topology persistence, nested nonlinear deformation, explicit composition graph, or runtime result contract required by ADM-001–007.
 
 ## 3. Evidence-linked capability matrix
 
@@ -282,7 +286,8 @@ Evidence:
 - [x] Hierarchy and ordinary transform evaluation paths inspected; nonlinear deformation propagation remains an FDM contract.
 - [x] Timeline/keyframe model inspected; FDM-specific property storage remains a host-extension gap.
 - [x] Current plugin bridge and Document schema rechecked; no generic plugin extension-data API was found in the inspected contract.
-- [ ] Evaluation and display-list cache path inspected; external result application, async cancellation, and full render/cache invalidation audit remain open.
+- [x] Pure document evaluation and editor display-list cache path inspected.
+- [ ] External result application, async cancellation, and full render/cache invalidation paths inspected.
 - [x] Command transactions and snapshot undo/redo inspected; FDM bake representation/provenance remains open.
 - [ ] Smart Controller/pin separation verified against current tests and source.
 - [ ] Every integration requirement classified with evidence and an owner.
