@@ -32,6 +32,7 @@ The plugin may define versioned schemas for its own authored data, but persisten
 8. Do not claim durable plugin-owned binding persistence until an AniCraft host-side storage contract is implemented and verified.
 9. Apply/bake operations are explicit, undoable commands. Preview is non-mutating.
 10. No PR merge or host-repository change is implied by this plan.
+11. CCC-01.5 is verified at the source/test-contract level: Smart Controller preview and Form Deform pin evaluation remain independent; the former cross-path integration test has been replaced with an isolated Smart Controller preview assertion, and the Smart Controller crate no longer depends on Form Deform for tests. AniCraft pin behavior remains host-owned and unchanged.
 
 ## 3. Feature allocation matrix
 
