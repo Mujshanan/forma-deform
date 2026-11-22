@@ -159,7 +159,7 @@ mod tests {
             composition: None,
         };
         let document = CanonicalDocument {
-            schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+            schema: SchemaIdentity { name: "smart-controller".into(), version: smart_controller_core::schema::CURRENT_SCHEMA_VERSION },
             inputs: vec![InputDefinition {
                 id: smart_controller_core::InputId::new("input").unwrap(),
                 source: InputSource::Manual,
