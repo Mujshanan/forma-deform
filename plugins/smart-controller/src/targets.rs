@@ -1,9 +1,8 @@
 //! Host target capability assessment.
 //!
-//! This module deliberately plans and reports capabilities; it does not issue
-//! mutating commands. A capability marked preview-only still requires the
-//! host's command-dialog preview/undo transaction to be invoked by a later,
-//! separately reviewed integration.
+//! This module verifies target capabilities, builds deterministic command
+//! payloads, and exposes the single-target current-playhead apply path. AniCraft
+//! remains authoritative for mutation, document revision, and undo/redo.
 
 use anicraft_plugin_sdk as ac;
 use serde_json::Value;
