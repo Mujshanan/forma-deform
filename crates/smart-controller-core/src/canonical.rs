@@ -8,6 +8,56 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+/// One ordered scalar axis in a bounded regular pose grid.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoseAxis {
+    pub keys: Vec<f64>,
+}
+
+impl PoseAxis {
+    pub fn validate(&self) -> Result<(), CoreError> {
+        if self.keys.len() < 2 || self.keys.iter().any(|key| !key.is_finite()) ||
+            self.keys.windows(2).any(|pair| pair[0] >= pair[1] || !(pair[1] - pair[0]).is_finite()) {
+            return Err(CoreError::InvalidMapping("PoseGrid axes require at least two finite, strictly increasing keys".into()));
+        }
+        Ok(())
+    }
+}
+
+/// Complete Cartesian grid; axis 0 varies fastest in pose_ids.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoseGrid {
+    pub axes: Vec<PoseAxis>,
+    pub pose_ids: Vec<String>,
+}
+
+impl PoseGrid {
+    pub fn validate(&self, input_count: usize) -> Result<(), CoreError> {
+        if !(2..=3).contains(&self.axes.len()) || self.axes.len() != input_count {
+            return Err(CoreError::InvalidMapping("PoseGrid requires exactly 2 or 3 axes matching the controller input count".into()));
+        }
+        let mut count = 1usize;
+        for axis in &self.axes {
+            axis.validate()?;
+            count = count.checked_mul(axis.keys.len())
+                .ok_or_else(|| CoreError::InvalidMapping("PoseGrid form count overflow".into()))?;
+            if count > 256 {
+                return Err(CoreError::InvalidMapping("PoseGrid is limited to 256 authored forms".into()));
+            }
+        }
+        if self.pose_ids.len() != count {
+            return Err(CoreError::InvalidMapping(format!("PoseGrid requires exactly {count} pose IDs")));
+        }
+        let mut ids = std::collections::HashSet::with_capacity(count);
+        if self.pose_ids.iter().any(|id| id.trim().is_empty() || !ids.insert(id)) {
+            return Err(CoreError::InvalidMapping("PoseGrid pose IDs must be non-empty and unique".into()));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MappingConfig {
@@ -15,6 +65,7 @@ pub enum MappingConfig {
     DirectedRange1D { start: f64, end: f64 },
     PoseSet1D { pose_ids: Vec<String> },
     JoystickFivePose { center: String, up: String, right: String, down: String, left: String },
+    PoseGrid(PoseGrid),
     Discrete { values: Vec<TypedValue> },
     ThreeAnchorRange { minimum: f64, neutral: f64, maximum: f64, easing: EasingConfig },
 }
@@ -169,6 +220,7 @@ impl Controller {
                     return Err(CoreError::InvalidMapping("five-pose joystick requires five distinct non-empty pose IDs".into()));
                 }
             }
+            MappingConfig::PoseGrid(grid) => grid.validate(self.inputs.len())?,
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
             MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, .. } => {
                 if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || !(*neutral - *minimum).is_finite() || !(*maximum - *neutral).is_finite() || minimum >= neutral || neutral >= maximum {
