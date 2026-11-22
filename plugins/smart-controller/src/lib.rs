@@ -356,7 +356,7 @@ fn build_geometry_authoring_document(p: &Value) -> Result<GeometryAuthoringBuild
         parent_scoped: false,
     };
     let document = CanonicalDocument {
-        schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+        schema: SchemaIdentity { name: "smart-controller".into(), version: smart_controller_core::schema::CURRENT_SCHEMA_VERSION },
         inputs: vec![input],
         controllers: vec![controller],
     };
