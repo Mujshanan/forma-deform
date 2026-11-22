@@ -91,7 +91,7 @@ pub fn build_host_target_preview_plan(
     result: &ComposedEvaluationResult,
 ) -> Result<TargetPreviewPlan, String> {
     let mut plan = build_target_preview_plan(document, result)?;
-    let mut element_responses = std::collections::BTreeMap::new();
+    let mut element_responses: std::collections::BTreeMap<u64, serde_json::Value> = std::collections::BTreeMap::new();
 
     for item in &mut plan.items {
         if let TargetMapping::GeometryDeform { element_id, pin_id, .. } = &item.target {
