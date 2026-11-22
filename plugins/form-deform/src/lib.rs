@@ -13,6 +13,8 @@ const MANIFEST: &str = r##"{
   "description": "Drive one Asset Warp pin from a bone angle using an authored neutral position and per-degree gains.",
   "params": {
     "bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Controller bone ID"},
+    "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID"},
+    "frame": {"type": "int", "min": 0, "max": 1000000000, "label": "Evaluation frame (leave empty to use the current playhead)"},
     "element_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warped shape element ID"},
     "pin_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Warp pin ID"},
     "neutral_angle": {"type": "number", "default": 0, "label": "Neutral bone angle (degrees)"},
@@ -48,7 +50,11 @@ fn run(params: &Value) -> Result<(), String> {
     let gain_y = number(params, "gain_y")?;
     let include_spring = params["include_spring_swing"].as_bool().unwrap_or(false);
 
-    let bone_data = ac::command("bone.info", json!({}))?;
+    let frame = params.get("frame").and_then(Value::as_u64);
+    let layer_id = required_id(params, "driver_layer_id")?;
+    let mut bone_query = json!({"layer": layer_id});
+    if let Some(frame) = frame { bone_query["frame"] = Value::from(frame); }
+    let bone_data = ac::command("bone.info", bone_query)?;
     let bone = find_bone(&bone_data, bone_id)
         .ok_or_else(|| format!("bone {bone_id} is not present in an armature at the playhead"))?;
     let keyed_angle = bone["angle"].as_f64()
@@ -56,7 +62,9 @@ fn run(params: &Value) -> Result<(), String> {
     let swing = bone["swing"].as_f64().unwrap_or(0.0);
     let input_angle = keyed_angle + if include_spring { swing } else { 0.0 };
 
-    let warp = ac::command("warp.info", json!({"element": element_id}))?;
+    let mut warp_query = json!({"element": element_id});
+    if let Some(frame) = frame { warp_query["frame"] = Value::from(frame); }
+    let warp = ac::command("warp.info", warp_query)?;
     if warp["warped"].as_bool() != Some(true) {
         return Err(format!("element {element_id} has no usable Asset Warp mesh; add a warp and pin first"));
     }
@@ -70,11 +78,14 @@ fn run(params: &Value) -> Result<(), String> {
         gain_per_degree: Vec2 { x: gain_x, y: gain_y },
     }, input_angle).map_err(|error| error.to_string())?;
 
-    ac::log(&format!("Form Deform — bone {bone_id}: keyed angle {keyed_angle:.3}°, spring swing {swing:.3}°, input {input_angle:.3}°"));
+    ac::log(&format!("Form Deform — layer {layer_id}, bone {bone_id}: keyed angle {keyed_angle:.3}°, spring swing {swing:.3}°, input {input_angle:.3}°"));
+    if let Some(frame) = frame { ac::log(&format!("Evaluated at explicit frame {frame}.")); } else { ac::log("Evaluated at the current AniCraft playhead."); }
     ac::log(&format!("Pin {pin_id} on element {element_id}: neutral ({neutral_x:.2}, {neutral_y:.2}) → target ({:.2}, {:.2}) stage px", target.x, target.y));
 
     if params["apply"].as_bool().unwrap_or(false) {
-        let result = ac::command("warp.pin_move", json!({"element": element_id, "pin": pin_id, "x": target.x, "y": target.y}))?;
+        let mut apply_params = json!({"element": element_id, "pin": pin_id, "x": target.x, "y": target.y});
+        if let Some(frame) = frame { apply_params["frame"] = Value::from(frame); }
+        let result = ac::command("warp.pin_move", apply_params)?;
         ac::log(&format!("Applied deformation at {:?}. This edit is undoable.", result["at"]));
     } else {
         ac::log("Calculation only. Enable Apply pin position to write the result to the document.");
