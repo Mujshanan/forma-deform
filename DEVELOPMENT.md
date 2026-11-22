@@ -80,7 +80,7 @@ The plugin may define versioned schemas for its own authored data, but persisten
 - Smart Bone authoring, symbol rigging, Switch Groups, reusable symbol assets, and the character asset library belong to **AniCraft 360 Studio**.
 - General bones, timeline, keyframes, document storage, rendering, and undo belong to **AniCraft**.
 
-## 4. UI proposal
+## 3.2 FDM v2 authored persistence and composition\n\nFDM owns a versioned authored payload schema (`forma-deform-document` v1), deformation definition IDs/revisions, typed parameters, explicit reference geometry and coordinate descriptors, plus typed composition graphs. AniCraft still owns document embedding, save/load, dirty state and undo/redo. Runtime snapshots, evaluated results and cache entries are never authoritative persisted data.\n\nComposition is independent by default. Sequential, parallel and weighted-blend operators require explicit graph nodes and inputs; the graph validator rejects cycles, missing references, orphan nodes, duplicate IDs, incompatible value signatures, target/reference/coordinate mismatches and invalid blend weights. Smart Controller output is not a graph source under CCC-01.5. See `docs/M1_FDM_PERSISTENCE_AND_COMPOSITION_SCHEMA.md`.\n\n## 4. UI proposal
 
 The UI is a native AniCraft tool context using existing stage, properties, timeline, command, and dockable-panel infrastructure.
 
