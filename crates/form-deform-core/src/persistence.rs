@@ -60,7 +60,7 @@ pub enum GeometryValueKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+#[serde(tag = "type", content = "value", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ParameterValue {
     Boolean(bool),
     Integer(i64),
@@ -362,6 +362,13 @@ mod tests {
         let json = sample_document().to_json().unwrap();
         let changed = json.replacen("{", "{\"unrecognized\":true,", 1);
         assert_eq!(FdmDocument::from_json(&changed), Err(PersistenceError::MalformedDocument));
+    }
+
+    #[test]
+    fn deserialized_host_references_are_revalidated() {
+        let json = sample_document().to_json().unwrap();
+        let invalid = json.replace("\\"target_id\\":\\"shape-1\\"", "\\"target_id\\":\\" \\"");
+        assert_eq!(FdmDocument::from_json(&invalid), Err(PersistenceError::InvalidTarget));
     }
 
     #[test]
