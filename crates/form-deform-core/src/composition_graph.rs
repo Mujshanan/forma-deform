@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn graph_rejects_unknown_node_fields_and_resource_overflow() {
         let graph = CompositionGraph::new(
-            "bounded", 1, target(), reference(), space(),
+            "bounded", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![CompositionNode::deformer("one", "missing")],
             vec!["one".into()],
         ).unwrap();
@@ -602,7 +602,7 @@ mod tests {
             .map(|i| CompositionNode::deformer(format!("n-{i}"), "d"))
             .collect::<Vec<_>>();
         assert_eq!(
-            CompositionGraph::new("large", 1, target(), reference(), space(), too_many, vec!["n-0".into()]),
+            CompositionGraph::new("large", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry, too_many, vec!["n-0".into()]),
             Err(CompositionGraphError::ResourceLimitExceeded)
         );
     }
@@ -614,7 +614,7 @@ mod tests {
             definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
         ];
         let graph = CompositionGraph::new(
-            "bad-sequence", 1, target(), reference(), space(),
+            "bad-sequence", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::deformer("a", "a"),
                 CompositionNode::deformer("b", "b"),
@@ -629,7 +629,7 @@ mod tests {
     fn graph_rejects_incompatible_value_types() {
         let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::AbsoluteGeometry)];
         let graph = CompositionGraph::new(
-            "bad-types", 1, target(), reference(), space(),
+            "bad-types", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::deformer("a", "a"),
                 CompositionNode::deformer("b", "b"),
