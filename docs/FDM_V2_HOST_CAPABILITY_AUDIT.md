@@ -373,7 +373,7 @@ The replacement:
 
 The unused `form-deform-core` dev-dependency was removed from `plugins/smart-controller/Cargo.toml`. Form Deform's own core tests remain the isolated coverage for its absolute pin-position formula (neutral pose, positive/negative angles, repeatability, and non-finite rejection); its plugin tests remain responsible for host bone/pin lookup and malformed responses.
 
-This removes the test-level executable composition contract without changing either production plugin path, the Smart Controller preview semantics, the Form Deform formula, or AniCraft's pin implementation. No new composition behavior is authorized. The source change was committed on the FDM documentation branch; CI/test execution was not performed as part of this source audit.
+This removes the test-level executable composition contract without changing either production plugin path, the Smart Controller preview semantics, the Form Deform formula, or AniCraft's pin implementation. No new composition behavior is authorized. The source change was committed on the FDM documentation branch and subsequently validated by GitHub Actions: `cargo test --workspace` and release WASM builds for bone-query, Form Deform, and Smart Controller all passed.
 
 #### Existing AniCraft pin behavior — preserved by the inspected host implementation
 
@@ -490,7 +490,7 @@ The exact API shapes, storage format, cache-key design, and evaluation schedulin
 - [x] Pure document evaluation and editor display-list cache path inspected.
 - [x] External result application, async cancellation, and full render/cache invalidation paths inspected; no external geometry-result API or FDM stale-result contract was found.
 - [x] Command transactions and snapshot undo/redo inspected; FDM bake representation/provenance remains open.
-- [x] CCC-01.5 source/test contract reconciled: production paths remain separate; the Smart Controller integration test asserts only its own preview output; the Form Deform dev-dependency was removed; AniCraft pin behavior remains unchanged. CI/test execution is still pending.
+- [x] CCC-01.5 source/test contract reconciled: production paths remain separate; the Smart Controller integration test asserts only its own preview output; the Form Deform dev-dependency was removed; AniCraft pin behavior remains unchanged. GitHub Actions passed `cargo test --workspace` and all three release WASM plugin builds.
 - [x] Every identified integration requirement classified with source evidence and an owner in the M0 integration gap and ownership matrix.
 - [x] Required AniCraft host extensions listed separately from Forma Deform-owned implementation work.
 
@@ -508,4 +508,4 @@ The exact API shapes, storage format, cache-key design, and evaluation schedulin
 - [AniCraft ADR 0079 — Asset Warp](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0079-asset-warp.md)
 - [Forma Deform SDK capability audit](ANICRAFT_SDK_AUDIT.md)
 
-**M0 status: Audit complete.** The source-based capability audit, CCC-01.5 reconciliation, integration gap/ownership matrix, and separate host-extension list are complete. Implementation-level contracts and API designs remain open; this audit does not authorize changes to AniCraft. The modified Smart Controller test has not yet been executed in CI.
+**M0 status: Audit and CI validation complete.** The source-based capability audit, CCC-01.5 reconciliation, integration gap/ownership matrix, and separate host-extension list are complete. GitHub Actions run [#491](https://github.com/Mujshanan/forma-deform/actions/runs/45007247606) passed `cargo test --workspace` and the release WASM builds for bone-query, Form Deform, and Smart Controller. Implementation-level contracts and API designs remain open; this audit does not authorize changes to AniCraft.
