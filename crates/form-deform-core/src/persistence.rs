@@ -316,7 +316,7 @@ mod tests {
         parameters.insert("gain".into(), ParameterValue::Number(0.75));
         DeformationDefinition::new(
             id, 1, format!("Definition {id}"), DeformationKind::PinDeformation,
-            target(), reference(), space(), GeometryValueKind::Displacement, parameters,
+            target(), reference(), space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement, parameters,
         ).unwrap()
     }
 
