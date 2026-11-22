@@ -284,7 +284,7 @@ pub struct EvaluatedGeometryResult {
     result_id: String,
     request_id: String,
     target: HostTargetRef,
-    source_stamp: GeometrySnapshotStamp,
+    source_stamps: Vec<GeometrySnapshotStamp>,
     model: ModelRevisionStamp,
     time: EvaluationTimeSample,
     dependencies: Vec<DependencyStamp>,
@@ -315,7 +315,7 @@ impl EvaluatedGeometryResult {
             result_id: result_id.into(),
             request_id: request.request_id.clone(),
             target,
-            source_stamp: source.stamp(),
+            source_stamps: request.sources.iter().map(GeometrySnapshot::stamp).collect(),
             model: request.model.clone(),
             time: request.time.clone(),
             dependencies: request.dependencies.clone(),
@@ -351,8 +351,8 @@ impl EvaluatedGeometryResult {
             return Err(EvaluationContractError::RequestDependencyMismatch);
         }
         let source = request.source(&self.target).ok_or(EvaluationContractError::MissingSourceTarget)?;
-        let current_stamp = source.stamp();
-        if self.source_stamp != current_stamp {
+        let expected_source_stamps: Vec<_> = request.sources.iter().map(GeometrySnapshot::stamp).collect();
+        if self.source_stamps != expected_source_stamps {
             return Err(EvaluationContractError::SourceStampMismatch);
         }
         if self.coordinate_space != *source.coordinate_space() {
@@ -372,17 +372,34 @@ impl EvaluatedGeometryResult {
     /// validation inside the host's final transaction.
     pub fn validate_source_freshness(
         &self,
-        current_source: &GeometrySnapshot,
-    ) -> Result<SnapshotFreshness, EvaluationContractError> {
-        current_source.validate_envelope().map_err(EvaluationContractError::HostContract)?;
-        SnapshotFreshness::compare(&self.source_stamp, &current_source.stamp())
-            .map_err(EvaluationContractError::HostContract)
+        current_sources: &[GeometrySnapshot],
+    ) -> Result<Vec<SnapshotFreshness>, EvaluationContractError> {
+        if current_sources.len() != self.source_stamps.len() {
+            return Err(EvaluationContractError::MissingSourceTarget);
+        }
+        let mut freshness = Vec::with_capacity(self.source_stamps.len());
+        for captured in &self.source_stamps {
+            let current = current_sources.iter()
+                .find(|source| source.target() == captured.target())
+                .ok_or(EvaluationContractError::MissingSourceTarget)?;
+            current.validate_envelope().map_err(EvaluationContractError::HostContract)?;
+            freshness.push(
+                SnapshotFreshness::compare(captured, &current.stamp())
+                    .map_err(EvaluationContractError::HostContract)?
+            );
+        }
+        Ok(freshness)
     }
 
     pub fn result_id(&self) -> &str { &self.result_id }
     pub fn request_id(&self) -> &str { &self.request_id }
     pub fn target(&self) -> &HostTargetRef { &self.target }
-    pub fn source_stamp(&self) -> &GeometrySnapshotStamp { &self.source_stamp }
+    pub fn source_stamp(&self) -> &GeometrySnapshotStamp {
+        self.source_stamps.iter()
+            .find(|stamp| stamp.target() == &self.target)
+            .expect("result target is included in its validated source stamps")
+    }
+    pub fn source_stamps(&self) -> &[GeometrySnapshotStamp] { &self.source_stamps }
     pub fn model(&self) -> &ModelRevisionStamp { &self.model }
     pub fn time(&self) -> &EvaluationTimeSample { &self.time }
     pub fn dependencies(&self) -> &[DependencyStamp] { &self.dependencies }
@@ -639,7 +656,72 @@ mod tests {
         let second = EvaluatedGeometryResult::new("result-b", &request, target(1), GeometryOutputOperation::ReplaceSourceGeometry, path(2.0)).unwrap();
         assert_eq!(first.fingerprint(), second.fingerprint());
         let changed = snapshot(1, 6, 2);
-        assert!(!first.validate_source_freshness(&changed).unwrap().is_current());
+        let freshness = first.validate_source_freshness(&[changed]).unwrap();
+        assert_eq!(freshness.len(), 1);
+        assert!(!freshness[0].is_current());
+    }
+
+    #[test]
+    fn result_tracks_every_source_snapshot_in_a_multi_source_request() {
+        let request = EvaluationRequest::new(
+            "multi-source",
+            vec![snapshot(1, 5, 2), snapshot(2, 7, 3)],
+            model(),
+            time(),
+            vec![],
+            "source-rest",
+            None,
+        ).unwrap();
+        let result = EvaluatedGeometryResult::new(
+            "multi-result",
+            &request,
+            target(1),
+            GeometryOutputOperation::IndependentDeformationContribution,
+            path(2.0),
+        ).unwrap();
+        assert_eq!(result.source_stamps().len(), 2);
+        assert_eq!(result.source_stamp().target(), &target(1));
+
+        let current = vec![snapshot(1, 5, 2), snapshot(2, 8, 3)];
+        let freshness = result.validate_source_freshness(&current).unwrap();
+        assert_eq!(freshness.len(), 2);
+        assert!(freshness[0].is_current());
+        assert!(freshness[1].geometry_changed);
+
+        assert_eq!(
+            result.validate_source_freshness(&[snapshot(1, 5, 2)]),
+            Err(EvaluationContractError::MissingSourceTarget)
+        );
+    }
+
+    #[test]
+    fn result_rejects_a_changed_non_output_source_snapshot() {
+        let request = EvaluationRequest::new(
+            "multi-source",
+            vec![snapshot(1, 5, 2), snapshot(2, 7, 3)],
+            model(),
+            time(),
+            vec![],
+            "source-rest",
+            None,
+        ).unwrap();
+        let result = EvaluatedGeometryResult::new(
+            "multi-result",
+            &request,
+            target(1),
+            GeometryOutputOperation::ReplaceSourceGeometry,
+            path(2.0),
+        ).unwrap();
+        let changed = EvaluationRequest::new(
+            "multi-source",
+            vec![snapshot(1, 5, 2), snapshot(2, 8, 3)],
+            model(),
+            time(),
+            vec![],
+            "source-rest",
+            None,
+        ).unwrap();
+        assert_eq!(result.validate_against(&changed), Err(EvaluationContractError::SourceStampMismatch));
     }
 
     #[test]
