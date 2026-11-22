@@ -44,17 +44,20 @@ impl InputRange {
     /// The checked core mapping primitive owns the arithmetic; this legacy
     /// wrapper preserves the V1 error contract.
     pub fn normalize(self, input: f64) -> Result<f64, ControllerError> {
-        if !input.is_finite() {
-            return Err(ControllerError::NonFiniteInput);
-        }
-        self.validate()?;
-        crate::mapping::range::ThreePointRange::new(
+        // Preserve V1 validation precedence: reject an invalid range before
+        // inspecting the supplied sample.
+        let range = crate::mapping::range::ThreePointRange::new(
             self.minimum,
             self.neutral,
             self.maximum,
         )
-        .and_then(|range| range.normalize_signed(input))
-        .map_err(|_| ControllerError::ArithmeticOverflow)
+        .map_err(|_| ControllerError::InvalidInputRange)?;
+        if !input.is_finite() {
+            return Err(ControllerError::NonFiniteInput);
+        }
+        range
+            .normalize_signed(input)
+            .map_err(|_| ControllerError::ArithmeticOverflow)
     }
 }
 
