@@ -10,6 +10,7 @@ use crate::{
     evaluator::{evaluate, ControllerMapper},
     graph::ControllerGraph,
     ids::TargetId,
+    input::{InputDefinition, InputSnapshot},
     value::{Angle, TypedValue},
 };
 pub use crate::evaluator::EvaluationResult;
@@ -296,7 +297,7 @@ mod tests {
     use crate::{
         canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
         ids::{BindingId, ControllerId, InputId},
-        input::{FallbackPolicy, InputDefinition, InputDimension, InputSample, InputSnapshot, InputSource},
+        input::{FallbackPolicy, InputDimension, InputSample, InputSource},
     };
 
     fn id(value: &str) -> TargetId { TargetId::new(value).unwrap() }
