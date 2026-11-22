@@ -188,7 +188,7 @@ The module sketch is conceptual. Do not create empty crates or force the current
 | M3 — Native authoring UI | Tool context, binding editor, target inspector, diagnostics | Uses AniCraft panels/commands; keyboard and undo behavior verified |
 | M4 — Persistent bindings | Versioned binding model stored through host-owned document extension | Save/load, migration, undo and invalidation tests pass |
 | M5 — Deformation integration | Target adapters and explicit apply/bake commands | Stable target identity and atomic undo |
-| M6 — Host evaluation integration | Live evaluator only if AniCraft exposes a supported hook | Scrub/playback determinism, invalidation and performance tests |
+| M6 — Host evaluation integration | Blocked: no supported AniCraft custom evaluator hook in the audited SDK; host contract specified in [FD-M6](docs/FD-M6-HOST-EVALUATION-INTEGRATION.md) | Host-owned pure evaluator, explicit-frame inputs, deterministic scrub/playback, invalidation and performance tests |
 | M7 — Advanced algorithms | Multi-axis keyforms, lattice, RBF/ARAP research, soft selection | Benchmarks justify each addition |
 
 Do not skip M0 to claim capabilities that the host does not expose. M6 is not a prerequisite for a useful authoring/preview tool.
@@ -284,3 +284,8 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
+
+
+## 12. FD-M6 — Host evaluation integration
+
+**Status: blocked on AniCraft.** Re-audit of the current host SDK and plug-in guide found no supported continuous custom evaluator. Command plug-ins run on demand; frame scripts are keyframe-entry callbacks and cannot query bone/warp data. The M6 contract, ownership boundary, deterministic evaluation semantics, invalidation requirements, implementation order and acceptance tests are specified in [FD-M6 host evaluation integration](docs/FD-M6-HOST-EVALUATION-INTEGRATION.md). No polling loop or frame-script workaround will be used. M5's explicit apply/bake remains the supported fallback.
