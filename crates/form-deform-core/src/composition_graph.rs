@@ -927,8 +927,9 @@ mod tests {
         let second_plan = reordered.execution_plan(&defs).unwrap();
         let ids = |plan: &CompositionExecutionPlan| plan.nodes().iter().map(|node| node.node_id()).collect::<Vec<_>>();
         assert_eq!(ids(&first_plan), ids(&second_plan));
-        assert_eq!(ids(&first_plan), vec!["a-node", "c-node", "z-node", "sequence", "output"]);
-        assert_eq!(first_plan.nodes()[3].dependencies(), &["a-node".to_string(), "c-node".to_string()]);
+        assert_eq!(ids(&first_plan), vec!["a-node", "c-node", "sequence", "z-node", "output"]);
+        let sequence = first_plan.nodes().iter().find(|node| node.node_id() == "sequence").unwrap();
+        assert_eq!(sequence.dependencies(), &["a-node".to_string(), "c-node".to_string()]);
     }
 
     #[test]
