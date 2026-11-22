@@ -261,7 +261,7 @@ FD-M1 supplies a first-party implementation of the existing `ControllerMapper` c
 | `PoseSet1D` | Scalar input clamped to [-1, 1] | Ordered pose IDs resolve through the runtime PoseLibrary; adjacent poses interpolate evenly by BindingId |
 | `PoseGrid` | Two or three ordered Scalar inputs; each axis uses its authored finite key domain and clamps at endpoints | Complete Cartesian grid, axis 0 fastest; multilinear typed blending with exact authored keyform reproduction |
 
-Angle input and Angle property output use radians and preserve wrapped/unwrapped semantics. Discrete and PoseSet1D require Scalar input.
+Angle input and Angle property output use radians and preserve wrapped/unwrapped semantics. Discrete, PoseSet1D, and PoseGrid require Scalar input.
 
 ### 10.2 Target mapping
 
@@ -281,7 +281,7 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 
 ### 10.4 Verification scope
 
-The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
+The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, JoystickFivePose anchors, and bounded PoseGrid bilinear/trilinear interpolation.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
 
