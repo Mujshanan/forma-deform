@@ -360,7 +360,7 @@ mod tests {
         let input_id = InputId::new("manual-driver").unwrap();
         let target_id = TargetId::new("property:arm:rotation").unwrap();
         let document = CanonicalDocument {
-            schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+            schema: SchemaIdentity { name: "smart-controller".into(), version: smart_controller_core::schema::CURRENT_SCHEMA_VERSION },
             inputs: vec![InputDefinition {
                 id: input_id.clone(),
                 source: InputSource::Manual,
