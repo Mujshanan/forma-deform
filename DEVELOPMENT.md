@@ -214,32 +214,31 @@ This document is an architecture and development plan. It does not authorize cha
 
 ## 11. FD-M5 — Target application first slice
 
-**Status:** one-target current-playhead apply path implemented in the Smart Controller command adapter; multi-target and range bake remain host-extension work.
+**Status:** one-target current-playhead apply path implemented in the Smart Controller adapter; the adapter is corrected to AniCraft's actual warp.info response. GUI smoke test remains pending. Batch design is documented; no AniCraft host change is included.
 
 ### Supported operation
 
-1. Evaluate the canonical controller document and build the same deterministic target preview plan used by Preview.
+1. Evaluate the canonical controller document and build the deterministic target preview plan.
 2. Require exactly one resolved output target and no unresolved targets.
-3. Require the read-only host identity check to have verified the exact geometry element and pin.
-4. Re-query `warp.info` immediately before mutation to reject stale target identity.
-5. Issue one `warp.pin_move` command with absolute stage-space Vector2 coordinates at AniCraft's current playhead.
-6. Let AniCraft own document mutation and the corresponding undo entry.
+3. Verify the exact positive numeric element ID and AniCraft's actual `warp.info` field `pins[].pin`.
+4. Re-query `warp.info` immediately before mutation.
+5. Issue one `warp.pin_move` command with absolute stage-space Vector2 coordinates at the current playhead.
 
-The operation is explicit and opt-in. Preview remains the default and issues no mutating command. The adapter accepts only positive numeric host element/pin IDs and a Vector2 output; array indices, selected-element order, string aliases, and inferred targets are rejected.
+Preview remains the default. Only `GeometryDeform` targets are writable.
 
-### Deliberate limits
+### Undo and batch boundary
 
-- Only `GeometryDeform` → Asset Warp pin is currently writable.
-- Exactly one target is applied per invocation, avoiding a partially completed multi-command batch.
-- The current-playhead write is a single undoable host command.
-- Timeline-range bake, multi-pin atomic apply, symbol-frame setters, and generic property setters are not implemented. The inspected command contract does not establish a single batch transaction for these writes; a host-owned batch command is required before claiming atomic undo for them.
+AniCraft's `plugin.run` executes nested document commands in one undo step and restores the document if any nested command fails. A first multi-target bake can preflight all outputs, then issue the `warp.pin_move` calls inside one plug-in run.
+
+The preferred host API for native authoring and lower call overhead is a proposed `warp.pin_move_batch` command with whole-batch preflight, a single snapshotted frame, duplicate/missing-pin rejection, and one engine transaction. Its payload, validation rules, limits and test plan are specified in [FD-M5 deformation integration](docs/FD-M5-DEFORMATION-INTEGRATION.md). This command does not exist yet.
 
 ### Verification and acceptance
 
-- Pure tests cover stable numeric target identity, Vector2 payloads, invalid target kinds, and invalid IDs.
-- Integration still requires an AniCraft smoke test confirming current-playhead keying and undo/redo behavior in the actual host.
-- [ ] Verify host apply and undo/redo in AniCraft.
-- [ ] Design a host-owned batch command before adding multi-target or timeline-range bake.
+- [x] Source-level host contract reviewed against AniCraft's `cmds_warp.rs`, `cmds_plugin.rs`, plug-in policy and atomic-run tests.
+- [x] Forma Deform adapter corrected to parse `pins[].pin` (not `pins[].id`).
+- [ ] Run in the AniCraft GUI: apply at playhead, verify keying, Undo and Redo.
+- [ ] Verify Cancel leaves the document unchanged.
+- [ ] Implement and test host batch command before timeline-range bake.
 
 ## 10. FD-M1 — Canonical one-dimensional Smart Controller mapper
 
