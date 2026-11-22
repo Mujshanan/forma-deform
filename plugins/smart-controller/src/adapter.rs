@@ -10,6 +10,7 @@ use smart_controller_core::{
     composition::{evaluate_and_compose, CompositionContext, ComposedEvaluationResult},
     evaluator::ControllerMapper,
     graph::ControllerGraph,
+    mapping::{CanonicalControllerMapper, PoseLibrary},
     ids::TargetId,
     migration::CanonicalDocument,
     CoreError,
@@ -31,8 +32,9 @@ pub struct HostPreviewSession {
 }
 
 /// Validate and execute a canonical document against an already-collected
-/// host input snapshot. Mapping remains injected: this adapter does not claim
-/// that the not-yet-complete Pose2D/joystick mapper is implemented.
+/// host input snapshot. The mapper remains injectable for tests and alternate
+/// strategies; use evaluate_document_preview_with_canonical_mapper for the
+/// first-party one-dimensional mapping implementation.
 pub fn evaluate_document_preview<M: ControllerMapper>(
     document: &CanonicalDocument,
     snapshot: &InputSnapshot,
@@ -69,9 +71,8 @@ use smart_controller_core::{
 };
 
 /// Collect host inputs, evaluate the canonical DAG, compose its outputs, and
-/// build target-specific preview data in one invocation. The mapper remains
-/// injected because the concrete Pose2D/joystick mapping implementation is a
-/// separate core milestone. This function performs no target mutation.
+/// build target-specific preview data in one invocation. The mapper is
+/// injectable for alternate strategies. This function performs no target mutation.
 pub fn evaluate_host_document_preview<M: ControllerMapper>(
     document: &CanonicalDocument,
     host_context: &crate::input_provider::HostInputContext,
@@ -92,6 +93,33 @@ pub fn evaluate_host_document_preview<M: ControllerMapper>(
         evaluation: plan.evaluation,
         target_preview,
     })
+}
+
+
+/// Evaluate a canonical document using the first-party one-dimensional mapper.
+/// The supplied pose library resolves PoseSet1D references for this invocation;
+/// it is runtime data and is not persisted by this adapter.
+pub fn evaluate_document_preview_with_canonical_mapper(
+    document: &CanonicalDocument,
+    snapshot: &InputSnapshot,
+    pose_library: &PoseLibrary,
+    composition_context: &CompositionContext,
+) -> Result<HostPreviewPlan, CoreError> {
+    let mapper = CanonicalControllerMapper::with_pose_library(pose_library.clone());
+    evaluate_document_preview(document, snapshot, &mapper, composition_context)
+}
+
+
+/// Host-preview entry point using the first-party canonical one-dimensional
+/// mapper. PoseSet1D data is supplied by the caller for this invocation.
+pub fn evaluate_host_document_preview_with_canonical_mapper(
+    document: &CanonicalDocument,
+    host_context: &crate::input_provider::HostInputContext,
+    pose_library: &PoseLibrary,
+    composition_context: &CompositionContext,
+) -> Result<HostPreviewSession, String> {
+    let mapper = CanonicalControllerMapper::with_pose_library(pose_library.clone());
+    evaluate_host_document_preview(document, host_context, &mapper, composition_context)
 }
 
 /// Whether the preview uses only the constrained keyed pose or explicitly
@@ -318,4 +346,84 @@ mod tests {
         assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
         assert!(sample_bone_rotation(&definition(), &json!({"bones":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
     }
+
+    #[test]
+    fn canonical_mapper_is_wired_to_document_and_host_preview_entry_points() {
+        use smart_controller_core::{
+            canonical::{BindingMode, Controller, ControllerBinding, MappingConfig, TargetMapping},
+            input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
+            migration::CanonicalDocument,
+            schema::SchemaIdentity,
+            InputId, TargetId,
+        };
+
+        let input_id = InputId::new("manual-driver").unwrap();
+        let target_id = TargetId::new("property:arm:rotation").unwrap();
+        let document = CanonicalDocument {
+            schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+            inputs: vec![InputDefinition {
+                id: input_id.clone(),
+                source: InputSource::Manual,
+                dimension: InputDimension::Scalar,
+                fallback: FallbackPolicy::Reject,
+            }],
+            controllers: vec![Controller {
+                id: smart_controller_core::ControllerId::new("controller").unwrap(),
+                enabled: true,
+                inputs: vec![input_id.clone()],
+                dependencies: vec![],
+                mapping: MappingConfig::Range1D {
+                    minimum: -1.0,
+                    neutral: 0.0,
+                    maximum: 1.0,
+                },
+                bindings: vec![ControllerBinding {
+                    id: smart_controller_core::BindingId::new("rotation").unwrap(),
+                    target_id: target_id.clone(),
+                    target: TargetMapping::Property {
+                        target_id: "arm".into(),
+                        property: "rotation".into(),
+                        scale: 2.0,
+                        additive: false,
+                    },
+                    mode: BindingMode::AbsolutePose,
+                    base_value: None,
+                    composition: None,
+                }],
+                parent_scoped: false,
+            }],
+        };
+        let pose_library = PoseLibrary::new();
+        let expected = TypedValue::scalar(1.0).unwrap();
+        let snapshot = InputSnapshot::new(0, vec![
+            InputSample::valid(input_id.clone(), TypedValue::scalar(0.5).unwrap(), Some(0)),
+        ]).unwrap();
+
+        let plan = evaluate_document_preview_with_canonical_mapper(
+            &document,
+            &snapshot,
+            &pose_library,
+            &CompositionContext::default(),
+        ).unwrap();
+        assert_eq!(plan.evaluation.composition.outputs.get(&target_id), Some(&expected));
+
+        let host_context = crate::input_provider::HostInputContext {
+            manual_values: std::collections::BTreeMap::from([
+                (input_id, TypedValue::scalar(0.5).unwrap()),
+            ]),
+            bone_layers: std::collections::BTreeMap::new(),
+            bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
+            wrapped_angles: false,
+        };
+        let session = evaluate_host_document_preview_with_canonical_mapper(
+            &document,
+            &host_context,
+            &pose_library,
+            &CompositionContext::default(),
+        ).unwrap();
+        assert_eq!(session.target_preview.items.len(), 1);
+        assert_eq!(session.target_preview.items[0].value, expected);
+    }
+
+
 }
