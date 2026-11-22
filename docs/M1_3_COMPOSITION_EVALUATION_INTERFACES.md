@@ -28,17 +28,19 @@ Define the smallest host-independent boundary required to execute an explicitly 
 7. The evaluator is read-only. AniCraft remains responsible for scheduling, current-snapshot checks, caching, application, undo and bake transactions.
 8. CCC-01.5 remains unchanged: Smart Controller evaluation and pin deformation remain independent. Smart Controller output is not implicitly admitted as an FDM graph source.
 
-## Important schema-to-runtime gap
+## M1.3.2 graph validation and planning
 
-The current graph schema represents `Parallel` as a node with a single geometry signature, while the runtime interface correctly represents its result as an ordered branch collection. Before M1.3.2 execution planning, graph validation must be tightened so that:
+The graph schema's node cardinality is derived from the authored node kind; no persisted fields or schema version were changed:
 
-- a branch collection cannot be consumed as an ordinary single geometry;
-- sequential stages accept only single-geometry nodes;
-- weighted blend consumes explicit compatible geometry-producing branches;
-- parallel branch IDs and weighted input IDs have deterministic, validated ordering;
-- graph outputs explicitly support the intended output cardinality.
+- Deformer: one geometry value.
+- Sequential: one geometry value. Every stage must itself produce one geometry; each stage's input kind must match the previous stage's output kind. Stage order is authored and semantic.
+- Parallel: an ordered branch collection. Every branch must produce one geometry and all branches must have compatible input/output kinds. A parallel collection cannot be nested as a branch or consumed as an ordinary geometry.
+- Weighted blend: one geometry value. Every input must be a single geometry with compatible input/output kinds. Weights remain explicit, finite, positive and normalized.
+- Graph outputs must agree on output value kind and cardinality. Output-node order remains authored.
 
-This is a deliberate acceptance gate, not permission to reinterpret existing persisted graphs silently. If schema changes are required, they must be versioned and migrated explicitly.
+`CompositionGraph::execution_plan` validates the graph against its definitions and creates a topological plan. Among currently ready independent nodes, the planner selects the lexicographically smallest stable node ID. Dependency lists preserve authored stage, branch and weighted-input order. The plan does not execute operators, schedule parallel work, or imply a blend.
+
+The cardinality is derived rather than serialized, so existing schema-v1 documents retain their meaning. Invalid ambiguous connections fail with explicit validation errors; no automatic rewrites or guessed migrations occur.
 
 ## M1.3.1 acceptance
 
@@ -50,4 +52,4 @@ This is a deliberate acceptance gate, not permission to reinterpret existing per
 
 ## Next slice
 
-M1.3.2 is the deterministic execution planner and graph/runtime cardinality validation. It must resolve the schema-to-runtime gap above before any operator is executed.
+M1.3.3 is operator execution over the validated plan. It must consume the immutable plan and explicit snapshots, preserve branch order, and return deterministic intermediate values without host scheduling or mutation.
