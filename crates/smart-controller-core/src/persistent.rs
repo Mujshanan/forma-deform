@@ -100,10 +100,16 @@ impl PersistentBindingDocument {
         inputs: Vec<InputDefinition>,
         controller: Controller,
     ) -> Result<(), CoreError> {
-        if inputs.iter().any(|input| !controller.inputs.contains(&input.id)) {
-            return Err(CoreError::InvalidModel(
-                "upsert includes an input not referenced by its controller".into(),
-            ));
+        let mut supplied_ids = std::collections::HashSet::new();
+        for input in &inputs {
+            if !supplied_ids.insert(input.id.clone()) {
+                return Err(CoreError::InvalidModel(format!("upsert contains duplicate input ID {}", input.id)));
+            }
+            if !controller.inputs.contains(&input.id) {
+                return Err(CoreError::InvalidModel(
+                    "upsert includes an input not referenced by its controller".into(),
+                ));
+            }
         }
         let mut candidate = self.controller_document.clone();
         candidate.controllers.retain(|item| item.id != controller.id);
