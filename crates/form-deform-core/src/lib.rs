@@ -1,5 +1,6 @@
 //! Deterministic, non-accumulating bone-to-warp-pin deformation math.
 
+pub mod evaluation_contract;
 pub mod host_contract;
 pub mod path2d;
 
