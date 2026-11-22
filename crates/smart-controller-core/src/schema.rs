@@ -3,7 +3,7 @@ use crate::error::CoreError;
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA_NAME: &str = "smart-controller";
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
