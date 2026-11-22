@@ -14,9 +14,9 @@ pub enum TargetCapabilityStatus {
     /// The core can calculate the target value, but the inspected SDK does not
     /// establish a corresponding host application command.
     CalculationOnly,
-    /// A documented host command exists, but is mutating and must be invoked
-    /// only through the host's preview/undo transaction.
-    CommandPreviewOnly,
+    /// A documented host mutation command exists and is invoked only inside
+    /// AniCraft's atomic plugin.run transaction.
+    CommandApply,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,8 +31,8 @@ pub struct TargetCapability {
 
 /// Query the documented read-only warp.info endpoint for one numeric element ID.
 pub fn query_geometry_info(element_id: &str, frame: Option<u32>) -> Result<Value, String> {
-    let element = element_id.parse::<u64>()
-        .map_err(|_| format!("element ID '{element_id}' is not a numeric host element ID"))?;
+    let element = element_id.parse::<u64>().ok().filter(|id| *id > 0)
+        .ok_or_else(|| format!("element ID '{element_id}' is not a positive numeric host element ID"))?;
     let mut params = serde_json::Map::new();
     params.insert("element".into(), Value::from(element));
     if let Some(frame) = frame {
@@ -48,10 +48,10 @@ pub fn verify_geometry_pin(
     element_id: &str,
     pin_id: &str,
 ) -> Result<(), String> {
-    let expected_element = element_id.parse::<u64>()
-        .map_err(|_| format!("element ID '{element_id}' is not numeric"))?;
-    let expected_pin = pin_id.parse::<u64>()
-        .map_err(|_| format!("pin ID '{pin_id}' is not numeric"))?;
+    let expected_element = element_id.parse::<u64>().ok().filter(|id| *id > 0)
+        .ok_or_else(|| format!("element ID '{element_id}' is not a positive numeric host ID"))?;
+    let expected_pin = pin_id.parse::<u64>().ok().filter(|id| *id > 0)
+        .ok_or_else(|| format!("pin ID '{pin_id}' is not a positive numeric host ID"))?;
     let actual_element = response.get("element").and_then(Value::as_u64)
         .ok_or("warp.info response is missing numeric element ID")?;
     if actual_element != expected_element {
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn geometry_pin_exposes_only_the_documented_preview_command_path() {
+    fn geometry_pin_exposes_the_documented_apply_command_path() {
         let capability = assess_target(&TargetMapping::GeometryDeform {
             element_id: "element-1".into(),
             pin_id: "pin-2".into(),
