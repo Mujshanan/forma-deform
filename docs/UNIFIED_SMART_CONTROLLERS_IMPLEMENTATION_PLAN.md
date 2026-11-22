@@ -768,3 +768,10 @@ The runtime bridge now has a durable, independently versioned data contract:
 **Integration boundary:** this commit defines the durable extension contract and conversion into runtime state. It does not yet bind the extension envelope to a particular AniCraft project-file metadata container or add host UI for authoring/import/export. That requires a separately verified host storage capability and remains part of the deferred host-facing work. Existing V1 documents without this optional extension continue to use the existing mapper path.
 
 **Verification:** GitHub Actions run [44980370511](https://github.com/Mujshanan/forma-deform/actions/runs/44980370511) passed on commit `155f89615f1d279cc7258e28a7ed5782ea23117b`: 207 workspace Rust tests passed with zero failures; Bun typecheck, Bun tests (9/9), Bun build, and release WASM builds for bone-query, form-deform, and smart-controller all passed. Rustfmt and Clippy are not part of this workflow and are not claimed. No PR or merge has been created.
+
+
+### Host project-storage capability gate — audited 2026-11-22
+
+The follow-up audit is recorded in [ANICRAFT_PROJECT_STORAGE_CAPABILITY_AUDIT.md](./ANICRAFT_PROJECT_STORAGE_CAPABILITY_AUDIT.md). Current AniCraft `main` has a typed `Document`/`DocumentFile` model and a versioned `.anicraft` JSON envelope, but no generic extension collection or plug-in-owned document metadata API. The command plug-in ABI exposes `command`, `document`, `elements`, and `log`; file operations are prohibited. Therefore the Phase 6A extension cannot yet be persisted inside actual AniCraft project files by an ordinary plug-in.
+
+**Gate result: host extension required.** The next implementation belongs in the AniCraft repository and needs separate authorization/review there: add an optional versioned Smart Controller payload to the typed document/format path, expose narrow get/set commands through the existing command ABI, and test save/reopen, undo/redo, invalid payloads and older-file compatibility. Do not implement sidecar storage or claim project-level persistence through the existing SDK. No AniCraft files were changed by this audit.
