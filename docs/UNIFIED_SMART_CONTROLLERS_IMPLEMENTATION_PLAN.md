@@ -743,11 +743,12 @@ The advanced mapping algorithms are now connected to the existing evaluator cont
 
 **Compatibility boundary:** no fields or variants were added to `Controller`, `MappingConfig`, `SchemaEnvelope`, or schema version 1. The registry is explicitly runtime-only; it does not make advanced mapping selections durable or portable. Persisting authored advanced mappings requires a separately versioned extension contract and remains an open follow-up decision. This prevents an implicit V1 schema migration and preserves the existing V1 Slider preview path.
 
-**New integration tests:** seven tests cover advanced Grid dispatch through the evaluator, fallback delegation for unregistered controllers, no fallback after registered mapping failure, declared-input enforcement, Vector2 type enforcement, exact BindingId output matching, and duplicate registration rejection.
+**New integration tests:** eight tests cover Grid and Triangulated dispatch through the evaluator, fallback delegation for unregistered controllers, no fallback after registered mapping failure, declared-input enforcement, Vector2 type enforcement, exact BindingId output matching, and duplicate registration rejection.
 
 Implementation commits:
 - `629c547b7122164e6b8970fc2fe9dba0fd6aec34` — runtime mapper bridge
 - `cd3a9ea748412b0b7d21d2aa98ae3c0cd499fea2` — public exports
-- `14e4f7f48d34c2ecc76fd4f64b320d8846131a42` — integration tests
+- `14e4f7f48d34c2ecc76fd4f64b320d8846131a42` — initial integration tests
+- `ff3baff3361334a064ce191be0c1946f014818f1` — Triangulated dispatch regression test
 
 CI for these integration commits is pending; no passing test or build result is claimed yet. No PR or merge has been created.
