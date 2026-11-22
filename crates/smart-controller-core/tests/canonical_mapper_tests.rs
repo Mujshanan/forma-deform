@@ -442,3 +442,29 @@ fn discrete_mapping_requires_one_output_binding() {
     assert!(result.contributions.is_empty());
     assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 }
+
+
+#[test]
+fn pose_grid_mapping_runs_through_the_canonical_evaluator() {
+    let mut poses = smart_controller_core::mapping::PoseLibrary::new();
+    for (id, value) in [("p00",0.0),("p10",10.0),("p01",20.0),("p11",30.0)] {
+        poses.register(id, Pose2D::new(vec![(
+            BindingId::new("pose").unwrap(),
+            TypedValue::scalar(value).unwrap(),
+        )]).unwrap()).unwrap();
+    }
+    let controller = controller(
+        MappingConfig::PoseGrid {
+            axes: vec![
+                smart_controller_core::canonical::PoseAxis { keys: vec![0.0, 1.0] },
+                smart_controller_core::canonical::PoseAxis { keys: vec![0.0, 1.0] },
+            ],
+            pose_ids: vec!["p00".into(),"p10".into(),"p01".into(),"p11".into()],
+        },
+        vec![property_binding("pose", 1.0)],
+        vec!["x", "y"],
+    );
+    let result = run(controller, TypedValue::scalar(0.5).unwrap(), InputDimension::Scalar,
+        &CanonicalControllerMapper::with_pose_library(poses)).unwrap();
+    assert!((scalar_output(&result, "pose") - 15.0).abs() < 1e-12);
+}
