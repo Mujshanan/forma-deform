@@ -290,15 +290,15 @@ The FDM v2 M1 contract package is split into three focused documents:
 2. [Evaluation and host lifecycle contracts](docs/M1_EVALUATION_LIFECYCLE_CONTRACT.md) — evaluated geometry input/output, explicit time sampling, dependency stamps, cache invalidation, persistence ownership, and transactional apply/bake boundaries.
 3. [Host conformance and acceptance test matrix](docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md) — FDM automated gates and AniCraft host conformance tests with explicit evidence rules.
 
-The contract documents complete the FDM-side design specification for review. They do not claim that the remaining runtime result DTOs, host document identity/revision store, timeline sampler, persistent extension, cache lifecycle, or native transaction implementation already exist. The AniCraft conformance tests remain blocked pending a separately reviewed and authorized host implementation.
+The contract documents and the FDM-side evaluation request/result DTOs now define and validate the source snapshot, model, time, external dependency and output-result boundary. The remaining FDM-side work includes a persistent deformation-model schema/migration and a concrete composition-graph model. The host document identity/revision store, timeline sampler, persistent extension, cache lifecycle, and native transaction implementation do not yet exist in AniCraft. The AniCraft conformance tests remain blocked pending a separately reviewed and authorized host implementation.
 
 ### 11.4 Next implementation sequence
 
-1. Review and accept the complete FDM v2 M1 contract package.
-2. Implement and test FDM-owned evaluation request/result/dependency DTOs against the contracts.
+1. Review and accept the complete FDM v2 M1 contract and DTO package.
+2. Complete the FDM-authored deformation persistence schema, migration rules and explicit composition-graph validation.
 3. Separately authorize and implement AniCraft document/target identity, revision, snapshot and coordinate conformance.
 4. Implement host persistence and explicit transaction/bake commands only against verified host APIs.
-5. Validate the FD-M2 through FD-M5 Smart Controller plugin chain as a related but separate workflow; do not count it as proof of FDM v2 M1 conformance.
+5. Validate the FD-M2 through FD-M5 Smart Controller plugin chain as a related but separate workflow; do not count it as proof of FDM v2 M1 host conformance.
 6. Continue with host evaluation scheduling only if AniCraft exposes a supported hook.
 
 **Governance:** Accepted architecture decisions are not blanket authorization to modify AniCraft, implement every proposed topology/algorithm, or merge pull requests. Preserve this boundary in issues, PRs, and subsequent milestones.
