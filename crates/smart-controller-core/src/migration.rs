@@ -496,3 +496,37 @@ pub fn export_unversioned_params(document: &CanonicalDocument) -> Result<ParamsE
         },
     })
 }
+
+#[cfg(test)]
+mod canonical_schema_migration_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_v1_load_migrates_losslessly_to_v2() {
+        let v1 = serde_json::json!({
+            "schema": {"name": SCHEMA_NAME, "version": 1},
+            "inputs": [],
+            "controllers": []
+        });
+        let migrated = CanonicalDocument::from_json(&v1.to_string()).unwrap();
+        assert_eq!(migrated.schema.version, CURRENT_SCHEMA_VERSION);
+        let mut expected = v1;
+        expected["schema"]["version"] = serde_json::json!(CURRENT_SCHEMA_VERSION);
+        let actual: serde_json::Value = serde_json::from_str(&migrated.to_json().unwrap()).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn canonical_v2_round_trips_and_future_versions_fail_closed() {
+        let current = serde_json::json!({
+            "schema": {"name": SCHEMA_NAME, "version": CURRENT_SCHEMA_VERSION},
+            "inputs": [],
+            "controllers": []
+        });
+        let parsed = CanonicalDocument::from_json(&current.to_string()).unwrap();
+        assert_eq!(CanonicalDocument::from_json(&parsed.to_json().unwrap()).unwrap(), parsed);
+        let mut future = current;
+        future["schema"]["version"] = serde_json::json!(CURRENT_SCHEMA_VERSION + 1);
+        assert!(matches!(CanonicalDocument::from_json(&future.to_string()), Err(CoreError::UnsupportedSchemaVersion(_))));
+    }
+}
