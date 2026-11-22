@@ -186,7 +186,7 @@ fn discrete_mapping_selects_nearest_authored_value_and_preserves_type() {
         mapping: MappingConfig::Discrete {
             values: vec![
                 TypedValue::scalar(2.0).unwrap(),
-                TypedValue::scalar(4.0).unwrap(),
+                TypedValue::angle(0.5, true).unwrap(),
                 TypedValue::scalar(8.0).unwrap(),
             ],
         },
@@ -194,15 +194,31 @@ fn discrete_mapping_selects_nearest_authored_value_and_preserves_type() {
     };
     let mapper = CanonicalControllerMapper::new();
 
-    for (input, expected) in [(-1.0, 2.0), (0.0, 4.0), (1.0, 8.0)] {
-        let result = run(
-            scalar_controller.clone(),
-            TypedValue::scalar(input).unwrap(),
-            InputDimension::Scalar,
-            &mapper,
-        ).unwrap();
-        assert_eq!(scalar_output(&result, "selected"), expected);
-    }
+    let first = run(
+        scalar_controller.clone(),
+        TypedValue::scalar(-1.0).unwrap(),
+        InputDimension::Scalar,
+        &mapper,
+    ).unwrap();
+    assert_eq!(scalar_output(&first, "selected"), 2.0);
+
+    let middle = run(
+        scalar_controller.clone(),
+        TypedValue::scalar(0.0).unwrap(),
+        InputDimension::Scalar,
+        &mapper,
+    ).unwrap();
+    let middle_value = middle.contributions[0].value.as_angle().unwrap();
+    assert_eq!(middle_value.radians(), 0.5);
+    assert!(middle_value.is_wrapped());
+
+    let last = run(
+        scalar_controller,
+        TypedValue::scalar(1.0).unwrap(),
+        InputDimension::Scalar,
+        &mapper,
+    ).unwrap();
+    assert_eq!(scalar_output(&last, "selected"), 8.0);
 }
 
 #[test]
@@ -248,7 +264,7 @@ fn relative_geometry_mapping_returns_offset_from_neutral_anchor() {
         },
         BindingMode::RelativeDelta,
     );
-    relative.base_value = Some(TypedValue::vector2(0.0, 0.0).unwrap());
+    relative.base_value = Some(TypedValue::vector2(2.0, 3.0).unwrap());
     let controller = controller(
         MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
         vec![relative],
