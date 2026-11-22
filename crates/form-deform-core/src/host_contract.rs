@@ -70,6 +70,9 @@ impl GeometryFingerprint {
         if self.algorithm.trim().is_empty() || self.digest.is_empty() {
             return Err(ContractError::InvalidFingerprint);
         }
+        if self.algorithm == crate::path2d::PATH2D_FINGERPRINT_ALGORITHM && self.digest.len() != 32 {
+            return Err(ContractError::InvalidFingerprint);
+        }
         Ok(())
     }
 }
@@ -123,11 +126,11 @@ impl CoordinateSpaceDescriptor {
     }
 }
 
-/// Immutable-by-contract point-in-time input. The generic payload lets each
-/// versioned geometry kind define its own typed representation without making
-/// this identity/revision layer depend on a particular path or mesh encoding.
+/// Immutable point-in-time Path2D input. The payload is an owned value with
+/// private storage and read-only accessors; no host-backed mutable storage is
+/// accepted by this M1 snapshot type.
 #[derive(Clone, Debug, PartialEq)]
-pub struct GeometrySnapshot<P> {
+pub struct GeometrySnapshot {
     target: HostTargetRef,
     geometry_revision: GeometryRevision,
     topology_revision: TopologyRevision,
@@ -135,10 +138,10 @@ pub struct GeometrySnapshot<P> {
     coordinate_space: CoordinateSpaceDescriptor,
     payload_kind: String,
     payload_schema_version: u32,
-    payload: P,
+    payload: crate::path2d::Path2D,
 }
 
-impl<P> GeometrySnapshot<P> {
+impl GeometrySnapshot {
     /// Construct a validated snapshot. Fields remain private so consumers can
     /// only inspect payload through shared references, preserving the
     /// immutable-by-contract evaluation boundary.
@@ -150,7 +153,7 @@ impl<P> GeometrySnapshot<P> {
         coordinate_space: CoordinateSpaceDescriptor,
         payload_kind: impl Into<String>,
         payload_schema_version: u32,
-        payload: P,
+        payload: crate::path2d::Path2D,
     ) -> Result<Self, ContractError> {
         let snapshot = Self {
             target,
@@ -189,7 +192,7 @@ impl<P> GeometrySnapshot<P> {
     pub fn coordinate_space(&self) -> &CoordinateSpaceDescriptor { &self.coordinate_space }
     pub fn payload_kind(&self) -> &str { &self.payload_kind }
     pub fn payload_schema_version(&self) -> u32 { self.payload_schema_version }
-    pub fn payload(&self) -> &P { &self.payload }
+    pub fn payload(&self) -> &crate::path2d::Path2D { &self.payload }
 
     pub fn stamp(&self) -> GeometrySnapshotStamp {
         GeometrySnapshotStamp::new(
@@ -325,6 +328,12 @@ mod tests {
         }
     }
 
+    fn path() -> crate::path2d::Path2D {
+        crate::path2d::Path2D::new(vec![
+            crate::path2d::PathCommand::MoveTo(crate::path2d::Point2::new(0.0, 0.0).unwrap()),
+        ]).unwrap()
+    }
+
     fn stamp(generation: u64, geometry: u64, topology: u64, digest: u8) -> GeometrySnapshotStamp {
         GeometrySnapshotStamp::new(
             target(generation),
@@ -419,14 +428,14 @@ mod tests {
         assert_eq!(
             GeometrySnapshot::new(
                 target(1), GeometryRevision(0), TopologyRevision(1),
-                fingerprint.clone(), coordinate_space.clone(), "Path2D", 1, vec![1, 2],
+                fingerprint.clone(), coordinate_space.clone(), "Path2D", 1, path(),
             ).unwrap_err(),
             ContractError::InvalidRevision
         );
         assert_eq!(
             GeometrySnapshot::new(
                 target(0), GeometryRevision(1), TopologyRevision(1),
-                fingerprint, coordinate_space, "Path2D", 1, vec![1, 2],
+                fingerprint, coordinate_space, "Path2D", 1, path(),
             ).unwrap_err(),
             ContractError::InvalidGeneration
         );
@@ -451,6 +460,10 @@ mod tests {
         assert_eq!(GeometryFingerprint {
             algorithm: String::new(),
             digest: vec![1; 32],
+        }.validate(), Err(ContractError::InvalidFingerprint));
+        assert_eq!(GeometryFingerprint {
+            algorithm: crate::path2d::PATH2D_FINGERPRINT_ALGORITHM.into(),
+            digest: vec![1; 31],
         }.validate(), Err(ContractError::InvalidFingerprint));
     }
 }
