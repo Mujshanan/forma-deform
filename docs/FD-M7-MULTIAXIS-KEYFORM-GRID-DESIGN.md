@@ -160,13 +160,21 @@ Use the existing CoreError::InvalidMapping / non-finite error path so the evalua
 ### Integration and performance
 - Canonical mapper integration test with resolved input snapshots.
 - Missing/unavailable input produces the standard mapping diagnostic and no partial outputs.
-- Serialization round-trip for the new mapping variant; confirm existing schema-v1 documents still deserialize unchanged.
+- Canonical schema-v1 documents migrate losslessly to v2; schema-v2 documents round-trip; unsupported future versions fail closed.
 - Benchmark representative grids (2–4 axes, 2–5 keys per axis, 1–1000 bindings) against the five-pose field and record evaluation cost. Do not optimize before measuring.
 
-## 9. Implementation sequence and exit gates
+## 9. Schema and migration decision
 
-1. Confirm schema/migration policy for adding a new tagged mapping variant.
-2. Add the validated axis model and mapping variant, with backward-compatibility tests.
+The current canonical document schema is version 1 and rejects any version other than the current version. MappingConfig is serialized inside Controller, and the new mapping variant would therefore be a persisted schema capability. Adding the variant without a version change would let the new reader parse old documents, but older readers would fail on the unknown tagged variant while still seeing schema version 1.
+
+**Required approach:** introduce canonical schema version 2 for the new mapping variant and provide an explicit, lossless v1-to-v2 migration for existing canonical documents. Existing v1 mapping variants retain their meaning and payloads. The migration must preserve controller/input/binding IDs, order, composition settings, and all existing mapping configuration. The outer persistent-binding envelope version should be reviewed separately; it need not change if its wire structure is unchanged, but its validation and round-trip tests must cover an embedded canonical v2 document. Unsupported future versions must continue to fail closed.
+
+Do not ship this mapping under schema v1 without a documented compatibility policy.
+
+## 10. Implementation sequence and exit gates
+
+1. Add canonical v1-to-v2 migration and tests before emitting v2 documents.
+2. Add the validated axis model and mapping variant, with old-document migration and v2 round-trip tests.
 3. Add a bounded corner-weight enumerator and checked indexing helper.
 4. Add typed weighted-pose blending; share with five-pose only if the refactor remains behavior-preserving.
 5. Integrate the mapping into the canonical mapper.
