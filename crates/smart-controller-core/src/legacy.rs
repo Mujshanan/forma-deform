@@ -31,40 +31,30 @@ pub struct InputRange {
 
 impl InputRange {
     pub fn validate(self) -> Result<(), ControllerError> {
-        let lower_span = self.neutral - self.minimum;
-        let upper_span = self.maximum - self.neutral;
-        if !self.minimum.is_finite()
-            || !self.neutral.is_finite()
-            || !self.maximum.is_finite()
-            || !lower_span.is_finite()
-            || !upper_span.is_finite()
-            || lower_span <= 0.0
-            || upper_span <= 0.0
-        {
-            return Err(ControllerError::InvalidInputRange);
-        }
-        Ok(())
+        crate::mapping::range::ThreePointRange::new(
+            self.minimum,
+            self.neutral,
+            self.maximum,
+        )
+        .map(|_| ())
+        .map_err(|_| ControllerError::InvalidInputRange)
     }
 
     /// Clamp and normalize an input to [-1, 1], preserving neutral at exactly 0.
+    /// The checked core mapping primitive owns the arithmetic; this legacy
+    /// wrapper preserves the V1 error contract.
     pub fn normalize(self, input: f64) -> Result<f64, ControllerError> {
-        self.validate()?;
         if !input.is_finite() {
             return Err(ControllerError::NonFiniteInput);
         }
-
-        let value = input.clamp(self.minimum, self.maximum);
-        let normalized = if value <= self.neutral {
-            -1.0 + (value - self.minimum) / (self.neutral - self.minimum)
-        } else {
-            (value - self.neutral) / (self.maximum - self.neutral)
-        };
-
-        if normalized.is_finite() {
-            Ok(normalized.clamp(-1.0, 1.0))
-        } else {
-            Err(ControllerError::ArithmeticOverflow)
-        }
+        self.validate()?;
+        crate::mapping::range::ThreePointRange::new(
+            self.minimum,
+            self.neutral,
+            self.maximum,
+        )
+        .and_then(|range| range.normalize_signed(input))
+        .map_err(|_| ControllerError::ArithmeticOverflow)
     }
 }
 
@@ -77,11 +67,12 @@ pub enum EaseCurve {
 
 impl EaseCurve {
     fn apply(self, value: f64) -> f64 {
-        let t = value.clamp(0.0, 1.0);
-        match self {
-            Self::Linear => t,
-            Self::Smoothstep => t * t * (3.0 - 2.0 * t),
-        }
+        let easing = match self {
+            Self::Linear => crate::mapping::easing::Easing::Linear,
+            Self::Smoothstep => crate::mapping::easing::Easing::Smoothstep,
+        };
+        // ControllerBinding::evaluate supplies a finite normalized value.
+        easing.apply(value).expect("validated legacy input must be finite")
     }
 }
 
