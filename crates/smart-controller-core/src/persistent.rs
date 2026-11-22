@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn replacing_controller_prunes_unreferenced_inputs() {
+    fn replacing_controller_preserves_its_referenced_input_definitions() {
         let (inputs, controller) = sample_record();
         let mut payload = PersistentBindingDocument::new();
         payload.upsert_controller(inputs, controller.clone()).unwrap();
@@ -238,7 +238,7 @@ mod tests {
         replacement.enabled = false;
         payload.upsert_controller(Vec::new(), replacement).unwrap();
         assert_eq!(payload.revision, 2);
-        assert!(payload.controller_document.inputs.is_empty());
+        assert_eq!(payload.controller_document.inputs.len(), 1);
     }
 
     #[test]
