@@ -2,7 +2,7 @@
 
 **Decision:** proceed with a native, host-independent regular pose-grid mapper using multilinear interpolation. Do not port or add an Aether Canvas dependency. Keep Aether Canvas as an algorithmic/design reference only.
 
-**Status:** evaluated; implementation not started by this document.
+**Status:** implemented in the M7 runtime slice; verification through CI remains pending.
 
 ## 1. Product gap and existing foundations
 
@@ -121,11 +121,7 @@ Do not include these in the first implementation:
 
 ## 6. Schema and migration gate
 
-The current canonical document schema is version 1 and rejects versions other than the current version. MappingConfig is serialized inside Controller. Adding PoseGrid under schema v1 would make newer readers accept the new mapping while older readers would fail on an unknown tagged variant without a version signal.
-
-**Required approach:** introduce canonical schema version 2 for PoseGrid and provide an explicit, lossless v1-to-v2 migration before emitting v2 documents. Existing v1 mapping variants must retain their exact meaning and payloads. The migration must preserve controller/input/binding IDs, ordering, composition settings, and all existing mapping configuration. The outer persistent-binding envelope version should be reviewed separately; it may remain unchanged if its wire structure is unchanged, but its validation and round-trip tests must cover an embedded canonical v2 document. Unsupported future versions must continue to fail closed.
-
-The current CanonicalDocument::from_json path parses and validates only the current version; it does not yet migrate canonical v1 documents. Implement and test that migration before adding the new mapping variant.
+Canonical schema v2 is now the current write format. CanonicalDocument::from_json accepts v1 and performs a lossless migration by changing only the canonical schema identity version; the existing v1 document body is retained. Unsupported future versions still fail closed. The persistent-binding envelope remains version 1 because its outer wire shape did not change; its loader routes the embedded canonical document through the same v1-to-v2 migration path. Tests cover canonical migration, current-version round-trip, future-version rejection, and migration inside the persistent envelope.
 
 ## 7. Registry decision record
 
@@ -139,12 +135,12 @@ The current CanonicalDocument::from_json path parses and validates only the curr
 | Dependencies | No new dependencies |
 | Correctness gate | Typed pose validation, exact key reproduction, boundary and wrapped-angle tests |
 | Performance gate | 2D/3D benchmark, <=256 forms |
-| Status | **Approved for design; implementation pending canonical schema v1-to-v2 migration** |
+| Status | **Implemented; CI and performance verification pending** |
 
 ## 8. Go / no-go
 
-**Go** for a bounded 2D/3D multilinear pose grid after canonical schema v1-to-v2 migration and the validation contract above are implemented.
+**Implemented:** canonical schema v1-to-v2 migration and bounded 2D/3D multilinear PoseGrid are present. Remaining gates are full Rust/WASM CI, broader adversarial validation coverage, and representative performance measurements.
 
 **No-go** for copying Aether Canvas code, adopting its crate, enabling Catmull–Rom/cyclic behavior, or expanding into editing operations in this slice.
 
-This evaluation does not modify runtime code or AniCraft. It is the implementation brief for the next M7 change.
+The implementation is host-independent. It does not modify AniCraft, add a dependency, persist runtime pose contents, or add host scheduling.
