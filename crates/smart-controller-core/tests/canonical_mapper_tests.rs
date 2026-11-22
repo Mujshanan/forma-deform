@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use smart_controller_core::{
     canonical::{BindingMode, Controller, ControllerBinding, MappingConfig, TargetMapping},
     contribution::CompositionMode,
@@ -55,18 +53,18 @@ fn run(
     dimension: InputDimension,
     mapper: &CanonicalControllerMapper,
 ) -> Result<EvaluationResult, CoreError> {
-    let input_id = controller.inputs[0].clone();
+    let input_ids = controller.inputs.clone();
     let graph = ControllerGraph::new(vec![controller])?;
-    let definitions = vec![InputDefinition {
-        id: input_id.clone(),
+    let definitions = input_ids.iter().cloned().map(|id| InputDefinition {
+        id,
         source: InputSource::Manual,
         dimension,
         fallback: FallbackPolicy::Reject,
-    }];
-    let snapshot = InputSnapshot::new(
-        0,
-        vec![InputSample::valid(input_id, input, Some(0))],
-    )?;
+    }).collect::<Vec<_>>();
+    let samples = input_ids.into_iter()
+        .map(|id| InputSample::valid(id, input, Some(0)))
+        .collect();
+    let snapshot = InputSnapshot::new(0, samples)?;
     evaluate(&graph, &definitions, &snapshot, mapper)
 }
 
@@ -183,31 +181,6 @@ fn directed_range_preserves_reversed_endpoints_and_frame_endpoint_policy() {
 
 #[test]
 fn discrete_mapping_selects_nearest_authored_value_and_preserves_type() {
-    let controller = controller(
-        MappingConfig::Discrete {
-            values: vec![
-                TypedValue::scalar(2.0).unwrap(),
-                TypedValue::angle(0.5, true).unwrap(),
-                TypedValue::vector2(4.0, 8.0).unwrap(),
-            ],
-        },
-        vec![binding(
-            "selected",
-            TargetMapping::GeometryDeform {
-                element_id: "shape".into(),
-                pin_id: "pin".into(),
-                negative_offset: [0.0, 0.0],
-                neutral_offset: [0.0, 0.0],
-                positive_offset: [0.0, 0.0],
-            },
-            BindingMode::AbsolutePose,
-        )],
-        vec!["driver"],
-    );
-    // Use a property target here so all three typed values are valid only
-    // at the mapper boundary; the evaluator intentionally rejects non-scalar
-    // values for this particular target. Test the mapper's selection directly
-    // through scalar values in the production-compatible path below.
     let scalar_controller = Controller {
         bindings: vec![property_binding("selected", 1.0)],
         mapping: MappingConfig::Discrete {
