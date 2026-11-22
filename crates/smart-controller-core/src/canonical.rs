@@ -231,3 +231,28 @@ impl Controller {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod pose_grid_validation_tests {
+    use super::*;
+
+    fn axis(keys: &[f64]) -> PoseAxis { PoseAxis { keys: keys.to_vec() } }
+
+    #[test]
+    fn accepts_bounded_two_and_three_axis_grids() {
+        PoseGrid { axes: vec![axis(&[0.0,1.0]),axis(&[-1.0,0.0,1.0])], pose_ids: (0..6).map(|i| format!("p{i}")).collect() }.validate(2).unwrap();
+        PoseGrid { axes: vec![axis(&[0.0,1.0]),axis(&[0.0,1.0]),axis(&[0.0,1.0])], pose_ids: (0..8).map(|i| format!("p{i}")).collect() }.validate(3).unwrap();
+    }
+
+    #[test]
+    fn rejects_bad_axes_counts_keys_products_and_pose_ids() {
+        assert!(PoseGrid { axes: vec![axis(&[0.0,1.0])], pose_ids: vec![] }.validate(1).is_err());
+        assert!(PoseGrid { axes: vec![axis(&[0.0,1.0]); 4], pose_ids: vec![] }.validate(4).is_err());
+        assert!(axis(&[0.0,0.0]).validate().is_err());
+        assert!(axis(&[1.0,0.0]).validate().is_err());
+        assert!(axis(&[0.0,f64::INFINITY]).validate().is_err());
+        let too_large = PoseGrid { axes: vec![axis(&[0.0,1.0,2.0,3.0,4.0]),axis(&[0.0,1.0,2.0,3.0,4.0]),axis(&[0.0,1.0,2.0,3.0,4.0])], pose_ids: vec![] };
+        assert!(too_large.validate(3).is_err());
+        assert!(PoseGrid { axes: vec![axis(&[0.0,1.0]),axis(&[0.0,1.0])], pose_ids: vec!["same".into(),"same".into(),"c".into(),"d".into()] }.validate(2).is_err());
+    }
+}
