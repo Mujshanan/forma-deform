@@ -13,6 +13,7 @@ use crate::{
     error::CoreError,
     ids::{ControllerId, InputId},
     pose::Pose2D,
+    value::Vector2,
 };
 
 use super::{
