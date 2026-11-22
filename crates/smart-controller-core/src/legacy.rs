@@ -543,6 +543,12 @@ mod tests {
     }
 
     #[test]
+    fn invalid_range_error_precedes_non_finite_sample_error() {
+        let invalid = InputRange { minimum: 0.0, neutral: 0.0, maximum: 1.0 };
+        assert_eq!(invalid.normalize(f64::NAN), Err(ControllerError::InvalidInputRange));
+    }
+
+    #[test]
     fn non_finite_input_is_rejected() {
         let binding = symbol_binding();
         assert_eq!(binding.evaluate(f64::NAN), Err(ControllerError::NonFiniteInput));
