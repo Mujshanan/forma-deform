@@ -60,7 +60,7 @@ const MANIFEST: &str = r##"{
     "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
     "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
     "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"},
-    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame", "apply_all_current_frame"], "default": "preview", "label": "Target action (apply one or all verified pins at the playhead)"}
+    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame", "apply_all_current_frame", "bake_range"], "default": "preview", "label": "Target action (apply one or all verified pins at the playhead)"}
   }
 }"##;
 
@@ -141,6 +141,7 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
         bone_layers,
         bone_angle_policy,
         wrapped_angles,
+        frame: None,
     };
     let session = adapter::evaluate_host_document_preview_with_canonical_mapper(
         &document,
@@ -184,6 +185,44 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
             ac::log(&format!(
                 "Applied {} at the current playhead via warp.pin_move. The host command owns the undo step; result: {}",
                 item.target_id, result
+            ));
+        }
+        "bake_range" => {
+            let start = p.get("frame_start").and_then(Value::as_u64)
+                .ok_or("frame_start must be a non-negative integer")? as u32;
+            let end = p.get("frame_end").and_then(Value::as_u64)
+                .ok_or("frame_end must be a non-negative integer")? as u32;
+            let frames = inclusive_frame_range(start, end)?;
+            let mut prepared = Vec::new();
+            let mut total_targets = 0usize;
+            // Evaluate and preflight the entire range before the first write.
+            for frame in frames.iter().copied() {
+                let mut frame_context = context.clone();
+                frame_context.frame = Some(frame);
+                let frame_session = adapter::evaluate_host_document_preview_with_canonical_mapper(
+                    &document, &frame_context, &PoseLibrary::new(), &CompositionContext::default()
+                )?;
+                let items = multi_apply_candidates(&frame_session.target_preview)?;
+                total_targets = total_targets.checked_add(items.len())
+                    .ok_or("bake target count overflow")?;
+                if total_targets > 512 {
+                    return Err("range bake exceeds 512 total target writes; narrow the frame range or target set".into());
+                }
+                for item in items {
+                    prepared.push(targets::prepare_geometry_target_at_frame(
+                        &item.target, item.value, Some(frame)
+                    )?);
+                }
+            }
+            if prepared.is_empty() {
+                return Err("range bake produced no geometry target writes".into());
+            }
+            for params in prepared {
+                targets::apply_prepared_geometry_target(params)?;
+            }
+            ac::log(&format!(
+                "Baked {} geometry target write(s) across frames {}–{} in one plugin.run transaction.",
+                total_targets, start, end
             ));
         }
         "apply_all_current_frame" => {
@@ -512,6 +551,13 @@ mod tests {
             .collect();
         let plan = preview_plan::TargetPreviewPlan { items, unresolved_targets: vec![] };
         assert!(multi_apply_candidates(&plan).unwrap_err().contains("1–512"));
+    }
+
+    #[test]
+    fn range_bake_uses_inclusive_bounded_frames() {
+        assert_eq!(inclusive_frame_range(3, 5).unwrap(), vec![3, 4, 5]);
+        assert!(inclusive_frame_range(5, 3).is_err());
+        assert!(inclusive_frame_range(0, 512).is_err());
     }
 
     fn valid_geometry_params() -> Value {
