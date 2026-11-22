@@ -52,6 +52,12 @@ pub enum CompositionNode {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NodeSignature {
+    input: GeometryValueKind,
+    output: GeometryValueKind,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WeightedInput {
@@ -244,65 +250,91 @@ impl CompositionGraph {
 
         let node_map: BTreeMap<&str, &CompositionNode> =
             self.nodes.iter().map(|node| (node.node_id(), node)).collect();
-        let mut output_kinds = BTreeMap::new();
+        let mut signatures = BTreeMap::new();
         for node in &self.nodes {
-            let kind = self.resolve_output_kind(node, &node_map, &definitions_by_id, &mut output_kinds)?;
-            output_kinds.insert(node.node_id(), kind);
+            let signature = self.resolve_signature(node, &node_map, &definitions_by_id, &mut signatures)?;
+            signatures.insert(node.node_id(), signature);
+        }
+        let mut graph_output_kind = None;
+        for output in &self.outputs {
+            let signature = signatures.get(output.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
+            if let Some(expected) = graph_output_kind {
+                if signature.output != expected {
+                    return Err(CompositionGraphError::IncompatibleValueTypes);
+                }
+            } else {
+                graph_output_kind = Some(signature.output);
+            }
         }
         Ok(())
     }
 
-    fn resolve_output_kind<'a>(
+    fn resolve_signature<'a>(
         &self,
         node: &'a CompositionNode,
         nodes: &BTreeMap<&str, &'a CompositionNode>,
         definitions: &BTreeMap<&str, &DeformationDefinition>,
-        cache: &mut BTreeMap<&'a str, GeometryValueKind>,
-    ) -> Result<GeometryValueKind, CompositionGraphError> {
-        if let Some(kind) = cache.get(node.node_id()) {
-            return Ok(*kind);
+        cache: &mut BTreeMap<&'a str, NodeSignature>,
+    ) -> Result<NodeSignature, CompositionGraphError> {
+        if let Some(signature) = cache.get(node.node_id()) {
+            return Ok(*signature);
         }
-        let kind = match node {
+        let signature = match node {
             CompositionNode::Deformer { deformer_id, .. } => {
-                definitions.get(deformer_id.as_str())
-                    .ok_or(CompositionGraphError::MissingDeformer)?.output_kind()
+                let definition = definitions.get(deformer_id.as_str())
+                    .ok_or(CompositionGraphError::MissingDeformer)?;
+                NodeSignature {
+                    input: definition.input_kind(),
+                    output: definition.output_kind(),
+                }
             }
             CompositionNode::Sequential { stages, .. } => {
-                let mut kinds = stages.iter().map(|id| {
+                let mut resolved = stages.iter().map(|id| {
                     let child = nodes.get(id.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
-                    self.resolve_output_kind(child, nodes, definitions, cache)
+                    self.resolve_signature(child, nodes, definitions, cache)
                 });
-                let first = kinds.next().ok_or(CompositionGraphError::InsufficientInputs)??;
-                for kind in kinds {
-                    if kind? != first { return Err(CompositionGraphError::IncompatibleValueTypes); }
+                let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                let mut previous_output = first.output;
+                for item in resolved {
+                    let current = item?;
+                    if current.input != previous_output {
+                        return Err(CompositionGraphError::IncompatibleValueTypes);
+                    }
+                    previous_output = current.output;
                 }
-                first
+                NodeSignature { input: first.input, output: previous_output }
             }
             CompositionNode::Parallel { branches, .. } => {
-                let mut kinds = branches.iter().map(|id| {
+                let mut resolved = branches.iter().map(|id| {
                     let child = nodes.get(id.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
-                    self.resolve_output_kind(child, nodes, definitions, cache)
+                    self.resolve_signature(child, nodes, definitions, cache)
                 });
-                let first = kinds.next().ok_or(CompositionGraphError::InsufficientInputs)??;
-                for kind in kinds {
-                    if kind? != first { return Err(CompositionGraphError::IncompatibleValueTypes); }
+                let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                for item in resolved {
+                    let current = item?;
+                    if current.input != first.input || current.output != first.output {
+                        return Err(CompositionGraphError::IncompatibleValueTypes);
+                    }
                 }
                 first
             }
             CompositionNode::WeightedBlend { inputs, .. } => {
-                let mut kinds = inputs.iter().map(|input| {
+                let mut resolved = inputs.iter().map(|input| {
                     let child = nodes.get(input.node_id.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
-                    self.resolve_output_kind(child, nodes, definitions, cache)
+                    self.resolve_signature(child, nodes, definitions, cache)
                 });
-                let first = kinds.next().ok_or(CompositionGraphError::InsufficientInputs)??;
-                for kind in kinds {
-                    if kind? != first { return Err(CompositionGraphError::IncompatibleValueTypes); }
+                let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                for item in resolved {
+                    let current = item?;
+                    if current.output != first.output {
+                        return Err(CompositionGraphError::IncompatibleValueTypes);
+                    }
                 }
-                first
+                NodeSignature { input: first.output, output: first.output }
             }
         };
-        cache.insert(node.node_id(), kind);
-        Ok(kind)
+        cache.insert(node.node_id(), signature);
+        Ok(signature)
     }
 
     fn validate_acyclic(&self, nodes: &BTreeMap<&str, &CompositionNode>) -> Result<(), CompositionGraphError> {
@@ -449,16 +481,16 @@ mod tests {
         ).unwrap()
     }
 
-    fn definition(id: &str, kind: GeometryValueKind) -> DeformationDefinition {
+    fn definition(id: &str, input: GeometryValueKind, output: GeometryValueKind) -> DeformationDefinition {
         DeformationDefinition::new(
             id, 1, id, DeformationKind::PinDeformation, target(), reference(),
-            space(), kind, BTreeMap::<String, ParameterValue>::new(),
+            space(), input, output, BTreeMap::<String, ParameterValue>::new(),
         ).unwrap()
     }
 
     #[test]
     fn graph_defaults_to_explicit_nodes_and_ordered_sequential_composition() {
-        let defs = vec![definition("a", GeometryValueKind::Displacement), definition("b", GeometryValueKind::Displacement)];
+        let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::Displacement, GeometryValueKind::Displacement)];
         let graph = CompositionGraph::new(
             "graph", 1, target(), reference(), space(),
             vec![
@@ -488,7 +520,7 @@ mod tests {
     #[test]
     fn weighted_blend_requires_positive_normalized_weights() {
         assert_eq!(WeightedInput::new("a", 0.0), Err(CompositionGraphError::InvalidWeight));
-        let defs = vec![definition("a", GeometryValueKind::Displacement), definition("b", GeometryValueKind::Displacement)];
+        let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement)];
         let graph = CompositionGraph::new(
             "blend", 1, target(), reference(), space(),
             vec![
@@ -510,7 +542,7 @@ mod tests {
         other.axes = AxisOrientation::XRightYUp;
         let definition = DeformationDefinition::new(
             "a", 1, "a", DeformationKind::PinDeformation, target(), reference(),
-            other, GeometryValueKind::Displacement, BTreeMap::new(),
+            other, GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement, BTreeMap::new(),
         ).unwrap();
         let graph = CompositionGraph::new(
             "graph", 1, target(), reference(), space(),
@@ -538,7 +570,7 @@ mod tests {
 
     #[test]
     fn graph_rejects_incompatible_value_types() {
-        let defs = vec![definition("a", GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry)];
+        let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::AbsoluteGeometry)];
         let graph = CompositionGraph::new(
             "bad-types", 1, target(), reference(), space(),
             vec![
