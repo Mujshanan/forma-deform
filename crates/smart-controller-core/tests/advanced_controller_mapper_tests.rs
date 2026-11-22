@@ -106,7 +106,7 @@ fn registered_grid_mapping_runs_through_controller_mapper_and_evaluator() {
     let mut registry = AdvancedMappingRegistry::new();
     registry.register_grid(id_controller("controller"), id_input("driver"), grid()).unwrap();
 
-    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+    let fallback = |_: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         Err(CoreError::InvalidMapping("fallback must not run for a registered controller".into()))
     };
     let mapper = AdvancedControllerMapper::new(fallback, registry);
@@ -141,7 +141,7 @@ fn registered_triangulated_mapping_runs_through_controller_mapper_and_evaluator(
         mapping,
     ).unwrap();
 
-    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+    let fallback = |_: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         Err(CoreError::InvalidMapping("fallback must not run for a registered controller".into()))
     };
     let mapper = AdvancedControllerMapper::new(fallback, registry);
@@ -160,7 +160,7 @@ fn registered_triangulated_mapping_runs_through_controller_mapper_and_evaluator(
 
 #[test]
 fn unregistered_controller_is_delegated_to_existing_mapper_unchanged() {
-    let fallback = |controller: &Controller, _| {
+    let fallback = |controller: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| {
         Ok(BTreeMap::from([(
             controller.bindings[0].id.clone(),
             TypedValue::scalar(42.0)?,
@@ -185,7 +185,7 @@ fn registered_mapping_failure_does_not_silently_fall_back() {
     registry.register_grid(id_controller("controller"), id_input("driver"), grid()).unwrap();
 
     let fallback_calls = Cell::new(0);
-    let fallback = |controller: &Controller, _| {
+    let fallback = |controller: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| {
         fallback_calls.set(fallback_calls.get() + 1);
         Ok(BTreeMap::from([(
             controller.bindings[0].id.clone(),
@@ -212,7 +212,7 @@ fn registered_mapping_failure_does_not_silently_fall_back() {
 fn advanced_mapping_requires_its_registered_input_to_be_declared() {
     let mut registry = AdvancedMappingRegistry::new();
     registry.register_grid(id_controller("controller"), id_input("other"), grid()).unwrap();
-    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+    let fallback = |_: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         panic!("registered mapping must not delegate to fallback")
     };
     let mapper = AdvancedControllerMapper::new(fallback, registry);
@@ -234,7 +234,7 @@ fn advanced_mapping_requires_its_registered_input_to_be_declared() {
 fn advanced_mapping_rejects_non_vector2_driver_inputs() {
     let mut registry = AdvancedMappingRegistry::new();
     registry.register_grid(id_controller("controller"), id_input("driver"), grid()).unwrap();
-    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+    let fallback = |_: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         panic!("registered mapping must not delegate to fallback")
     };
     let mapper = AdvancedControllerMapper::new(fallback, registry);
@@ -266,7 +266,7 @@ fn advanced_pose_must_emit_exactly_the_controller_binding_set() {
     ).unwrap();
     let mut registry = AdvancedMappingRegistry::new();
     registry.register_grid(id_controller("controller"), id_input("driver"), mapping).unwrap();
-    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+    let fallback = |_: &Controller, _: &smart_controller_core::evaluator::ResolvedInputs| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         panic!("registered mapping must not delegate to fallback")
     };
     let mapper = AdvancedControllerMapper::new(fallback, registry);
