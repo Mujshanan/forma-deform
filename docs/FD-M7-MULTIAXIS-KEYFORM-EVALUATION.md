@@ -2,7 +2,7 @@
 
 **Decision:** proceed with a native, host-independent regular pose-grid mapper using multilinear interpolation. Do not port or add an Aether Canvas dependency. Keep Aether Canvas as an algorithmic/design reference only.
 
-**Status:** implemented in the M7 runtime slice; verification through CI remains pending.
+**Status:** implemented; Rust workspace tests, WASM builds, and frontend checks pass in CI. Performance benchmark remains pending.
 
 ## 1. Product gap and existing foundations
 
@@ -135,11 +135,11 @@ Canonical schema v2 is now the current write format. CanonicalDocument::from_jso
 | Dependencies | No new dependencies |
 | Correctness gate | Typed pose validation, exact key reproduction, boundary and wrapped-angle tests |
 | Performance gate | 2D/3D benchmark, <=256 forms |
-| Status | **Implemented; CI and performance verification pending** |
+| Status | **Implemented; CI passed; performance benchmark pending** |
 
 ## 8. Go / no-go
 
-**Implemented:** canonical schema v1-to-v2 migration and bounded 2D/3D multilinear PoseGrid are present. Remaining gates are full Rust/WASM CI, broader adversarial validation coverage, and representative performance measurements.
+**Implemented:** canonical schema v1-to-v2 migration and bounded 2D/3D multilinear PoseGrid are present. Remaining gates are broader adversarial validation coverage and representative performance measurements.
 
 **No-go** for copying Aether Canvas code, adopting its crate, enabling Catmull–Rom/cyclic behavior, or expanding into editing operations in this slice.
 
