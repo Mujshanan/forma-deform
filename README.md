@@ -80,11 +80,12 @@ Additional technical references:
 - [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md)
 - [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md)
 - [M4 persistent bindings](docs/FD-M4-PERSISTENT-BINDINGS.md)
+- [M5 deformation integration](docs/FD-M5-DEFORMATION-INTEGRATION.md)
 - [Capability limits](docs/CAPABILITIES.md)
 
 ## Current milestone
 
-FD-M4 has started with a strict, versioned persistent-binding payload and atomic core collection operations. Actual persistence remains blocked on a reviewed AniCraft document-extension and command contract; the current WASM plug-in cannot write document metadata or files.
+FD-M4's versioned persistent-binding payload and atomic core collection operations pass CI; durable host save/load still requires an AniCraft document extension. FD-M5 adds an explicit, single-target current-playhead apply path through the verified Asset Warp command. Multi-target and timeline-range bake remain host-extension work.
 
 ## Verification
 
