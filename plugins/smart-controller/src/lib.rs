@@ -60,7 +60,9 @@ const MANIFEST: &str = r##"{
     "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
     "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
     "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"},
-    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame", "apply_all_current_frame", "bake_range"], "default": "preview", "label": "Target action (apply one or all verified pins at the playhead)"}
+    "frame_start": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Bake start frame"},
+    "frame_end": {"type": "int", "min": 0, "max": 1000000000, "default": 20, "label": "Bake end frame (inclusive)"},
+    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame", "apply_all_current_frame", "bake_range"], "default": "preview", "label": "Target action (preview, apply, or bake frame range)"}
   }
 }"##;
 
@@ -247,6 +249,18 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Inclusive, bounded frame range for deterministic range baking.
+fn inclusive_frame_range(start: u32, end: u32) -> Result<Vec<u32>, String> {
+    if end < start {
+        return Err("frame_end must be greater than or equal to frame_start".into());
+    }
+    let count = end as u64 - start as u64 + 1;
+    if count > 512 {
+        return Err("range bake is limited to 512 frames".into());
+    }
+    Ok((start..=end).collect())
+}
+
 fn single_apply_candidate(
     plan: &preview_plan::TargetPreviewPlan,
 ) -> Result<&preview_plan::TargetPreviewItem, String> {
@@ -428,7 +442,7 @@ fn run(p: &Value) -> Result<(), String> {
                     "workflow", "legacy_input", "input_source", "bone_id", "layer_id",
                     "input_minimum", "input_neutral", "input_maximum", "easing",
                     "bone_angle_policy", "angle_semantics", "element_id", "pin_id",
-                    "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y", "target_action",
+                    "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y", "frame_start", "frame_end", "target_action",
                 ] {
                     object.remove(key);
                 }
@@ -465,7 +479,7 @@ mod tests {
         let params = manifest["params"].as_object().unwrap();
         assert!(params.len() <= 32);
         assert_eq!(params["target_action"]["default"], "preview");
-        assert_eq!(params["target_action"]["options"], json!(["preview", "apply_current_frame", "apply_all_current_frame"]));
+        assert_eq!(params["target_action"]["options"], json!(["preview", "apply_current_frame", "apply_all_current_frame", "bake_range"]));
         for spec in params.values() {
             assert!(matches!(
                 spec["type"].as_str(),
