@@ -107,11 +107,20 @@ impl PersistentBindingDocument {
         }
         let mut candidate = self.controller_document.clone();
         candidate.controllers.retain(|item| item.id != controller.id);
-        let referenced: std::collections::HashSet<_> = candidate.controllers
+        let referenced_by_others: std::collections::HashSet<_> = candidate.controllers
             .iter()
             .flat_map(|item| item.inputs.iter().cloned())
             .collect();
-        candidate.inputs.retain(|input| referenced.contains(&input.id));
+        let supplied_ids: std::collections::HashSet<_> = inputs.iter()
+            .map(|input| input.id.clone())
+            .collect();
+        let retained_for_replacement: std::collections::HashSet<_> = controller.inputs.iter()
+            .filter(|id| !supplied_ids.contains(*id))
+            .cloned()
+            .collect();
+        candidate.inputs.retain(|input| {
+            referenced_by_others.contains(&input.id) || retained_for_replacement.contains(&input.id)
+        });
 
         for input in inputs {
             if let Some(existing) = candidate.inputs.iter().find(|item| item.id == input.id) {
