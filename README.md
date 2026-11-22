@@ -1,38 +1,39 @@
 # Forma Deform
 
-**Forma Deform** is a reusable 2D deformation project with an AniCraft plugin suite. The original TypeScript rectangle/timeline demo remains a separate geometry experiment.
+Forma Deform is the reusable controller and deformation engine project for AniCraft. This repository contains host-independent Rust libraries, AniCraft command-plug-in adapters, and a small legacy TypeScript geometry/timeline experiment.
 
-## Current AniCraft integrations
+**Product direction:** prove controller behavior in a small independent library, validate the host boundary through AniCraft command plug-ins, then deliver the finished Smart Controller as a first-party native AniCraft editor tool. The command plug-in is an integration prototype and compatibility path—not the final authoring UI.
 
-The current implementation contains three separate command plug-ins:
+## Current repository contents
 
-- **Bone Query** — read-only armature, bone, pose, spring, joint-translation, and skin-weight inspection.
-- **Form Deform** — deterministic bone-angle-driven Asset Warp pin deformation using an authored neutral position and per-degree gains.
-- **Smart Controller** — general-purpose neutral-centered input mapping with Linear/Smoothstep easing and three geometry anchors.
+| Component | Responsibility | Current boundary |
+|---|---|---|
+| Smart Controller core | Host-independent controller model, validation, mapping and evaluation | Rust library; model consolidation and verification remain part of development |
+| Smart Controller plug-in | On-demand AniCraft command adapter and preview path | Prototype/compatibility stage; not a playback evaluator |
+| Form Deform core + plug-in | Bone-angle-driven Asset Warp pin deformation | Independent engine and command adapter |
+| Bone Query plug-in | Read-only armature, bone, pose and skin-weight inspection | On-demand diagnostic command |
+| AniCraft plug-in SDK | Host command/document bridge used by the plug-ins | Pinned local integration boundary |
+| TypeScript demo | Original rectangle/timeline geometry experiment | Separate experiment; not the Smart Controller product UI |
 
-Each current plug-in has its own crate and manifest. Shared native logic is isolated under crates/. The AniCraft guest SDK is vendored with pinned upstream provenance.
+## Target architecture
 
-**Smart Controller product direction:** the command plug-in is a prototype/compatibility implementation, not the intended final UI. The target is a first-party native AniCraft editor tool, using AniCraft's existing Tools and Properties conventions and exposing the same registered command contracts through AniCraft's existing MCP server. This requires coordinated host-side work in [Mujshanan/AniCraft](https://github.com/Mujshanan/anicraft). See the [native-tool and MCP proposal](docs/SMART_CONTROLLER_NATIVE_TOOL_PROPOSAL.md) and [updated Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md).
+- The **Smart Controller core** owns controller semantics and deterministic evaluation. It must not depend on AniCraft, its UI, MCP transport, WASM imports, or document internals.
+- **AniCraft** owns durable/versioned controller definitions, host identity resolution, registered commands, undo, native tool UI, and any frame-evaluation integration.
+- The **native Smart Controller tool** follows AniCraft's existing Tools and Properties conventions.
+- The native UI and MCP use the same AniCraft command registry and command contracts. Reuse AniCraft's existing generic MCP tools; do not create a separate Smart Controller MCP server or protocol.
+- Smart Controller and Form Deform remain independent. No automatic output composition or data feed between them is part of this plan.
 
-See [plugin overview](plugins/README.md), the [unified build and smoke-test guide](plugins/INSTALL.md), and the [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md).
+## Documentation authority
 
-## Important host boundaries
+There are exactly two canonical project documents:
 
-The current AniCraft command-plug-in API supports on-demand bone and warp queries and undoable warp-pin edits. It does not expose durable arbitrary plug-in metadata, continuous playback/scrubbing evaluation, or a verified command to set a nested symbol instance's displayed frame. The suite does not claim those capabilities. Apply operations are explicit document edits; calculation-only mode is the default.
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** — the single source of truth for architecture, scope, current status, roadmap, phases, decisions, and development/verification process.
+- **[README.md](README.md)** — the concise project overview and entry point. It links to DEVELOPMENT.md and does not maintain a second roadmap.
 
-The native Smart Controller proposal requires first-party AniCraft integration for its tool UI, durable controller definitions, shared commands, and eventual frame-evaluation hook. The proposal does not claim those host capabilities are implemented.
+Do not add another README or development-plan document in a subdirectory. Component-specific details belong in DEVELOPMENT.md or in focused operational/reference documents that do not duplicate the roadmap. Historical audits are evidence snapshots, not competing project plans.
 
-## Verification
+## Build and verification
 
-Run the complete Rust suite and build all three WASM plug-ins:
+Start with the canonical [development guide](DEVELOPMENT.md). Plug-in build/install and in-app smoke-test commands are in [plugins/INSTALL.md](plugins/INSTALL.md).
 
-```sh
-rustup target add wasm32-unknown-unknown
-cargo fmt --all -- --check
-cargo test --workspace
-cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
-cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
-cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
-```
-
-The TypeScript demo retains its Bun-based scripts. GitHub Actions checks both projects.
+The native AniCraft tool is **not implemented by this repository update**. It requires separately scoped first-party changes in [Mujshanan/AniCraft](https://github.com/Mujshanan/anicraft). No playback, scrubbing, durable controller persistence, or live MCP streaming capability is claimed.
