@@ -4,15 +4,12 @@ pub mod range;
 
 use crate::model::EndpointPolicy;
 
-/// Normalize a signed driver angle into [0, 1]. Reversed endpoints are valid.
+/// V1 compatibility wrapper for directed range normalization.
+/// New code should use `mapping::range::normalize_directed` and retain its
+/// typed `CoreError` contract.
 pub fn normalize_rotation(input: f64, minimum: f64, maximum: f64) -> Result<f64, String> {
-    if !input.is_finite() || !minimum.is_finite() || !maximum.is_finite() || minimum == maximum {
-        return Err("input and rotation endpoints must be finite and endpoints must differ".into());
-    }
-    let clamped = input.clamp(minimum.min(maximum), minimum.max(maximum));
-    let normalized = (clamped - minimum) / (maximum - minimum);
-    if normalized.is_finite() { Ok(normalized.clamp(0.0, 1.0)) }
-    else { Err("rotation normalization produced a non-finite result".into()) }
+    range::normalize_directed(input, minimum, maximum)
+        .map_err(|error| error.to_string())
 }
 
 /// Exclusive maps [start, end); inclusive maps [start, end].
