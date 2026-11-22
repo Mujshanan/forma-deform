@@ -293,19 +293,9 @@ The design is not implementation-complete until host and adapter tests cover:
 14. Stage/local coordinate ambiguity cannot pass validation.
 15. A result referencing old geometry/topology revisions is rejected before application.
 
-## 11. Open decisions before acceptance
+## Draft history
 
-The following require explicit resolution before calling this contract accepted or implementing it:
-
-1. **Host document identity:** the inspected AniCraft `Document` / `DocumentFile` model has no persistent document UUID field. Its `next_id` is serialized, but that is an allocator, not document identity. The host therefore needs a persistent document UUID (or equivalent stable host-issued identity) and explicit copy/duplicate/Save As semantics before a durable cross-document target reference can be guaranteed.
-2. **Target ID generation:** AniCraft's `ElementId`, `LayerId`, and `SymbolId` are document-local `u64` wrappers. `Document::alloc_id` allocates from serialized `next_id`, so the inspected design is monotonic under normal operation, but no generation/incarnation is part of the ID type. Confirm deletion, migration, import, and overflow behavior; retain a generation token in the external contract unless the host can formally guarantee non-reuse.
-3. **Initial target kinds:** choose the first supported target kinds and exact capability queries; do not equate every ElementId with deformable geometry.
-4. **Geometry payload:** confirm whether the first host snapshot is path-only or needs an additional explicit geometry kind.
-5. **Revision ownership:** define where per-target geometry/topology counters live and how every mutation path advances them, including commands, undo/redo, imports, and document migrations.
-6. **Fingerprint algorithm:** select a stable canonicalization and digest algorithm, including float normalization and versioning.
-7. **Coordinate descriptor:** align units, axis orientation, origin, and local-rest semantics with AniCraft's actual geometry conventions.
-8. **Native Asset Warp stage:** source inspection establishes that `Warp.rest` is the authored rest outline and `Shape.path` is the bent outline for a warped shape. Confirm the snapshot adapter uses `Warp.rest` when present and that existing pin edits remain on the native host path.
-9. **Plugin transport:** choose how immutable snapshot payloads cross the current plugin boundary without leaking host implementation types.
+The original unresolved decision list is superseded by the resolved proposal and host-side conformance blockers in the next section. Do not treat this historical draft list as a second active decision list.
 
 ## 11. Contract decisions — resolved proposal and host-side blockers
 
