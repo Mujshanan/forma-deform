@@ -531,3 +531,118 @@ The native Smart Controller is ready for a production milestone only when:
 - [AniCraft host repository](https://github.com/Mujshanan/anicraft)
 - [AniCraft SDK capability audit](docs/ANICRAFT_SDK_AUDIT.md)
 - [Smart Controllers source audit](docs/SMART_CONTROLLERS_AUDIT.md)
+
+
+---
+
+## 11. AniCraft native-tool feasibility audit
+
+**Audit date:** 2026-11-22  
+**Repository reviewed:** [Mujshanan/anicraft](https://github.com/Mujshanan/anicraft)  
+**Source snapshot:** [`bcfea816478f2a00ab172cefe67f0bd5696b3886`](https://github.com/Mujshanan/anicraft/commit/bcfea816478f2a00ab172cefe67f0bd5696b3886)  
+**Scope:** source inspection of the native editor shell, tool dispatch, Properties UI, engine command/session/history, document schema/evaluation, WASM plug-in host, and MCP/remote command path. This is a source audit, not an in-app runtime test.
+
+### 11.1 Executive finding
+
+**The native-tool direction is feasible, but it requires first-party AniCraft changes.** AniCraft already has the exact host concepts Smart Controller should integrate with: a closed native tool enum, explicit stage-event dispatch, contextual Properties UI, a shared command registry, session-owned document state, undo snapshots, and generic MCP command discovery/execution.
+
+The WASM plug-in API is not a native tool-extension API. It is suitable for the thin command proof described in Stage 2, but it cannot supply the final always-available authoring tool or own durable controller definitions.
+
+No Smart Controller native tool, controller document schema, or general per-frame controller-evaluation hook was found in the inspected source. Treat those as first-party host work, not existing capabilities.
+
+### 11.2 Source-backed integration map
+
+| Concern | Existing AniCraft implementation | Audit result |
+|---|---|---|
+| Native tool identity and listing | `src/app.rs`: `Tool`, `Tool::ALL`, `label`, `shortcut`, `hint` | Explicit, closed enum/list. No plug-in tool-registration registry was found. A new tool must be added to the native enum and its exhaustive mappings. |
+| Tool icon and Tools UI | `src/panels.rs`: `tool_icon`, `tools`, `tool_items` | Native icon mapping and existing Tools-area layout. Iteration over `Tool::ALL` drives the visible tool buttons. |
+| Stage interaction | `src/stage.rs`: `show`, drag-start dispatch, click dispatch, drag/update handling | Tool behavior is wired directly into stage pointer-event handling. A native tool needs explicit hit-test, click, drag-start, drag-update, drag-end/cancel and drawing/overlay integration as applicable. |
+| Contextual Properties | `src/panels.rs`: `properties`, `bind_props`, `bone_props`, `warp_props` | Existing pattern is contextual: selected bones expose bone settings; Bind mode exposes weight-brush and point controls; Warp mode exposes mesh/pin controls. Smart Controller should follow this pattern rather than create a separate panel framework. |
+| Shared command registry | `crates/engine/src/lib.rs`: `CommandSpec`, `commands()`, `find_command()` | Commands are registered by collecting each command module's specs. `find_command` indexes the same registry. Add controller operations as ordinary engine commands. |
+| Command execution and atomicity | `crates/engine/src/lib.rs`: `Session::execute`, `execute_nested` | The session executes registered commands, validates through each command implementation, and handles mutation/rollback and history recording. Native UI and external callers should use this path. |
+| Gesture undo | `crates/engine/src/lib.rs`: `begin_gesture`, `end_gesture`; `crates/engine/src/history.rs`: `Snapshot`, `History` | Drag-like operations can group repeated mutations into one undo step. Snapshot includes the document and editor context such as scene, frame, layer and selection. |
+| Stable host identity | `crates/doc/src/lib.rs`: `ElementId`, `LayerId`, `BoneId`; `crates/engine/src/selection.rs` | Numeric host IDs and session selection already exist. Smart Controller bindings should persist host IDs with explicit type/ownership validation; do not rely on display names. |
+| Durable document schema | `crates/doc/src/lib.rs`: `Document`, `DocumentFile`, `Scene`, `Timeline`, `Layer`, `Keyframe` | The document is a typed Serde model with explicit fields and a conversion from `DocumentFile`. The inspected `Document` has no generic custom-metadata extension map. Durable controller definitions therefore require a deliberate first-party schema addition and backward-compatible defaults/migration tests. |
+| Timeline evaluation | `crates/doc/src/eval.rs`: `evaluate`, `evaluate_scene`, `evaluate_timeline`, `evaluate_player`; `crates/engine/src/lib.rs`: `Session::set_frame`, `display_list` | Timeline rendering/evaluation is a deterministic document/frame operation. Session frame changes invalidate the editor context; this is not, by itself, a callback for arbitrary plug-in controller evaluation. |
+| Existing frame scripts | `crates/doc/src/player.rs`; `crates/engine/src/player.rs` | There is a player/frame-script mechanism, but it is not a general controller callback. The inspected frame-script host exposes player state and queued actions/logging; document/command/elements requests are refused while the movie runs. Frame scripts are associated with frame-entry actions, not a general every-frame controller provider. |
+| WASM plug-in commands | `crates/engine/src/cmds_plugin.rs`; `crates/plugins/src/manifest.rs`, `registry.rs`, `runtime.rs`; `docs/plugins.md` | Plug-ins are installed session-side and expose manifest-defined commands/settings. They can query the document/elements and call permitted commands through the host. A run is bounded and treated as one undo step; it is not a persistent native UI extension. |
+| MCP discovery and execution | `crates/cli/src/mcp.rs`: `tools()`, `call_tool()`, `Host`; `src/remote.rs`: `Live`, `poll()`; `docs/mcp.md` | MCP exposes generic command discovery/run/script/document/render tools. The live desktop bridge executes through the same `Session::execute` command path and queues edits to avoid merging them with an active user gesture. No separate Smart Controller MCP server is needed. |
+
+### 11.3 Native tool integration requirements
+
+The native UI is explicitly wired rather than dynamically extended by WASM plug-ins. The current `Tool` enum contains 24 built-in tools, and `Tool::ALL` drives the tool list. The stage separately dispatches tool-specific pointer interactions. Consequently, a first-party Smart Controller tool requires coordinated changes in at least:
+
+1. **Tool definition:** add the tool to `src/app.rs` and update its complete tool list, label, shortcut/hint and any tool-state requirements.
+2. **Visual identity:** add its icon mapping in `src/panels.rs` and use the existing Tools-area button/accessibility conventions.
+3. **Properties experience:** add contextual controls through `panels::properties`, following the existing Bone/Bind/Warp patterns. Avoid a parallel panel/docking system.
+4. **Stage behavior:** integrate tool selection, hit-testing, click/drag lifecycle and controller overlay/manipulator drawing in `src/stage.rs`. If the initial native milestone is a non-canvas authoring tool, keep its stage interaction minimal and explicit.
+5. **Engine operations:** add controller create/update/delete/query operations to the existing `CommandSpec` registry. Native UI must call these commands rather than mutating document fields directly.
+6. **Document persistence:** define a versioned controller-definition representation in AniCraft's document model, with Serde defaults, sanitization/validation, round-trip fixtures and migration behavior. The correct ownership level (document, scene, symbol or another host object) must be decided from the controller use cases before implementation; the current schema does not provide an arbitrary metadata bag.
+7. **Undo and identity:** make durable definition changes normal mutating commands so existing snapshots and undo/redo cover them. Persist stable host IDs and reject stale or wrong-kind references.
+8. **MCP:** expose no new transport. Register the same commands so `anicraft_commands`, `anicraft_run` and `anicraft_run_script` discover and execute them through the existing host.
+
+The native tool and MCP are two front ends to the same command contracts. The UI may maintain transient interaction state, but the engine/document commands remain the authority for durable definitions and mutations.
+
+### 11.4 What the plug-in proof can and cannot establish
+
+The inspected WASM ABI has a deliberately narrow host boundary. The plug-in host supports requests for `command`, `document`, `elements` and `log`; command requests are routed through the engine's command registry and execute nested within the plug-in run. The plug-in manifest supplies command parameters/settings, and the app can present a generated parameter dialog with preview/OK/Cancel behavior.
+
+This is useful for proving:
+- the independent Rust core can be called from the adapter;
+- actual AniCraft IDs and command responses can be parsed;
+- read-only host snapshots can be converted to explicit controller inputs;
+- a preview result can be produced without changing the document;
+- any permitted command mutation participates in the plug-in's atomic undo step.
+
+It does **not** prove:
+- native tool registration or custom always-visible UI;
+- arbitrary custom Properties panels or canvas manipulators;
+- durable document-owned controller definitions;
+- a persistent plug-in process or state between runs;
+- a continuous controller evaluation callback during timeline playback;
+- safe Smart Controller → Form Deform composition.
+
+Keep the plug-in as a narrow proof/compatibility adapter while the native implementation is developed. Do not expand its manifest into a substitute authoring application.
+
+### 11.5 MCP contract confirmed
+
+AniCraft's MCP tool list is generic. `anicraft_commands` enumerates the engine's `commands()`; `anicraft_run` and `anicraft_run_script` call the host's `execute` method. The desktop bridge's live host executes `Session::execute` on the open app session. This confirms the intended alignment:
+
+```text
+Native Smart Controller UI ─┐
+                            ├── AniCraft CommandSpec registry ── Session::execute
+MCP generic run/script ─────┘
+```
+
+A controller command should have one engine implementation and one parameter/result contract. Do not duplicate its validation or semantics in a second MCP server. Note that `CommandSpec.params` is currently a human-readable parameter description; the command implementation remains responsible for actual validation.
+
+### 11.6 Playback and evaluation finding
+
+AniCraft already evaluates the document at an explicit frame and has a wall-clock/audio-driven editor playback loop. However, the inspected native playback loop advances the session frame; it does not expose a general extension callback for evaluating arbitrary external controller graphs. The movie player has a frame-script facility, but its script host is restricted to player-state reads and queued player actions, and frame scripts are tied to frame-entry behavior.
+
+Therefore:
+- Do not implement Smart Controller playback by repeatedly invoking MCP/plug-in commands.
+- Do not infer that the frame-script facility is a general controller runtime.
+- Before playback integration, define a first-party host evaluation lifecycle with explicit ordering relative to timeline evaluation, stable frame/input snapshots, error reporting, caching/invalidation and deterministic behavior.
+- Keep preview evaluation callable independently of playback so the core can be tested without the editor loop.
+
+This audit did not establish that no suitable internal hook could ever be added; it establishes that no public/general hook was identified in the inspected integration path.
+
+### 11.7 Recommended implementation sequence after the audit
+
+1. **Finish the source audit and record host gaps** (this section). No host code changes are included in this Forma Deform audit.
+2. **Characterize and consolidate `smart-controller-core`**: tests/fixtures for the existing three-anchor and Slider/Transform directions; select a canonical representation and specify migration before refactoring.
+3. **Complete the thin plug-in proof** only for the read-only/manual preview path and verified host queries. Preserve Smart Controller V1 preview-only and Form Deform independence.
+4. **Design the AniCraft document schema and command contract** before native UI implementation. Decide controller ownership, IDs, serialization compatibility, command atomicity and target-reference validation.
+5. **Implement the first-party native tool in the AniCraft repository**: tool registration, contextual Properties, minimal stage interaction and shared commands. Keep it on a separate reviewable host PR.
+6. **Add MCP coverage through the existing generic command surface** and test native/MCP parity against the same command tests.
+7. **Design playback evaluation as a separate host milestone** after the native preview and document model are stable.
+
+### 11.8 Verification status and limitations
+
+- Source reviewed at the exact AniCraft commit linked above.
+- Repository files inspected: native app/tool/panels/stage, engine registry/session/history, document model/evaluator/player, plug-in host/runtime/manifest/registry, CLI MCP and desktop remote bridge.
+- No AniCraft build, test suite, GUI session or live MCP/plug-in smoke test was run as part of this source-only audit.
+- This is not a comprehensive security review or a proof that every possible internal extension point is absent.
+- Any future implementation must re-check the source commit at the time of coding; the host repository is actively changing.
+
