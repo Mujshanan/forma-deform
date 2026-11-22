@@ -1,16 +1,99 @@
 # Smart Controller
 
-**V1 status:** Slider mapping and deterministic, on-demand preview.
+**V1 status:** canonical, on-demand host preview plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not apply targets, write keyframes, or run during playback/scrubbing.
 
-The host-independent Rust core performs validation, normalization, endpoint-aware frame mapping, and preview calculation. The AniCraft adapter only resolves the driver input through the verified bone.info command, calls the core, and logs JSON output.
+## Canonical preview (FD-M2)
 
-## V1 workflow
+Set `canonical_document_json` to a JSON-encoded canonical Smart Controller document (schema `smart-controller`, version `1`). The plugin then:
+
+1. Validates the canonical document before querying the host.
+2. Collects only external inputs referenced by enabled controllers.
+3. Uses the supplied `bone_layers_json` map to resolve canonical bone IDs to AniCraft armature/layer IDs. It never guesses a layer from selection or array position.
+4. Queries the read-only `bone.info` command once per required layer for the current playhead.
+5. Parses bone rotation by stable numeric bone ID, converting host degrees to canonical radians. Spring swing and wrapped-angle semantics are explicit parameters.
+6. Evaluates the canonical controller graph with `CanonicalControllerMapper`, runs the independent composition pass, and builds a target preview.
+7. For geometry targets only, queries read-only `warp.info` and verifies the exact element and pin IDs.
+8. Logs target values, capability boundaries, unresolved targets, and evaluator diagnostics.
+
+No target setter is called. The output is a preview plan, not a rendered stage overlay and not an apply/bake operation.
+
+### Command parameters
+
+| Parameter | Default | Purpose |
+|---|---|---|
+| `canonical_document_json` | empty | Versioned canonical document JSON; non-empty enables the canonical path |
+| `manual_values_json` | `{}` | JSON object mapping InputId to serialized TypedValue |
+| `bone_layers_json` | `{}` | Explicit JSON object mapping canonical bone ID strings to numeric AniCraft layer IDs |
+| `bone_angle_policy` | `keyed_pose_only` | Either `keyed_pose_only` or `keyed_pose_plus_spring_swing` |
+| `angle_semantics` | `unwrapped` | Either `wrapped` or `unwrapped` |
+
+Manual values use the canonical tagged value representation, for example:
+
+~~~json
+{"jaw-driver":{"kind":"scalar","value":0.5}}
+~~~
+
+A bone rotation input uses its stable host bone ID in the document and requires an explicit layer mapping:
+
+~~~json
+{"42":7}
+~~~
+
+### Minimal canonical document example
+
+This example maps a bone's rotation to a calculated property value. The property target is calculation-only: the plugin reports the value but does not call an unverified generic property setter.
+
+~~~json
+{
+  "schema": {"name": "smart-controller", "version": 1},
+  "inputs": [{
+    "id": "head-rotation",
+    "source": {"kind": "bone_transform", "bone_id": "42", "channel": "rotation"},
+    "dimension": "angle",
+    "fallback": {"kind": "reject"}
+  }],
+  "controllers": [{
+    "id": "head-controller",
+    "enabled": true,
+    "inputs": ["head-rotation"],
+    "dependencies": [],
+    "mapping": {"kind": "range_1d", "minimum": -0.7853981634, "neutral": 0.0, "maximum": 0.7853981634},
+    "bindings": [{
+      "id": "mouth-width-output",
+      "target_id": "property:mouth:width",
+      "target": {"kind": "property", "target_id": "mouth", "property": "width", "scale": 1.0, "additive": false},
+      "mode": "absolute_pose",
+      "base_value": null
+    }],
+    "parent_scoped": false
+  }]
+}
+~~~
+
+For this example, set `bone_layers_json` to `{"42":7}` if bone 42 belongs to AniCraft layer 7. The document and both maps are supplied to the plugin command as strings.
+
+### Input and target boundaries
+
+- Supported host input: `Manual` and `BoneTransform` rotation.
+- Unsupported host inputs fail closed: `LegacyScalar`, translation, and scale require a future explicit provider.
+- Controller-output inputs are resolved by the core dependency graph and are not queried from AniCraft.
+- Bone IDs and layer IDs are numeric host identities; mappings are explicit.
+- Bone angle is read at the current playhead. This is an on-demand command, not a playback observer.
+- GeometryDeform targets are verified through `warp.info`; `warp.pin_move` is never called.
+- SymbolFrame, FrameRange, and Property targets are calculated only because a matching host application command has not been verified.
+- PoseSet1D runtime pose records are not supplied by the current plugin invocation. Durable pose storage is not available in the documented AniCraft extension boundary.
+- JoystickFivePose and multi-input mapping remain unsupported by the one-dimensional mapper.
+- Smart Controller composition remains separate from Form Deform pin evaluation.
+
+## Legacy Slider preview
+
+When `canonical_document_json` is empty, the plugin preserves the original compact Slider workflow:
 
 1. Select the driver layer/armature and driver bone name.
-2. Select the action layer and configure its start/end frame range.
+2. Configure the action layer and frame range.
 3. Set minimum and maximum driver rotation angles.
 4. Choose Exclusive (default) or Inclusive endpoint policy.
-5. Run using the host bone input, or provide manual_value for deterministic tests.
+5. Run with the host bone input, or provide `manual_value` for deterministic testing.
 6. Inspect normalized input and calculated output frame in the plugin log.
 
 Manual input overrides the host query. A missing or malformed bone response is an error; it is never silently replaced with zero.
@@ -20,43 +103,25 @@ Manual input overrides the host query. A missing or malformed bone response is a
 - Exclusive maps [start, end). The end frame is reserved as the wrap point and is never selected; useful when the last frame duplicates the first pose.
 - Inclusive maps [start, end]. Both endpoint frames can be selected when the last pose is distinct.
 - Degenerate mapping helper intervals return start, although Slider validation requires end > start.
-- Rotation endpoints may be reversed; +45° to -45° maps +45° to normalized 0 and -45° to normalized 1.
-
-## Boundaries
-
-- V1 is an on-demand preview command, not a playback/scrubbing evaluator.
-- The plugin does not set the AniCraft timeline or write bone properties; no unverified command IDs are used.
-- action_layer_id is validated as configuration metadata; no host action/timeline API is assumed.
-- Transform calculations are pure-core groundwork for V2; the V1 adapter rejects Transform mode.
-- Bindings are not durably persisted in the AniCraft document.
+- Rotation endpoints may be reversed.
 
 ## Build and test
 
-    cargo test -p smart-controller-core
-    cargo test -p anicraft-smart-controller-plugin
-    cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+~~~sh
+rustup target add wasm32-unknown-unknown
+cargo test -p smart-controller-core
+cargo test -p anicraft-smart-controller-plugin
+cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+~~~
 
+The output is:
 
-## Unified adapter foundations (Phase 5)
+~~~text
+target/wasm32-unknown-unknown/release/anicraft_smart_controller_plugin.wasm
+~~~
 
-The adapter now has isolated modules for:
+Install the WASM file through AniCraft's **Commands → Install Plug-in…** workflow.
 
-- Parsing the verified `bone.info` response by numeric bone ID, with explicit spring-swing and angle-wrapping choices.
-- Assessing target capability and verifying exact geometry pin identity through read-only `warp.info`.
-- Delegating legacy BindingSet / Params migration to `smart-controller-core` while retaining its migration report.
+## Verification status
 
-The adapter also exposes `evaluate_document_preview`, which validates a canonical document, runs the evaluator and composition post-pass through an injected mapper, and returns target capability assessments in deterministic target order. It performs no host writes. Compatibility helpers support legacy-format detection and guarded reverse export to V1 BindingSet / Params while retaining migration reports.\n\nThese modules are foundations only. The existing V1 Slider command still uses its original preview path. Geometry pin mutation is not issued by the new adapter; the documented `warp.pin_move` path requires a host preview/undo transaction. Symbol-frame display, generic property application, playback evaluation and durable document persistence remain unverified or unsupported.
-
-
-### Canonical preview adapter (Phase 5)
-
-The adapter exposes a read-only canonical preview path:
-
-1. Supply manual values keyed by canonical InputId and an explicit bone-ID → AniCraft layer-ID map.
-2. The input provider queries each required layer once with the read-only `bone.info` command, parses stable numeric bone IDs, and creates an invocation-scoped snapshot.
-3. The core evaluator resolves ControllerOutput dependencies, evaluates the graph and performs the independent composition pass using an injected ControllerMapper.
-4. The target preview planner returns composed values paired with their canonical target mappings and capability assessments in TargetId order.
-
-The provider currently supports Manual and BoneTransform Rotation inputs. LegacyScalar sources and Translation/Scale bone channels require an explicit provider implementation and fail closed. Wrapped-angle semantics and spring-swing inclusion are explicit caller choices.
-
-The preview plan is descriptive data only. The host-driven path verifies GeometryDeform element/pin identity with read-only `warp.info`; it does not call target setters or mutate the document. Geometry pin application still requires the host preview/undo transaction; symbol-frame and generic property setters remain unverified. The concrete Pose2D/joystick mapper is a separate core prerequisite and must be supplied through the mapper boundary. No playback, scrubbing, durable document persistence, or Form Deform composition is claimed.
+Native test execution, WASM compilation, and an in-app run must pass before this milestone is marked complete. The plugin is intentionally on-demand and preview-only; no live playback evaluator, durable binding persistence, generic property setter, symbol-frame setter, or mutating geometry-preview transaction is claimed.
