@@ -1,6 +1,6 @@
 # M1 — Evaluation and Host Lifecycle Contracts
 
-**Status:** proposed FDM-side contract; no AniCraft host implementation is included.
+**Status:** FDM-side evaluation request/result DTOs and validation are implemented; AniCraft host conformance is not included.
 **Depends on:** `docs/M1_TARGET_GEOMETRY_CONTRACT.md` and accepted FDM v2 architecture decisions ADM-001 through ADM-007.
 **Purpose:** complete the M1 boundary beyond source-geometry identity and immutable Path2D snapshots.
 
@@ -209,9 +209,9 @@ Diagnostics must identify the failing dependency and whether the operation is sa
 
 ## 9. Required contract test groups
 
-FDM-side tests must cover deterministic evaluation, immutable input/output values, result-envelope validation, complete dependency stamps, coordinate-space mismatch, composition graph validation, serialization/migration, and stable diagnostic codes.
+The M1 evaluation-contract module now tests explicit time-sample validation, source/target identity matching, duplicate source and dependency rejection, model/time/dependency binding, coordinate-space preservation, deterministic output fingerprints, and explicit composition-graph stamps. The request and result values expose read-only accessors and keep their internal state private.
 
-Host-side conformance tests are listed in `docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md`. They are blocked until a separately authorized AniCraft host extension implements the required capabilities.
+Remaining FDM-side work includes the authored deformation persistence schema and named migration tests, plus a concrete composition-graph model with cycle validation. Host-side conformance tests are listed in `docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md`; they remain blocked until a separately authorized AniCraft host extension implements the required capabilities.
 
 ## 10. Explicit non-goals and authorization boundary
 
