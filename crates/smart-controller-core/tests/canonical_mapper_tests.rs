@@ -386,3 +386,59 @@ fn pose_set_requires_exact_controller_binding_set() {
     assert!(result.contributions.is_empty());
     assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 }
+
+
+#[test]
+fn symbol_frame_interpolates_and_rounds_three_authored_anchors() {
+    let controller = controller(
+        MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+        vec![binding(
+            "symbol",
+            TargetMapping::SymbolFrame {
+                symbol_instance_id: "mouth".into(),
+                negative_frame: 2,
+                neutral_frame: 5,
+                positive_frame: 10,
+            },
+            BindingMode::AbsolutePose,
+        )],
+        vec!["driver"],
+    );
+    let mapper = CanonicalControllerMapper::new();
+
+    let negative_midpoint = run(
+        controller.clone(),
+        TypedValue::scalar(-0.5).unwrap(),
+        InputDimension::Scalar,
+        &mapper,
+    ).unwrap();
+    let positive_midpoint = run(
+        controller,
+        TypedValue::scalar(0.5).unwrap(),
+        InputDimension::Scalar,
+        &mapper,
+    ).unwrap();
+
+    assert_eq!(scalar_output(&negative_midpoint, "symbol"), 4.0);
+    assert_eq!(scalar_output(&positive_midpoint, "symbol"), 8.0);
+}
+
+#[test]
+fn discrete_mapping_requires_one_output_binding() {
+    let controller = controller(
+        MappingConfig::Discrete {
+            values: vec![TypedValue::scalar(0.0).unwrap(), TypedValue::scalar(1.0).unwrap()],
+        },
+        vec![property_binding("first", 1.0), property_binding("second", 1.0)],
+        vec!["driver"],
+    );
+    let result = run(
+        controller,
+        TypedValue::scalar(0.0).unwrap(),
+        InputDimension::Scalar,
+        &CanonicalControllerMapper::new(),
+    ).unwrap();
+
+    assert!(result.contributions.is_empty());
+    assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
+}
