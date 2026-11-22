@@ -263,6 +263,73 @@ Evidence:
 - [Plugin nested command execution](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_plugin.rs)
 - [Native Envelope implementation](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_envelope.rs)
 
+### 6.7 Evaluation, rendering, result application, and cache lifecycle
+
+The current AniCraft rendering path is a staged pipeline:
+
+1. **Authored document and timeline evaluation.** `anicraft_doc::evaluate`, `evaluate_scene`, `evaluate_scene_camera`, and `evaluate_timeline` resolve keyframes, tweens, armatures/springs, symbols, groups, hierarchy transforms, and native Asset Warp into a `DisplayList`. Evaluation is pure: it reads the document and frame and does not mutate authored document state.
+2. **Display-list construction.** Each `DisplayItem` contains a resolved path, local-to-stage transform, paint/stroke, color, layer/element identity, clipping/group information, decoded bitmap pixels, and (for a warped bitmap) a prepared native `WarpMesh`. A warped shape's outline is already bent in its evaluated path; a warped bitmap is carried through its mesh by the renderer.
+3. **Render preparation and rasterization.** `anicraft_render::render` consumes an immutable `&DisplayList` and `&View`. It culls and prepares geometry/shaders in parallel, then rasterizes ordered operations in parallel horizontal bands. The CPU renderer is the deterministic oracle.
+4. **Stage render service.** `RenderService` receives `FrameJob` values containing a cloned, structurally shared `Document`, frame, view, onion/camera context, and cache keys. It evaluates each distinct scene once per batch, then renders the requested tiles in parallel.
+5. **Renderer substitution.** An optional `Rasterizer` callback receives only `&DisplayList` and `&View`, and returns pixels or a native GPU image. If it fails, panics, or returns an invalid image size, the CPU oracle draws the frame. This is a renderer replacement/fallback boundary, not a geometry-evaluation or deformation-result application API.
+
+**No external geometry-result injection point was found in the inspected public pipeline.** The render callback cannot mutate the display list, return changed geometry, identify target revisions, or participate in picking/bounds evaluation. It is therefore not a valid FDM geometry integration hook. Post-raster pixel manipulation would also fail to provide coherent geometry for hit testing, bounds, masks, exports, and other display-list consumers.
+
+#### Evaluation consumers and consistency requirement
+
+There is more than one caller of document evaluation:
+
+- `Session::display_list` caches the editing display list by document `StateId`, scene, frame, and open-editing context. The same list is used by hit testing, element bounds, and stage overlays.
+- The stage's `FrameJob::display_list` path calls the document evaluator through `display_list_for` / `display_list_inside`, including onion and camera variants; it does not consume the Session's cached list.
+- Built-in rendering/export paths evaluate movie frames through the document evaluator. The renderer's `render_frame` helper evaluates a frame then renders it. The exporter-plugin frame host likewise calls `anicraft_doc::evaluate` and serializes the resulting display-list items.
+- Player evaluation has its own `evaluate_player` entry point for runtime movie-clip/button state.
+
+**Integration consequence:** a deformation applied only in the stage renderer would make the picture disagree with hit testing, bounds, player output, and exported output. A supported FDM result must enter a shared host-owned evaluated-geometry path (or an explicitly equivalent host contract used by every relevant consumer), while leaving authored source geometry unchanged. The host must also decide how editing-only, camera, onion-skin, symbol, group, and player evaluation contexts resolve FDM data.
+
+#### Cache identity and invalidation
+
+The inspected cache layers are:
+
+- Session display-list cache: `(StateId, scene, frame, open-editing context)`; mutating commands clear it, successful document changes receive a fresh `StateId`, and restore/undo paths clear it.
+- Render scene cache identity: `(StateId, frame, onion settings)`.
+- Rendered frame/tile key: document `StateId`, frame, view transform and dimensions, background, onion settings, and rasterizer identity.
+- Finished images are held in a byte-bounded LRU cache. Stage tiles from previous states/zooms may remain temporarily as visual placeholders; the current key set determines which tiles are drawn as current. Switching documents explicitly forgets the prior document's pictures.
+
+The current keys do not include an FDM dependency fingerprint, target geometry revision, deformation-source revision, animation sample revision, composition revision, or evaluator version as separate dimensions. If FDM authored data is stored inside the host Document and every mutation advances the document `StateId`, whole-document invalidation can remain correct but may be coarse. If runtime deformation inputs or authored data can change outside that state identity, the existing keys are insufficient and stale pictures could be reused.
+
+#### Asynchronous work and stale results
+
+The render worker has an urgent queue and a prefetch queue. New urgent batches replace pending urgent work; new prefetch calls replace the pending prefetch queue. Work already removed from the queue and marked busy is not cancelled. It completes and is inserted into the image cache under the key it was created with. The stage requests repaint and selects tiles by the current job keys, so a completed old-key image is not selected as a current tile, but there is no explicit source-revision validation or stale-result rejection at cache insertion/application time.
+
+This is **latest-pending-work scheduling**, not a general cancellation or stale-result acceptance contract. There is no inspected FDM evaluation task handle, cancellation token, generation check, per-target revision validation, or atomic result-application API. Publish has a separate cancellation control checked by export work; that does not establish cancellation for live deformation evaluation.
+
+#### Ownership and required host integration
+
+| Concern | Existing AniCraft capability | FDM v2 implication |
+|---|---|---|
+| Pure frame evaluation | Deterministic document/frame evaluators producing DisplayLists | Reuse host time/context resolution; FDM supplies deformation-specific evaluation |
+| Evaluated geometry | DisplayItems carry resolved paths/transforms and native warp data | Add a host-owned evaluated-geometry integration contract; do not mutate authored source artwork |
+| Render backend | CPU oracle plus optional replaceable GPU Rasterizer | Renderer callback is not the FDM geometry hook |
+| Shared consumers | Session display list, stage jobs, player evaluator, built-in and plugin exports | Apply FDM consistently before all geometry consumers diverge |
+| Cache identity | Whole-document StateId and frame/view/onion/raster keys | Add explicit FDM dependency/revision identity or guarantee all relevant mutations advance host StateId |
+| Background scheduling | Latest pending urgent/prefetch queues; in-flight jobs finish | FDM needs explicit cancellation/generation/freshness semantics if evaluation is asynchronous |
+| Result application | No external deformation result acceptance/apply API found | AniCraft host extension required for validation and application of FDM results |
+| Failure handling | CPU render fallback for renderer errors; render errors surfaced on FrameImage | FDM invalid/stale/incompatible results need host-level diagnostics and fail-closed handling |
+
+**M0 conclusion:** the host already has a strong pure evaluation and rendering architecture, but not the FDM-facing evaluation/result boundary required by ADM-001 and ADM-007. The likely host-extension surface is before the shared evaluated-geometry representation is consumed by hit testing, stage rendering, player output, and exporters—not inside the rasterizer callback. The exact contract, data flow, and cache-key design remain open decisions; this audit does not authorize implementation or changes to AniCraft.
+
+Evidence:
+- [Document evaluation and DisplayList construction](https://github.com/Mujshanan/anicraft/blob/main/crates/doc/src/eval.rs)
+- [Session display-list cache, hit testing, and bounds](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/lib.rs)
+- [Session stage-picture and display-list cache lifecycle](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/editing.rs)
+- [RenderService, FrameJob, scene/frame keys, and worker queues](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/render_service.rs)
+- [Stage tile selection and rendering requests](https://github.com/Mujshanan/anicraft/blob/main/src/stage.rs)
+- [CPU renderer and immutable DisplayList input](https://github.com/Mujshanan/anicraft/blob/main/crates/render/src/lib.rs)
+- [Native Asset Warp mesh rendering](https://github.com/Mujshanan/anicraft/blob/main/crates/render/src/warp.rs)
+- [Exporter-plugin frame evaluation](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/plugin_export.rs)
+- [Render pipeline ADR 0002](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0002-render-pipeline.md)
+- [Tiled stage rendering ADR 0007](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0007-tiled-stage-rendering.md)
+
 ## 8. Updated capability conclusions
 
 | Concern | Verified AniCraft capability | Remaining FDM v2 gap |
@@ -272,10 +339,10 @@ Evidence:
 | Hierarchy | Folder/mask containment and separate affine rig-parent layer hierarchy | Nonlinear parent deformation mapping remains FDM semantics |
 | Timeline | Timeline/layers/keyframes/tweens/armature pose and native warp pin tweening | FDM property schema, storage, and specialized interpolation contract |
 | Persistence | Explicit serialized Document schema; no generic extension-data slot found | Host-owned versioned FDM extension data |
-| Evaluation | Pure document/frame-to-DisplayList evaluation | External FDM evaluation result integration hook |
-| Cache | Session display-list cache keyed by state/scene/frame/edit context | FDM dependency fingerprint and stale async result contract |
+| Evaluation | Pure document/frame-to-DisplayList evaluation; shared geometry feeds picking, bounds, stage, player, and exports through distinct evaluation entry points | External FDM result application hook shared by all consumers |
+| Cache | Session display-list cache plus render scene/frame/tile caches keyed by whole-document StateId and view context; pending render work is latest-wins | FDM dependency fingerprint/revision identity; explicit cancellation and stale-result rejection contract |
 | Transactions | Atomic mutating commands, rollback, snapshot undo/redo | FDM multi-target/frame-range bake transaction details |
-| Plugin access | Command/document/elements/log ABI; plugin commands nested in one undo step | Durable authored metadata and continuous evaluator are not exposed by this contract |
+| Plugin access | Command/document/elements/log ABI; plugin commands nested in one undo step; exporter plugins read evaluated frames | Durable authored metadata and continuous evaluator/result application are not exposed by this contract |
 
 ## 9. M0 deliverables and exit criteria
 
@@ -287,7 +354,7 @@ Evidence:
 - [x] Timeline/keyframe model inspected; FDM-specific property storage remains a host-extension gap.
 - [x] Current plugin bridge and Document schema rechecked; no generic plugin extension-data API was found in the inspected contract.
 - [x] Pure document evaluation and editor display-list cache path inspected.
-- [ ] External result application, async cancellation, and full render/cache invalidation paths inspected.
+- [x] External result application, async cancellation, and full render/cache invalidation paths inspected; no external geometry-result API or FDM stale-result contract was found.
 - [x] Command transactions and snapshot undo/redo inspected; FDM bake representation/provenance remains open.
 - [ ] Smart Controller/pin separation verified against current tests and source.
 - [ ] Every integration requirement classified with evidence and an owner.
@@ -297,6 +364,11 @@ Evidence:
 
 - [AniCraft Asset Warp implementation](https://github.com/Mujshanan/anicraft/blob/main/crates/doc/src/warp.rs)
 - [AniCraft Asset Warp commands](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_warp.rs)
+- [AniCraft document evaluation](https://github.com/Mujshanan/anicraft/blob/main/crates/doc/src/eval.rs)
+- [AniCraft render service](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/render_service.rs)
+- [AniCraft CPU renderer](https://github.com/Mujshanan/anicraft/blob/main/crates/render/src/lib.rs)
+- [AniCraft stage tile rendering](https://github.com/Mujshanan/anicraft/blob/main/src/stage.rs)
+- [AniCraft exporter plugin frame host](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/plugin_export.rs)
 - [AniCraft plugin guide](https://github.com/Mujshanan/anicraft/blob/main/docs/guide/plugins.md)
 - [AniCraft command reference](https://github.com/Mujshanan/anicraft/blob/main/docs/guide/reference/commands.md)
 - [AniCraft ADR 0079 — Asset Warp](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0079-asset-warp.md)
