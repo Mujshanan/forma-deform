@@ -705,3 +705,76 @@ mod joystick_field_tests {
         assert!(angle.radians().abs() > 3.0);
     }
 }
+
+#[cfg(test)]
+mod pose_grid_tests {
+    use super::*;
+    use crate::ids::BindingId;
+
+    fn scalar_pose(value: f64) -> Pose2D {
+        Pose2D::new(vec![(BindingId::new("out").unwrap(), TypedValue::scalar(value).unwrap())]).unwrap()
+    }
+
+    fn scalar(pose: &Pose2D) -> f64 {
+        pose.get(&BindingId::new("out").unwrap()).unwrap().as_scalar().unwrap()
+    }
+
+    #[test]
+    fn bilinear_grid_uses_nonuniform_spacing_and_axis_zero_fastest() {
+        let mut library = PoseLibrary::new();
+        for (id, value) in [("a",30.0),("b",34.0),("c",60.0),("d",64.0)] {
+            library.register(id, scalar_pose(value)).unwrap();
+        }
+        let result = interpolate_pose_grid(
+            &[&[0.0, 2.0], &[10.0, 20.0]],
+            &["a".into(),"b".into(),"c".into(),"d".into()],
+            &library,
+            &[1.0, 15.0],
+        ).unwrap();
+        assert!((scalar(&result) - 47.0).abs() < 1e-12);
+        let clamped = interpolate_pose_grid(
+            &[&[0.0, 2.0], &[10.0, 20.0]],
+            &["a".into(),"b".into(),"c".into(),"d".into()],
+            &library,
+            &[9.0, 15.0],
+        ).unwrap();
+        assert!((scalar(&clamped) - 49.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn trilinear_grid_uses_axis_zero_fastest_flattening() {
+        let mut library = PoseLibrary::new();
+        for (id, value) in [("p0",0.0),("p1",1.0),("p2",10.0),("p3",11.0),("p4",100.0),("p5",101.0),("p6",110.0),("p7",111.0)] {
+            library.register(id, scalar_pose(value)).unwrap();
+        }
+        let ids = ["p0","p1","p2","p3","p4","p5","p6","p7"].map(str::to_owned);
+        let result = interpolate_pose_grid(&[&[0.0,1.0],&[0.0,1.0],&[0.0,1.0]], &ids, &library, &[0.5,0.5,0.5]).unwrap();
+        assert!((scalar(&result) - 55.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn exact_keyform_does_not_resolve_zero_weight_neighbor_poses() {
+        let mut library = PoseLibrary::new();
+        library.register("only", scalar_pose(42.0)).unwrap();
+        let ids = vec!["only".into(),"missing-x".into(),"missing-y".into(),"missing-xy".into()];
+        let result = interpolate_pose_grid(&[&[0.0,1.0],&[0.0,1.0]], &ids, &library, &[0.0,0.0]).unwrap();
+        assert_eq!(scalar(&result), 42.0);
+    }
+
+    #[test]
+    fn wrapped_angles_blend_circularly_across_the_pi_seam() {
+        let angle_pose = |radians| Pose2D::new(vec![(
+            BindingId::new("angle").unwrap(),
+            TypedValue::angle(radians, true).unwrap(),
+        )]).unwrap();
+        let mut library = PoseLibrary::new();
+        let near_pi = std::f64::consts::PI - 0.05;
+        library.register("a", angle_pose(near_pi)).unwrap();
+        library.register("b", angle_pose(-near_pi)).unwrap();
+        library.register("c", angle_pose(near_pi)).unwrap();
+        library.register("d", angle_pose(-near_pi)).unwrap();
+        let result = interpolate_pose_grid(&[&[0.0,1.0],&[0.0,1.0]], &["a".into(),"b".into(),"c".into(),"d".into()], &library, &[0.5,0.5]).unwrap();
+        let angle = result.get(&BindingId::new("angle").unwrap()).unwrap().as_angle().unwrap();
+        assert!(angle.radians().abs() > 3.0);
+    }
+}
