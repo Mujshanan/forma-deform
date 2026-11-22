@@ -890,11 +890,6 @@ mod tests {
             definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
             definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
         ];
-        let defs = vec![
-            definition("z", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
-            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
-            definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
-        ];
         let graph = CompositionGraph::new(
             "stable-plan", 7, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
@@ -925,7 +920,7 @@ mod tests {
             vec!["output".into()],
         ).unwrap();
         let second_plan = reordered.execution_plan(&defs).unwrap();
-        let ids = |plan: &CompositionExecutionPlan| plan.nodes().iter().map(|node| node.node_id()).collect::<Vec<_>>();
+        let ids = |plan: &CompositionExecutionPlan| plan.nodes().iter().map(|node| node.node_id().to_owned()).collect::<Vec<_>>();
         assert_eq!(ids(&first_plan), ids(&second_plan));
         assert_eq!(ids(&first_plan), vec!["a-node", "c-node", "sequence", "z-node", "output"]);
         let sequence = first_plan.nodes().iter().find(|node| node.node_id() == "sequence").unwrap();
