@@ -294,7 +294,7 @@ fn map_anchored_bindings_with_unit(
                 TypedValue::vector2(x, y)?
             }
             TargetMapping::Property { scale, .. } => {
-                let mapped = eased * scale;
+                let mapped = eased * *scale;
                 match angle_wrapped {
                     Some(wrapped) => TypedValue::angle(mapped, wrapped)?,
                     None => TypedValue::scalar(mapped)?,
