@@ -890,17 +890,6 @@ mod tests {
             definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
             definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
         ];
-        let make_graph = |nodes| CompositionGraph::new(
-            "stable-plan", 7, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
-            nodes, vec!["sequence".into()],
-        ).unwrap();
-        let first = make_graph(vec![
-            CompositionNode::deformer("z-node", "z"),
-            CompositionNode::deformer("a-node", "a"),
-            CompositionNode::deformer("c-node", "c"),
-            CompositionNode::sequential("sequence", vec!["a-node".into(), "c-node".into()]),
-        ]);
-        // z-node must also reach an output; use a weighted blend to make its use explicit.
         let defs = vec![
             definition("z", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
             definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
@@ -940,7 +929,6 @@ mod tests {
         assert_eq!(ids(&first_plan), ids(&second_plan));
         assert_eq!(ids(&first_plan), vec!["a-node", "c-node", "z-node", "sequence", "output"]);
         assert_eq!(first_plan.nodes()[3].dependencies(), &["a-node".to_string(), "c-node".to_string()]);
-        let _ = first;
     }
 
     #[test]
