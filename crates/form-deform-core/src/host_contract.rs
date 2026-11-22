@@ -24,6 +24,10 @@ macro_rules! opaque_id {
             pub fn as_str(&self) -> &str {
                 &self.0
             }
+
+            pub fn validate(&self) -> Result<(), ContractError> {
+                if self.0.trim().is_empty() { Err(ContractError::EmptyIdentifier) } else { Ok(()) }
+            }
         }
     };
 }
@@ -48,6 +52,10 @@ pub struct HostTargetRef {
 
 impl HostTargetRef {
     pub fn validate(&self) -> Result<(), ContractError> {
+        self.namespace.validate()?;
+        self.document_id.validate()?;
+        self.target_kind.validate()?;
+        self.target_id.validate()?;
         if self.generation == 0 {
             return Err(ContractError::InvalidGeneration);
         }
@@ -119,6 +127,7 @@ pub struct CoordinateSpaceDescriptor {
 
 impl CoordinateSpaceDescriptor {
     pub fn validate(&self) -> Result<(), ContractError> {
+        self.id.validate()?;
         if self.dimensions != 2 {
             return Err(ContractError::UnsupportedDimensions(self.dimensions));
         }
