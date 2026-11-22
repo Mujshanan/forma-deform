@@ -749,3 +749,182 @@ Still intentionally not consolidated:
 - Pose-set, joystick and discrete mapping semantics remain underspecified by the present pose data model and are not silently implemented as scalar ranges.
 
 No target output, controller schema, preview behavior, input fallback policy, or Form Deform behavior was intentionally changed by these refactors. CI must verify the resulting branch before this consolidation increment is considered complete.
+
+
+---
+
+## 13. Native Smart Controller authoring specification
+
+**Status:** Proposed product/UI specification; not an implemented AniCraft capability and not authorization to change AniCraft host code.
+
+This section defines how an animator creates controllers, changes controller families, assigns bone inputs and targets, authors switch states, and binds outputs to native AniCraft symbols. It extends this canonical development guide; do not create a separate competing Smart Controller UI plan.
+
+### 13.1 Core interaction model
+
+Keep three operations distinct in the UI and document model:
+
+1. **Controller family and configuration:** what kind of control is authored and what input shape it accepts.
+2. **Input assignment:** where the controller reads values from (manual controls, bone channels, explicit external inputs, or upstream controller outputs).
+3. **Target binding:** which existing AniCraft objects/properties receive the controller's typed outputs.
+
+A controller is not a bone, symbol, layer, or timeline object. It is a document-owned control definition that references stable host identities. It must not duplicate the rig or symbol hierarchy.
+
+### 13.2 Controller families
+
+The initial product catalogue contains five families:
+
+| Family | Input contract | Primary use | Authoring UI |
+|---|---|---|---|
+| Scalar | One Scalar or Angle input | Continuous property, transform or frame-range control | One source selector; range/directed-range/three-anchor mapping editor |
+| Vector / Joystick | One Vector2 input or two explicitly paired Scalar inputs | Two-axis position, orientation or other continuous 2D control | X/Y source assignment, per-axis mapping, optional radial processing, 2D preview |
+| Discrete Switch | One enumerated input or a set of independent Boolean inputs | Mutually exclusive states or independent toggles | State list/editor, exclusive-vs-independent mode, default/fallback and state-to-target bindings |
+| 1D Pose | One Scalar or Angle input | Ordered pose sequence controlled by one continuous value | Ordered pose strip, authored positions, select-vs-blend mode and interpolation controls |
+| 2D Pose | One Vector2 input or two paired Scalar inputs | Spatial pose selection/blending | 2D pose canvas, pose points, interpolation and out-of-bounds policy |
+
+These are product families, not claims that every family is already implemented. The current core has Scalar/Vector2/Angle input dimensions and mapping variants including PoseSet1D, JoystickFivePose and Discrete, but the audit found incomplete canonical mapping semantics and missing explicit discrete input typing. Before a family is marked supported, its input contract, mapper behavior, serialized representation, diagnostics and tests must be complete.
+
+Do not conflate a general Vector2 controller with JoystickFivePose. A two-axis continuous controller maps a vector; a five-pose joystick selects/blends authored center/up/right/down/left poses. They are different mapping modes and may eventually be presented as separate creation choices under the Vector/Pose families.
+
+### 13.3 Creating a controller and changing its family
+
+The native Tools area exposes **Smart Controller**. Activating it opens the contextual Properties workflow and a small controller list/selection surface consistent with AniCraft's existing tool conventions.
+
+Creation flow:
+
+1. Choose **Add Controller**.
+2. Choose a family: Scalar, Vector/Joystick, Discrete Switch, 1D Pose, or 2D Pose.
+3. Enter a name; AniCraft allocates a stable controller identity.
+4. Configure the required input slots.
+5. Add one or more target bindings.
+6. Preview and validate; commit authored changes through normal host commands and undo.
+
+The selected controller's Properties header includes a **Type** selector. Changing family is an explicit **Convert Controller Type…** operation, not an in-place reinterpretation of existing fields.
+
+Conversion rules:
+- Preserve controller identity, name, compatible input assignments, and compatible target bindings only when their types and semantics remain valid.
+- Show a conversion preview listing preserved, transformed, and incompatible data before committing.
+- Require explicit user action to discard or replace incompatible mappings, pose data, or input slots.
+- Never silently coerce Vector2 to Scalar, enum to Boolean, or pose mappings to range mappings.
+- If conversion cannot be lossless, offer **Duplicate as…** or **Create new controller** and leave the original unchanged.
+- The command performs one undoable transaction. Cancel leaves the document unchanged.
+
+### 13.4 Input assignment and bone workflow
+
+Input assignment uses AniCraft's existing selection and bone identities. It must not introduce a second armature or bone picker model.
+
+For a bone-driven input:
+
+1. Select the controller and choose **Add Input** (or choose **Assign from Selection**).
+2. Choose **Bone Transform** as the source.
+3. Pick a bone using the host's existing stage/armature selection or bone hierarchy.
+4. Choose the channel: supported translation component(s), rotation, or scale component(s), as verified against AniCraft's actual bone model and evaluator.
+5. Choose the component/dimension required by the controller: scalar/angle, X/Y scalar pair, or Vector2 where the host exposes it.
+6. Configure units, coordinate space, normalization and fallback only where the host contract supplies those semantics.
+7. Preview the resolved sample and its source identity/freshness.
+
+The Properties panel should show a clickable bone reference (bone name and owning armature/rig context), channel, component mapping and a **Select Bone** action. **Assign from Selection** should use the current native selection when it contains exactly one compatible bone. If selection is ambiguous or incompatible, explain why and open the host-native picker; do not guess.
+
+Input assignment and target assignment are independent. A bone may be an input, an output target, both, or neither. The same bone may be referenced by several controllers if dependency and conflict rules permit it.
+
+For two-axis inputs, allow either one host Vector2 source or two separately assigned scalar channels. Pairing must be explicit and labeled X/Y; do not silently infer that two unrelated sources form a vector.
+
+### 13.5 Target assignment workflow
+
+The target section uses a single **Add Target Binding** command with target-kind choices. It should offer:
+- **Assign from Selection** for a compatible selected object/bone/symbol instance;
+- a host-native object/element picker;
+- a searchable target list grouped by scene/symbol context where the host can enumerate those objects.
+
+A binding stores a stable host object identity plus a typed target/property identity, not a display name alone. Display names are labels and may change. On deletion, replacement, symbol swap, or invalid reference, the host must report an unresolved target instead of redirecting to a different object with the same name.
+
+Binding editor fields are contextual:
+- Bone/property target: bone identity, supported transform/property channel, component, coordinate space and value type.
+- Symbol-frame target: symbol instance identity, symbol/library identity for validation, and frame/state selection or frame-range mapping.
+- Frame-range target: owning timeline/layer/action context, start/end and endpoint policy, only where the host supports it.
+- Geometry-deform target: element/pin identity and offset contract, remaining within Form Deform's independent behavior.
+- Other native property targets: target identity, property identity, value type and supported composition policy.
+
+The actual target kinds and setters must be gated by the AniCraft source audit. Do not expose a UI option merely because it exists in the Forma Deform core if AniCraft cannot safely identify, preview and mutate that target.
+
+### 13.6 Native symbol integration
+
+AniCraft symbols remain authoritative reusable artwork assets in the Library; stage copies are symbol instances. Smart Controller references existing symbol definitions and/or specific symbol instances through stable AniCraft identities. It does not create a parallel "controller symbol", copy symbol artwork into controller data, or replace the Library.
+
+Respect the native symbol distinctions:
+- **Graphic symbols** follow the parent timeline and are the natural first target for frame/pose selection that must scrub with the scene.
+- **Movie clips** run their own timelines independently of the parent timeline. Do not assume a parent-scene frame value selects their internal frame; require a verified instance-level control/evaluation path.
+- **Button symbols** have native Up, Over, Down and Hit frames driven by pointer interaction in Test Movie/export. Smart Controller should not hijack these built-in interaction states. If a controller needs expression/state selection, use a Graphic symbol or explicit target properties unless AniCraft defines a separate, non-conflicting state API.
+
+Symbol workflows:
+1. **Drive an existing instance:** select a symbol instance on the stage, choose Add Target Binding → Symbol, then select a supported operation such as Graphic frame/pose selection or a verified instance property.
+2. **Drive all instances of a symbol:** explicitly choose the Library symbol definition as the scope only if AniCraft provides a safe definition-level target contract. Otherwise create one binding per instance; never assume that changing one instance changes every instance.
+3. **Create switch states from symbols:** choose **Add States from Library…**, select existing compatible Graphic symbols or named symbol frames, and create state entries that reference those assets. This creates controller state references, not new symbols.
+4. **Use symbol frames as poses:** select an existing Graphic symbol instance and map discrete states or a continuous pose input to its frame/frame range, with explicit frame bounds and endpoint policy.
+5. **Swap/rename/delete safety:** preserve identity across rename; validate identity after swap; if the referenced symbol/instance is removed, show a broken-reference diagnostic and offer relink. Never silently bind to a same-named replacement.
+
+The native Properties panel should provide a **Symbol** target picker that searches the Library and, where needed, a separate **Instance** picker for stage instances. Clearly label the scope: *this instance* versus *symbol definition*. The latter is only available if supported by a verified host operation.
+
+### 13.7 Switch authoring and symbol-backed states
+
+A Discrete Switch controller has one of two explicit modes:
+
+- **Exclusive states:** one enum-like input selects exactly one named state (for example Neutral, Happy, Angry, Surprised).
+- **Independent toggles:** each named state has its own Boolean input and multiple states may be active simultaneously.
+
+The UI must not mix these semantics in one ambiguous checkbox list. The mode is chosen at creation or changed through an explicit conversion operation.
+
+A switch state has a stable state ID, display name, optional label/color, and one or more target bindings. A symbol-backed state references an existing Graphic symbol or a supported frame in a Graphic symbol. State entries must not embed/copy symbol content.
+
+**Add Switch** creates a new state or toggle entry, depending on the selected mode. **Add States from Library…** batch-creates entries from selected compatible Library symbols. Reordering changes presentation/order only; it must not change stable IDs or target identity. Deleting a state requires a clear policy for its bindings and is undoable.
+
+### 13.8 Properties window information architecture
+
+Use the existing AniCraft right-side Properties dock and native controls. Do not create a separate dock or panel framework.
+
+Common sections:
+1. **Controller:** name, family/type, enabled/preview status, conversion action.
+2. **Inputs:** source assignments, dimensions, units, source identity, fallback/freshness.
+3. **Processing:** normalization, inversion, dead zone/filtering only when meaningful.
+4. **Mapping / Poses / States:** family-specific configuration.
+5. **Target Bindings:** object/instance identity, target type, property, mapping and diagnostics.
+6. **Composition:** explicit mode/weight/priority/base settings; collapsed by default and only shown for compatible targets.
+7. **Preview / Diagnostics:** immutable input snapshot, resolved values, outputs, missing/stale references and validation errors.
+
+Selection behavior:
+- Controller selected: show the full controller configuration and binding list.
+- Input row selected: show source/channel details and input preview.
+- Target binding selected: show target identity and output mapping.
+- Pose/state selected: show that pose/state's target values and references.
+- Stage bone/symbol selected while the tool is active: offer an explicit **Assign as Input** or **Add as Target** action according to the user's chosen operation; never infer which role the user intended.
+
+The panel may use tabs or collapsible groups only if consistent with AniCraft's existing Properties conventions. The exact component composition and registration API must be confirmed in the host repository before implementation.
+
+### 13.9 Commands, undo and MCP parity
+
+All durable operations go through AniCraft's existing command registry. Native UI and generic MCP tools invoke the same commands and parameter/result contracts.
+
+Proposed command responsibilities (names are conceptual until checked against host naming conventions):
+- controller create/get/list/update/convert/delete;
+- input add/update/remove/assign-from-selection;
+- target binding add/update/remove/assign-from-selection;
+- state/pose add/update/reorder/remove;
+- add states from Library selection;
+- validate and preview.
+
+Document mutations are undoable and atomic. Preview and validation are read-only. MCP must not bypass native selection/identity validation or mutate the document through a private path.
+
+### 13.10 Acceptance criteria
+
+The native authoring design is ready for implementation only when:
+- each controller family has a versioned input/mapping contract and a tested built-in core mapper;
+- conversion is explicit, loss-aware, previewable and undoable;
+- bone inputs and targets use stable AniCraft identities and host-supported channels;
+- symbol targets distinguish Library definition from stage instance;
+- Graphic, Movie clip and Button timeline semantics are respected;
+- switch states can reference existing Library symbols/Graphic frames without copying artwork or hijacking Button pointer states;
+- broken references are diagnosed and can be explicitly relinked;
+- native UI and MCP use the same command registry;
+- all document mutations round-trip through save/reopen and undo/redo;
+- preview remains separate from playback until a first-party frame-evaluation lifecycle is implemented;
+- Smart Controller remains independent of Form Deform pin-deformation evaluation.
+
