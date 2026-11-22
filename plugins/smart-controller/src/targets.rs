@@ -59,7 +59,7 @@ pub fn verify_geometry_pin(
     }
     let pins = response.get("pins").and_then(Value::as_array)
         .ok_or("warp.info response is missing pins")?;
-    if !pins.iter().any(|pin| pin.get("id").and_then(Value::as_u64) == Some(expected_pin)) {
+    if !pins.iter().any(|pin| pin.get("pin").and_then(Value::as_u64) == Some(expected_pin)) {
         return Err(format!("pin ID {expected_pin} was not found on element {expected_element}"));
     }
     Ok(())
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn geometry_pin_identity_is_verified_by_host_ids_not_array_position() {
-        let response = serde_json::json!({"element":17,"pins":[{"id":90,"at":[1.0,2.0]},{"id":12,"at":[3.0,4.0]}]});
+        let response = serde_json::json!({"element":17,"pins":[{"pin":90,"at":[1.0,2.0],"rest":[0.0,0.0]},{"pin":12,"at":[3.0,4.0],"rest":[2.0,2.0]}]});
         assert!(verify_geometry_pin(&response, "17", "12").is_ok());
         assert!(verify_geometry_pin(&response, "17", "1").is_err());
         assert!(verify_geometry_pin(&response, "18", "12").is_err());
@@ -150,6 +150,9 @@ mod tests {
     fn malformed_geometry_identity_fails_closed() {
         assert!(verify_geometry_pin(&serde_json::json!({"pins":[]}), "17", "12").is_err());
         assert!(verify_geometry_pin(&serde_json::json!({"element":17,"pins":[]}), "17", "not-a-pin").is_err());
+        assert!(verify_geometry_pin(&serde_json::json!({"element":0,"pins":[{"pin":12}]}), "0", "12").is_err());
+        assert!(verify_geometry_pin(&serde_json::json!({"element":17,"pins":[{"id":12}]}), "17", "12").is_err(),
+            "AniCraft returns pin, not id");
     }
 
     #[test]
