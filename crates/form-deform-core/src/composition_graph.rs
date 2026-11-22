@@ -600,6 +600,24 @@ mod tests {
     }
 
     #[test]
+    fn sequential_stages_must_chain_input_to_previous_output() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "bad-sequence", 1, target(), reference(), space(),
+            vec![
+                CompositionNode::deformer("a", "a"),
+                CompositionNode::deformer("b", "b"),
+                CompositionNode::sequential("seq", vec!["a".into(), "b".into()]),
+            ],
+            vec!["seq".into()],
+        ).unwrap();
+        assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::IncompatibleValueTypes));
+    }
+
+    #[test]
     fn graph_rejects_incompatible_value_types() {
         let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::AbsoluteGeometry)];
         let graph = CompositionGraph::new(
