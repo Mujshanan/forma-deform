@@ -1,6 +1,6 @@
 # FD-M5 — Deformation Integration
 
-**Status:** single- and multi-target current-frame apply implemented through AniCraft's `plugin.run` transaction; GUI smoke test still required. Timeline-range bake remains outstanding.
+**Status:** single-target, multi-target current-frame apply, and bounded timeline-range bake are implemented through AniCraft's `plugin.run` transaction; GUI smoke test still required.
 
 ## 1. Single-target current-playhead apply
 
@@ -122,10 +122,25 @@ Proposed payload (all coordinates are stage-space pixels):
 6. A batch invoked from a command plug-in still produces one outer `plugin.run` undo step.
 7. The result reports the exact requested frame and stable element/pin IDs.
 
-## 3. Scope boundary
+## 3. Timeline-range bake (implemented in Forma Deform)
+
+The native action adds `bake_range` with inclusive `frame_start` and `frame_end` parameters.
+
+1. Validate a non-reversed inclusive frame range of at most 512 frames.
+2. For each frame, collect manual values and query each bone input using `bone.info {layer, frame}`; evaluate the canonical document at that frame.
+3. Require all frame plans to contain resolved, host-verified, unique GeometryDeform targets.
+4. Query `warp.info {element, frame}` for every target and prepare `warp.pin_move {element, pin, x, y, frame}` payloads.
+5. Enforce a global limit of 512 target writes across the entire range.
+6. Only after all frames have evaluated and all targets have passed preflight, issue the prepared writes inside the enclosing `plugin.run` transaction.
+
+Manual inputs are held constant over the range; bone rotation inputs are sampled per frame. Any preflight failure causes zero writes. Any commit failure propagates for whole-run rollback. The complete bake is one undo step.
+
+This implementation relies on the existing optional `frame` parameter of `bone.info`, `warp.info`, and `warp.pin_move`; it does not change the playhead or invent a frame setter. GUI verification of keyed frames, undo/redo and rollback remains required.
+
+## 4. Scope boundary
 
 - Single-target current-playhead apply is implemented in Forma Deform after the response-shape correction.
-- Multi-target current-frame apply is implemented through `plugin.run`; timeline-range bake is not implemented.
-- The existing `plugin.run` transaction is enough for multi-command plug-in writes; timeline-range bake still needs frame sampling, full-range preflight, resource limits and acceptance tests.
+- Multi-target current-frame apply and bounded timeline-range bake are implemented through `plugin.run`.
+- The existing `plugin.run` transaction is enough for multi-command plug-in writes; timeline-range bake has frame sampling, full-range preflight and resource limits; GUI acceptance tests remain.
 - `warp.pin_move_batch` is a proposed AniCraft host API, not an existing command. It is the recommended follow-up for native host-owned authoring and a single preflight/commit boundary.
 - M4 durable save/load and in-AniCraft GUI verification remain prerequisites before calling full M5 complete.
