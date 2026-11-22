@@ -189,7 +189,7 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
                 ));
             }
             let item = &session.target_preview.items[0];
-            if item.host_verification != targets::HostTargetVerification::Verified {
+            if item.host_verification != preview_plan::HostTargetVerification::Verified {
                 return Err("target identity was not verified by the host; refusing to apply".into());
             }
             let result = targets::apply_geometry_target(&item.target, item.value)?;
@@ -369,6 +369,8 @@ mod tests {
         let manifest: Value = serde_json::from_str(MANIFEST).unwrap();
         let params = manifest["params"].as_object().unwrap();
         assert!(params.len() <= 32);
+        assert_eq!(params["target_action"]["default"], "preview");
+        assert_eq!(params["target_action"]["options"], json!(["preview", "apply_current_frame"]));
         for spec in params.values() {
             assert!(matches!(
                 spec["type"].as_str(),
