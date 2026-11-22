@@ -94,7 +94,18 @@ impl CanonicalDocument {
         let version = schema.get("version").and_then(serde_json::Value::as_u64)
             .ok_or_else(|| CoreError::Serialization("canonical schema version is missing or invalid".into()))?;
         match version {
-            1 => { schema.insert("version".into(), serde_json::Value::from(CURRENT_SCHEMA_VERSION)); }
+            1 => {
+                let has_v2_mapping = value.get("controllers")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|controllers| controllers.iter().any(|controller| {
+                        controller.get("mapping").and_then(|mapping| mapping.get("kind"))
+                            .and_then(serde_json::Value::as_str) == Some("pose_grid")
+                    }));
+                if has_v2_mapping {
+                    return Err(CoreError::Serialization("PoseGrid is not valid in canonical schema v1".into()));
+                }
+                schema.insert("version".into(), serde_json::Value::from(CURRENT_SCHEMA_VERSION));
+            }
             v if v == CURRENT_SCHEMA_VERSION as u64 => {}
             v => return Err(CoreError::UnsupportedSchemaVersion(v as u32)),
         }
@@ -514,6 +525,24 @@ mod canonical_schema_migration_tests {
         expected["schema"]["version"] = serde_json::json!(CURRENT_SCHEMA_VERSION);
         let actual: serde_json::Value = serde_json::from_str(&migrated.to_json().unwrap()).unwrap();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn schema_v1_cannot_smuggle_a_v2_only_mapping() {
+        let v1 = serde_json::json!({
+            "schema": {"name": SCHEMA_NAME, "version": 1},
+            "inputs": [],
+            "controllers": [{
+                "id": "controller",
+                "enabled": true,
+                "inputs": [],
+                "dependencies": [],
+                "mapping": {"kind":"pose_grid","axes":[],"pose_ids":[]},
+                "bindings": [],
+                "parent_scoped": false
+            }]
+        });
+        assert!(CanonicalDocument::from_json(&v1.to_string()).is_err());
     }
 
     #[test]
