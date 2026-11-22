@@ -1,7 +1,7 @@
 # Forma Deform — UI/UX Design Specification
 
 **Product:** Forma Deform for AniCraft  
-**Design status:** Proposed native-tool UX specification  
+**Design status:** Proposed native-tool UX specification; M3A command-dialog implementation in progress  
 **Scope:** M3 native authoring-tool design; respects current prototype and host capability limits.
 
 ## 1. Product experience
@@ -293,13 +293,20 @@ Use AniCraft theme tokens if available; do not hard-code a separate theme implem
 
 ## 13. Implementation sequence
 
-### M3 — Native authoring UI design and implementation
-- Build the native tool context using AniCraft's existing panel and command infrastructure.
-- Implement selection-aware inspector and supported tool visibility.
-- Add the binding editor with source/target identity and validation.
-- Add on-demand, non-mutating preview display.
-- Add diagnostic states and accessible keyboard/focus behavior.
-- Verify host selection, panel docking, command dialog, and undo behavior in AniCraft.
+### M3A — SDK-supported command authoring (implementable now)
+- Use AniCraft command manifests as the native configuration dialogs; do not create a parallel browser or desktop UI.
+- Expose explicit driver layer/bone identity, optional evaluation frame, neutral/range, endpoint policy, target IDs, and spring policy.
+- Keep Smart Controller preview read-only and report the sampled frame and calculated output.
+- Keep Form Deform calculation-only by default; applying a pin position is an explicit undoable host command.
+- Validate stable numeric bone/element/pin IDs and fail closed on missing or mismatched host data.
+- Add command-level tests and document the exact preview/apply behavior.
+
+### M3B — Host-dependent native workspace (blocked pending AniCraft APIs)
+- Dockable custom panel and selection-aware inspector.
+- Interactive stage overlays, mesh/pin handles, and preview displacement rendering.
+- Durable binding editor and document persistence.
+- Continuous playback/scrubbing evaluation.
+- Implement only after AniCraft exposes and verifies panel, overlay, document-extension, and evaluator APIs.
 
 ### Follow-on work
 - M4: versioned binding persistence through a host-owned document extension. Until then, do not present drafts as durable.
@@ -309,11 +316,11 @@ Use AniCraft theme tokens if available; do not hard-code a separate theme implem
 
 ## 14. Acceptance criteria
 
-- The workspace is visibly part of AniCraft and reuses its stage and timeline.
+- M3B requires the workspace to be visibly part of AniCraft and reuse its stage and timeline; M3A uses native command dialogs only.
 - No duplicate document, layer tree, timeline, renderer, undo stack, or playback runtime is introduced.
 - Tool availability follows the selected target's verified capabilities.
 - A user can inspect a target and understand its stable host identity.
-- A user can configure a supported one-dimensional controller mapping with explicit source, neutral, range, and easing.
+- In M3A, a user can configure the supported Slider mapping with explicit source, neutral, range, endpoint policy, and optional sample frame.
 - Preview clearly exposes raw input, normalized input, mapping result, and output.
 - Preview does not mutate authored geometry, keyframes, or document data.
 - Invalid and unsupported states are actionable and never silently coerced.
