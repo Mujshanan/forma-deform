@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn deserialized_host_references_are_revalidated() {
         let json = sample_document().to_json().unwrap();
-        let invalid = json.replace("\\"target_id\\":\\"shape-1\\"", "\\"target_id\\":\\" \\"");
+        let invalid = json.replace(r#""target_id":"shape-1""#, r#""target_id":" ""#);
         assert_eq!(FdmDocument::from_json(&invalid), Err(PersistenceError::InvalidTarget));
     }
 
