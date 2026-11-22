@@ -589,6 +589,13 @@ mod tests {
     }
 
     #[test]
+    fn evaluation_request_has_an_explicit_versioned_schema() {
+        let request = request();
+        assert_eq!(request.schema_name(), EVALUATION_REQUEST_SCHEMA);
+        assert_eq!(request.schema_version(), EVALUATION_REQUEST_SCHEMA_VERSION);
+    }
+
+    #[test]
     fn request_requires_sources_and_unique_target_identities() {
         assert_eq!(
             EvaluationRequest::new("r", vec![], model(), time(), vec![], "stage", None),
