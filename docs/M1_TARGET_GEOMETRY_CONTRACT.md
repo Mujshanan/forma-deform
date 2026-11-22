@@ -1,6 +1,22 @@
 # M1 Proposal — Stable Target Identity and Revisioned Geometry Snapshots
 
-**Status:** Proposed contract for review; not yet an accepted architecture decision  
+**Status:** Proposed contract for review; not yet an accepted architecture decision
+
+## Implementation progress — FDM-side contract primitives
+
+The first implementation slice now exists in `form-deform-core::host_contract`:
+
+- Distinct opaque host namespace, document, target-kind, target, and coordinate-space identifiers.
+- Mandatory host target generation token, so ID reuse cannot silently resurrect an old binding.
+- Separate target-scoped geometry and topology revision tokens.
+- Fingerprints carry an explicit algorithm identifier and digest.
+- A typed coordinate-space descriptor validates 2D scope, declared linear units, and finite positive scale.
+- Generic, versioned geometry snapshot envelopes keep payload encoding independent from identity and revision semantics.
+- Snapshot stamps compare target identity, geometry revision, topology revision, and fingerprint independently.
+
+This is intentionally only the FDM-side contract layer. It does not generate host identities, acquire snapshots, persist data, implement AniCraft revision tracking, or apply results. The AniCraft-side gaps and open decisions below remain blocking for end-to-end host integration. The current implementation uses no new dependencies and includes native unit tests; CI is running on this PR revision.
+
+  
 **Scope:** Forma Deform ↔ AniCraft host boundary  
 **Depends on:** ADM-001, ADM-002, ADM-007, CCC-01.5  
 **Out of scope:** AniCraft implementation, persistence API design, evaluated-geometry injection, scheduling/cancellation, cache policy, animation sampling, bake transactions, multi-source composition
