@@ -214,7 +214,7 @@ This document is an architecture and development plan. It does not authorize cha
 
 ## 11. FD-M5 — Target application first slice
 
-**Status:** single- and multi-target current-playhead apply implemented in the Smart Controller adapter using AniCraft's actual `warp.info` response. GUI smoke test remains pending. Timeline-range bake is not implemented.
+**Status:** single- and multi-target current-playhead apply plus bounded timeline-range bake implemented in the Smart Controller adapter using AniCraft's frame-aware `bone.info`, `warp.info`, and `warp.pin_move` commands. GUI smoke test remains pending.
 
 ### Supported operations
 
@@ -227,6 +227,12 @@ This document is an architecture and development plan. It does not authorize cha
 
 A plug-in-side batch over existing `warp.pin_move` commands is implemented. The proposed `warp.pin_move_batch` remains an optional host-owned API for lower call overhead and reusable native callers; it is not required for the current plug-in batch and does not exist yet. Its payload, validation rules, limits and host test plan are specified in [FD-M5 deformation integration](docs/FD-M5-DEFORMATION-INTEGRATION.md).
 
+### Timeline-range bake
+
+- `bake_range` evaluates each inclusive frame using frame-specific bone rotation inputs.
+- The entire range is preflighted before writes; range and total writes are each capped at 512.
+- Prepared pin writes include explicit frame IDs and commit in one `plugin.run` transaction.
+
 ### Verification and acceptance
 
 - [x] Source-level host contract reviewed against AniCraft's `cmds_warp.rs`, `cmds_plugin.rs`, plug-in policy and atomic-run tests.
@@ -235,7 +241,7 @@ A plug-in-side batch over existing `warp.pin_move` commands is implemented. The 
 - [ ] Run in the AniCraft GUI: single/multi apply, verify keying, one-step Undo and Redo.
 - [ ] Force a commit-time failure and verify whole-run rollback.
 - [ ] Verify Cancel leaves the document unchanged.
-- [ ] Implement timeline-range bake after persistent M4 host bindings and frame-range semantics are available.
+- [ ] Run range bake in AniCraft and verify every frame, one-step Undo/Redo and full rollback.
 
 ## 10. FD-M1 — Canonical one-dimensional Smart Controller mapper
 
