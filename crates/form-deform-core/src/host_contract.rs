@@ -6,7 +6,8 @@
 /// A non-empty opaque identifier issued by the host.
 macro_rules! opaque_id {
     ($name:ident) => {
-        #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[serde(transparent)]
         pub struct $name(String);
 
         impl $name {
@@ -33,7 +34,8 @@ opaque_id!(CoordinateSpaceId);
 
 /// Stable host identity. The generation is mandatory because host numeric IDs
 /// are not assumed to be permanently non-reusable after deletion/import.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HostTargetRef {
     pub namespace: HostNamespace,
     pub document_id: HostDocumentId,
@@ -52,14 +54,15 @@ impl HostTargetRef {
 }
 
 /// Host-issued, target-scoped source revisions.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GeometryRevision(pub u64);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TopologyRevision(pub u64);
 
 /// A deterministic content digest with an explicit algorithm/canonicalization ID.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GeometryFingerprint {
     pub algorithm: String,
     pub digest: Vec<u8>,
@@ -77,18 +80,18 @@ impl GeometryFingerprint {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CoordinateSpaceKind {
     TargetLocalRest,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AxisOrientation {
     XRightYUp,
     XRightYDown,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CoordinateOrigin {
     TopLeft,
     BottomLeft,
@@ -97,7 +100,8 @@ pub enum CoordinateOrigin {
 
 /// Explicit description of the coordinates carried by a geometry payload.
 /// Unit names and scale are supplied by the host; FDM does not infer them.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CoordinateSpaceDescriptor {
     pub id: CoordinateSpaceId,
     pub kind: CoordinateSpaceKind,
@@ -215,7 +219,8 @@ impl GeometrySnapshot {
 }
 
 /// The exact source dependency an evaluation result must report.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GeometrySnapshotStamp {
     target: HostTargetRef,
     geometry_revision: GeometryRevision,
