@@ -157,3 +157,114 @@ impl PersistentBindingDocument {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        canonical::{BindingMode, ControllerBinding, MappingConfig, TargetMapping},
+        ids::{BindingId, InputId, TargetId},
+        input::{FallbackPolicy, InputDimension, InputSource},
+    };
+
+    fn sample_record() -> (Vec<InputDefinition>, Controller) {
+        let input_id = InputId::new("jaw-angle").unwrap();
+        let input = InputDefinition {
+            id: input_id.clone(),
+            source: InputSource::Manual,
+            dimension: InputDimension::Scalar,
+            fallback: FallbackPolicy::Reject,
+        };
+        let controller = Controller {
+            id: ControllerId::new("jaw-controller").unwrap(),
+            enabled: true,
+            inputs: vec![input_id],
+            dependencies: vec![],
+            mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+            bindings: vec![ControllerBinding {
+                id: BindingId::new("jaw-width").unwrap(),
+                target_id: TargetId::new("property:jaw:width").unwrap(),
+                target: TargetMapping::Property {
+                    target_id: "jaw".into(),
+                    property: "width".into(),
+                    scale: 1.0,
+                    additive: false,
+                },
+                mode: BindingMode::AbsolutePose,
+                base_value: None,
+                composition: None,
+            }],
+            parent_scoped: false,
+        };
+        (vec![input], controller)
+    }
+
+    #[test]
+    fn versioned_payload_round_trips_and_preserves_revision() {
+        let (inputs, controller) = sample_record();
+        let mut payload = PersistentBindingDocument::new();
+        payload.upsert_controller(inputs, controller).unwrap();
+        let json = payload.to_json().unwrap();
+        let decoded = PersistentBindingDocument::from_json(&json).unwrap();
+        assert_eq!(decoded, payload);
+        assert_eq!(decoded.revision, 1);
+    }
+
+    #[test]
+    fn invalid_upsert_is_atomic_and_does_not_advance_revision() {
+        let (inputs, mut controller) = sample_record();
+        let mut payload = PersistentBindingDocument::new();
+        controller.mapping = MappingConfig::Range1D { minimum: 0.0, neutral: 0.0, maximum: 1.0 };
+        assert!(payload.upsert_controller(inputs, controller).is_err());
+        assert_eq!(payload.revision, 0);
+        assert!(payload.controller_document.controllers.is_empty());
+    }
+
+    #[test]
+    fn replacing_controller_prunes_unreferenced_inputs() {
+        let (inputs, controller) = sample_record();
+        let mut payload = PersistentBindingDocument::new();
+        payload.upsert_controller(inputs, controller.clone()).unwrap();
+        let mut replacement = controller;
+        replacement.enabled = false;
+        payload.upsert_controller(Vec::new(), replacement).unwrap();
+        assert_eq!(payload.revision, 2);
+        assert!(payload.controller_document.inputs.is_empty());
+    }
+
+    #[test]
+    fn remove_controller_prunes_inputs_and_increments_revision() {
+        let (inputs, controller) = sample_record();
+        let controller_id = controller.id.clone();
+        let mut payload = PersistentBindingDocument::new();
+        payload.upsert_controller(inputs, controller).unwrap();
+        payload.remove_controller(&controller_id).unwrap();
+        assert_eq!(payload.revision, 2);
+        assert!(payload.controller_document.inputs.is_empty());
+        assert!(payload.controller_document.controllers.is_empty());
+    }
+
+    #[test]
+    fn unsupported_storage_schema_versions_fail_closed() {
+        let payload = PersistentBindingDocument::new();
+        let mut value: serde_json::Value = serde_json::from_str(&payload.to_json().unwrap()).unwrap();
+        value["schema"]["version"] = serde_json::json!(2);
+        assert!(PersistentBindingDocument::from_json(&value.to_string()).is_err());
+    }
+
+    #[test]
+    fn unknown_persisted_fields_fail_closed() {
+        let payload = PersistentBindingDocument::new();
+        let mut value: serde_json::Value = serde_json::from_str(&payload.to_json().unwrap()).unwrap();
+        value["unexpected"] = serde_json::json!(true);
+        assert!(PersistentBindingDocument::from_json(&value.to_string()).is_err());
+    }
+
+    #[test]
+    fn missing_controller_cannot_be_removed() {
+        let mut payload = PersistentBindingDocument::new();
+        let missing = ControllerId::new("missing").unwrap();
+        assert!(payload.remove_controller(&missing).is_err());
+        assert_eq!(payload.revision, 0);
+    }
+}
