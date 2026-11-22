@@ -59,7 +59,8 @@ const MANIFEST: &str = r##"{
     "neutral_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral X anchor"},
     "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
     "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
-    "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"}
+    "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"},
+    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame"], "default": "preview", "label": "Target action (Apply writes one pin key at the playhead)"},
   }
 }"##;
 
@@ -172,7 +173,33 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
     for diagnostic in &session.evaluation.evaluation.diagnostics {
         ac::log(&format!("Controller diagnostic: {diagnostic:?}"));
     }
-    ac::log("Read-only preview only: no target setter, keyframe write, timeline command, or document mutation was issued.");
+
+    match p.get("target_action").and_then(Value::as_str).unwrap_or("preview") {
+        "preview" => {
+            ac::log("Preview only: no target setter, keyframe write, timeline command, or document mutation was issued.");
+        }
+        "apply_current_frame" => {
+            if !session.target_preview.unresolved_targets.is_empty() {
+                return Err("cannot apply while the preview contains unresolved output targets".into());
+            }
+            if session.target_preview.items.len() != 1 {
+                return Err(format!(
+                    "current-frame apply requires exactly one resolved target; found {}",
+                    session.target_preview.items.len()
+                ));
+            }
+            let item = &session.target_preview.items[0];
+            if item.host_verification != targets::HostTargetVerification::Verified {
+                return Err("target identity was not verified by the host; refusing to apply".into());
+            }
+            let result = targets::apply_geometry_target(&item.target, item.value)?;
+            ac::log(&format!(
+                "Applied {} at the current playhead via warp.pin_move. The host command owns the undo step; result: {}",
+                item.target_id, result
+            ));
+        }
+        other => return Err(format!("unsupported target_action '{other}'")),
+    }
     Ok(())
 }
 
@@ -306,7 +333,7 @@ fn run(p: &Value) -> Result<(), String> {
                     "workflow", "legacy_input", "input_source", "bone_id", "layer_id",
                     "input_minimum", "input_neutral", "input_maximum", "easing",
                     "bone_angle_policy", "angle_semantics", "element_id", "pin_id",
-                    "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y",
+                    "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y", "target_action",
                 ] {
                     object.remove(key);
                 }
