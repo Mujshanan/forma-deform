@@ -1,6 +1,6 @@
 //! First-party mapper for the canonical Smart Controller document model.
 //!
-//! This module maps one explicitly declared driver input to typed binding
+//! This module maps explicitly declared driver inputs to typed binding
 //! outputs. It is pure: it does not query the host, mutate document state,
 //! compose contributions, or apply deformation.
 //!
@@ -9,9 +9,9 @@
 //! - DirectedRange1D maps its directed start/end interval to the signed range.
 //! - Discrete and PoseSet1D use a normalized signed driver domain of [-1, 1].
 //!
-//! PoseSet1D pose data is supplied by the runtime PoseLibrary. The library is
-//! deliberately separate from canonical schema v1 until durable pose storage
-//! has an explicit, versioned document-extension contract.
+//! PoseSet1D, JoystickFivePose, and PoseGrid pose data are supplied by the
+//! runtime PoseLibrary. Pose contents remain separate from canonical document
+//! persistence; schema v2 versions the PoseGrid mapping configuration only.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -69,12 +69,9 @@ impl PoseLibrary {
     }
 }
 
-/// Built-in canonical mapper for one-dimensional controller configurations.
-///
-/// The mapper supports Range1D, ThreeAnchorRange, DirectedRange1D, Discrete
-/// and PoseSet1D. JoystickFivePose remains an explicit unsupported capability
-/// here; it requires a two-dimensional pose-field mapper and is not silently
-/// coerced into a scalar mapping.
+/// Built-in canonical mapper for scalar, one-dimensional, and multi-axis
+/// controller configurations. Multi-input variants declare their axis order
+/// explicitly and are never coerced into one-dimensional mappings.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CanonicalControllerMapper {
     poses: PoseLibrary,
