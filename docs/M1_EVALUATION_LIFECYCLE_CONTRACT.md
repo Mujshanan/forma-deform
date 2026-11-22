@@ -210,7 +210,7 @@ Diagnostics must identify the failing dependency and whether the operation is sa
 
 The M1 evaluation-contract module includes tests for explicit time-sample validation, source/target identity matching, duplicate source and dependency rejection, model/time/dependency binding, coordinate-space preservation, deterministic output fingerprints, and explicit composition-graph stamps. The request and result values expose read-only accessors and keep their internal state private. The current PR #30 head passed the complete GitHub Actions CI workflow, including workspace tests and all three release WASM builds (run #690).
 
-Remaining FDM-side work includes the authored deformation persistence schema and named migration tests, plus a concrete composition-graph model with cycle validation. Host-side conformance tests are listed in `docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md`; they remain blocked until a separately authorized AniCraft host extension implements the required capabilities.
+FDM-owned authored persistence and typed composition-graph validation are implemented in `docs/M1_FDM_PERSISTENCE_AND_COMPOSITION_SCHEMA.md` and the `persistence` / `composition_graph` modules. The v1 schema is the first persisted format; no legacy format is silently upgraded. Future schema changes require named deterministic migrations. Host-side conformance tests are listed in `docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md`; they remain blocked until a separately authorized AniCraft host extension implements the required capabilities.
 
 ## 10. Explicit non-goals and authorization boundary
 
