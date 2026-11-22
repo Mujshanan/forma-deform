@@ -85,9 +85,10 @@ pub fn evaluate_host_document_preview<M: ControllerMapper>(
     )?;
     let plan = evaluate_document_preview(document, &snapshot, mapper, composition_context)
         .map_err(|error| error.to_string())?;
-    let target_preview = crate::preview_plan::build_host_target_preview_plan(
+    let target_preview = crate::preview_plan::build_host_target_preview_plan_at_frame(
         document,
         &plan.evaluation,
+        host_context.frame,
     )?;
     Ok(HostPreviewSession {
         evaluation: plan.evaluation,
