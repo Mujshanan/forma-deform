@@ -3,6 +3,8 @@
 //! These types describe data supplied by a host adapter. They do not allocate
 //! host IDs, read documents, persist bindings, or apply deformation results.
 
+use serde::{Deserialize, Serialize};
+
 /// A non-empty opaque identifier issued by the host.
 macro_rules! opaque_id {
     ($name:ident) => {
