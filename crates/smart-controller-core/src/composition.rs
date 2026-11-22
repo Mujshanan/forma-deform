@@ -7,13 +7,13 @@ use crate::{
     contribution::{BaseRef, CompositionMode, Contribution},
     diagnostic_codes::{Diagnostic, DiagnosticSeverity, COMPOSITION_NO_ELIGIBLE},
     error::CoreError,
-    ids::{BindingId, ControllerId, InputId, TargetId},
-    input::{FallbackPolicy, InputDefinition, InputDimension, InputSample, InputSnapshot, InputSource},
-    canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
-    evaluator::{evaluate, ControllerMapper, EvaluationResult},
+    evaluator::{evaluate, ControllerMapper},
     graph::ControllerGraph,
+    ids::TargetId,
+    input::{InputDefinition, InputSnapshot},
     value::{Angle, TypedValue},
 };
+pub use crate::evaluator::EvaluationResult;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Explicit values needed to resolve non-authored additive bases.
