@@ -2,6 +2,7 @@
 pub mod grid;
 pub mod interpolation;
 pub mod triangulated;
+pub mod controller_mapper;
 
 use crate::{error::CoreError, pose::Pose2D, value::Vector2};
 
@@ -21,3 +22,7 @@ impl PoseMapping2D for triangulated::TriangulatedMapping {
         self.evaluate(point)
     }
 }
+
+pub use controller_mapper::{
+    AdvancedControllerMapper, AdvancedMappingEntry, AdvancedMappingRegistry, AdvancedPoseMapping,
+};
