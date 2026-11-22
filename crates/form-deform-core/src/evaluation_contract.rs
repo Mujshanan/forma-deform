@@ -595,6 +595,25 @@ mod tests {
     }
 
     #[test]
+    fn host_dependency_stamps_reject_zero_revisions() {
+        assert_eq!(
+            DependencyStamp::Transform { target: target(1), revision: 0 }.validate(),
+            Err(EvaluationContractError::InvalidRevision)
+        );
+        assert_eq!(
+            DependencyStamp::Hierarchy {
+                document_id: HostDocumentId::new("doc-1").unwrap(),
+                revision: 0,
+            }.validate(),
+            Err(EvaluationContractError::InvalidRevision)
+        );
+        assert_eq!(
+            DependencyStamp::NativeAssetWarp { target: target(1), revision: 0 }.validate(),
+            Err(EvaluationContractError::InvalidRevision)
+        );
+    }
+
+    #[test]
     fn result_is_bound_to_exact_source_model_time_and_dependencies() {
         let request = request();
         let result = EvaluatedGeometryResult::new(
