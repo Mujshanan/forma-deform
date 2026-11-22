@@ -1,9 +1,8 @@
 //! AniCraft Smart Controller command adapter.
 //!
-//! V1 retains the original Slider preview. Canonical preview accepts a
-//! versioned controller document as a command parameter, reads verified host
-//! inputs on demand, and reports a deterministic read-only target plan.
-//! It never applies target values or drives playback.
+//! The native settings dialog authors a constrained canonical geometry controller
+//! or runs the retained legacy Slider preview. The adapter reads verified host
+//! inputs on demand and reports a deterministic, read-only target plan.
 pub mod adapter;
 pub mod compatibility;
 pub mod input_provider;
@@ -276,9 +275,6 @@ fn run(p: &Value) -> Result<(), String> {
                     "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y",
                 ] {
                     object.remove(key);
-                }
-                if object.get("legacy_input").and_then(Value::as_str) == Some("manual") {
-                    object.insert("manual_value".into(), json!(p.get("manual_value").and_then(Value::as_f64).unwrap_or(0.0)));
                 }
             }
             let params: Params = serde_json::from_value(legacy_params)
