@@ -18,16 +18,16 @@ const MANIFEST: &str = r##"{
   "author": "Mujshanan",
   "description": "Calculate a deterministic bone-angle-to-action-frame Slider preview.",
   "params": {
-    "mode": {"type": "string", "default": "slider", "label": "Controller mode (V1: slider)"},
+    "mode": {"type": "choice", "options": ["slider"], "default": "slider", "label": "Controller mode (V1: slider)"},
     "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID"},
-    "driver_bone_name": {"type": "string", "default": "Head", "label": "Driver bone name"},
+    "driver_bone_name": {"type": "choice", "options": ["Head"], "default": "Head", "label": "Driver bone name"},
     "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID"},
-    "min_rotation_deg": {"type": "number", "default": -45, "label": "Minimum driver angle (degrees)"},
-    "max_rotation_deg": {"type": "number", "default": 45, "label": "Maximum driver angle (degrees)"},
+    "min_rotation_deg": {"type": "number", "min": -360, "max": 360, "default": -45, "label": "Minimum driver angle (degrees)"},
+    "max_rotation_deg": {"type": "number", "min": -360, "max": 360, "default": 45, "label": "Maximum driver angle (degrees)"},
     "action_start_frame": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Action start frame"},
     "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Action end frame"},
-    "endpoint_policy": {"type": "string", "default": "exclusive", "label": "Endpoint policy: exclusive or inclusive"},
-    "manual_value": {"type": "number", "label": "Manual driver angle (overrides bone query)"}
+    "endpoint_policy": {"type": "choice", "options": ["exclusive", "inclusive"], "default": "exclusive", "label": "Endpoint policy"},
+    "manual_value": {"type": "number", "min": -360, "max": 360, "default": 0, "label": "Manual driver angle (degrees)"}
   }
 }"##;
 
@@ -68,12 +68,30 @@ fn run(p: &Value) -> Result<(), String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn manifest_uses_only_anicraft_supported_parameter_types() {
+        let manifest: Value = serde_json::from_str(MANIFEST).unwrap();
+        let params = manifest["params"].as_object().unwrap();
+        for (name, spec) in params {
+            let kind = spec["type"].as_str().unwrap();
+            assert!(
+                matches!(kind, "number" | "int" | "bool" | "choice" | "color"),
+                "unsupported AniCraft parameter type {kind:?} for {name}"
+            );
+            if kind == "choice" {
+                assert!(!spec["options"].as_array().unwrap().is_empty());
+            }
+        }
+    }
+
     #[test]
     fn bone_resolution_uses_bone_info_response_shape() {
         let data = json!({"armatures":[{"bones":[{"name":"Head","angle":12.5},{"name":"Jaw","angle":-4.0}]}]});
         assert_eq!(find_driver_bone(&data, "Jaw"), Some(-4.0));
         assert_eq!(find_driver_bone(&data, "Missing"), None);
     }
+
     #[test]
     fn malformed_bone_info_fails_closed() {
         assert_eq!(find_driver_bone(&json!({"armatures":[]}), "Head"), None);
