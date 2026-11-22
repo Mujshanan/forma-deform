@@ -373,6 +373,48 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_constructor_rejects_zero_revisions_and_generation() {
+        let coordinate_space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let fingerprint = GeometryFingerprint {
+            algorithm: "anicraft-path2d-sha256-v1".into(),
+            digest: vec![7; 32],
+        };
+        assert_eq!(
+            GeometrySnapshot::new(
+                target(1), GeometryRevision(0), TopologyRevision(1),
+                fingerprint.clone(), coordinate_space.clone(), "Path2D", 1, vec![1, 2],
+            ).unwrap_err(),
+            ContractError::InvalidRevision
+        );
+        assert_eq!(
+            GeometrySnapshot::new(
+                target(0), GeometryRevision(1), TopologyRevision(1),
+                fingerprint, coordinate_space, "Path2D", 1, vec![1, 2],
+            ).unwrap_err(),
+            ContractError::InvalidGeneration
+        );
+    }
+
+    #[test]
+    fn freshness_classifies_revision_regression() {
+        let captured = stamp(1, 8, 6, 9);
+        let current = stamp(1, 7, 5, 9);
+        let freshness = SnapshotFreshness::compare(&captured, &current).unwrap();
+        assert!(!freshness.is_current());
+        assert!(freshness.geometry_revision_regressed);
+        assert!(freshness.topology_revision_regressed);
+    }
+
+    #[test]
     fn fingerprint_requires_declared_algorithm_and_content_digest() {
         assert!(GeometryFingerprint {
             algorithm: "sha256-v1".into(),
