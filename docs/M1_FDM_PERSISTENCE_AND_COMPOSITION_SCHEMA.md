@@ -1,6 +1,6 @@
 # M1 — FDM Authored Persistence and Composition Graph Schema
 
-**Status:** FDM-side v1 schema and graph validation implemented in PR #31; CI pending.  
+**Status:** FDM-side v1 schema and graph validation implemented; PR #31 CI run #727 passed.  
 **Ownership:** Forma Deform owns this payload schema and its validation. AniCraft owns embedding it in the authoritative document, save/load, dirty state, transactions and undo/redo.
 
 ## 1. Schema envelope
@@ -41,20 +41,20 @@ The host reference is a stable serialized identity token, not a persisted pointe
 
 ## 4. Composition graph
 
-A graph is scoped to one target, one reference geometry stamp and one coordinate-space descriptor. It has its own stable graph ID, revision and graph schema version.
+A graph is scoped to one target, one reference geometry stamp and one coordinate-space descriptor. It declares its input value kind and has its own stable graph ID, revision and graph schema version.
 
 Node kinds:
 
 - **Deformer:** references one persisted FDM deformation definition.
 - **Sequential:** contains an explicitly ordered list of two or more node IDs. Each stage's input type must match the previous stage's output type.
-- **Parallel:** contains two or more explicit branches evaluated independently from the same reference input. Branch input and output signatures must match.
+- **Parallel:** contains two or more explicit branches evaluated independently from the same reference input. Branch input and output signatures must match each other and the graph's declared input kind.
 - **Weighted blend:** contains two or more explicit node references with finite positive weights whose sum is 1 within the schema tolerance.
 
 Graph output node IDs are explicit. Every node must be reachable from an output; orphan nodes are rejected. Node IDs and output IDs must be unique. Every reference must resolve. Cycles are rejected before evaluation.
 
 ### Compatibility checks
 
-Every deformer referenced by a graph must match the graph's exact target identity, reference geometry stamp and coordinate-space descriptor. Sequential stages must have compatible adjacent input/output value types. Parallel branches must have identical input and output types. Weighted-blend inputs must have identical output types. Multiple graph outputs must agree on output type.
+Every deformer referenced by a graph must match the graph's exact target identity, reference geometry stamp and coordinate-space descriptor. Sequential stages must have compatible adjacent input/output value types. Parallel branches must have identical input and output types. Weighted-blend inputs must have identical input and output types. Every graph output must accept the declared graph input kind, and multiple graph outputs must agree on output type.
 
 A graph cannot infer coordinate conversion, reference geometry, ordering, weight normalization or a missing node. Incompatibility is a validation error, not a fallback.
 
@@ -74,7 +74,7 @@ The graph schema contains only FDM deformation definitions. Smart Controller out
 
 ## 6. Resource limits and host boundary
 
-V1 validation bounds the serialized document to 16 MiB, 10,000 deformation definitions, 1,000 composition graphs and 256 parameters per definition. Host adapters may enforce stricter limits before parsing or commit.
+V1 validation bounds the serialized document to 16 MiB, 10,000 deformation definitions, 1,000 composition graphs, 1,024 nodes and 4,096 references per graph, and 256 parameters per definition. Host adapters may enforce stricter limits before parsing or commit.
 
 This implementation validates and serializes the FDM payload in memory. It does not implement AniCraft document extension storage, host save/load integration, dirty-state tracking, host reference remapping, transaction semantics or undo/redo. Those remain host-side acceptance gates and require separate authorization.
 
