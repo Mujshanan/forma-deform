@@ -287,6 +287,13 @@ mod tests {
     }
 
     #[test]
+    fn canonical_v1_digest_matches_golden_vector() {
+        let digest = sample().fingerprint(&space()).unwrap();
+        let hex = digest.digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        assert_eq!(hex, "7a2dc1419d74cba04f979772df1f2da57a6d39585ebe2400fdb1307c05df4011");
+    }
+
+    #[test]
     fn digest_is_sha256_length() {
         assert_eq!(sample().fingerprint(&space()).unwrap().digest.len(), 32);
     }
