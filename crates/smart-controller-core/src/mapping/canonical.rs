@@ -451,7 +451,7 @@ fn interpolate_pose_grid(
         let mut weight = 1.0;
         for (axis_index, (keys, (lower, amount))) in axes.iter().zip(&segments).enumerate() {
             let upper = (mask & (1 << axis_index)) != 0;
-            let index = lower + usize::from(upper);
+            let index = lower + if upper { 1 } else { 0 };
             weight *= if upper { *amount } else { 1.0 - *amount };
             flat_index += index * stride;
             stride *= keys.len();
@@ -467,6 +467,9 @@ fn interpolate_pose_grid(
             first.validate_compatible(pose)?;
         }
         corners.push((pose, weight));
+    }
+    if corners.len() == 1 && corners[0].1 == 1.0 {
+        return Ok(corners[0].0.clone());
     }
     blend_weighted_poses(&corners)
 }
