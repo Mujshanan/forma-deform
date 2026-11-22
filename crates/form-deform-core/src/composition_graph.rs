@@ -14,6 +14,8 @@ use crate::host_contract::{
 use crate::persistence::{DeformationDefinition, GeometryValueKind};
 
 pub const COMPOSITION_GRAPH_SCHEMA_VERSION: u32 = 1;
+pub const MAX_COMPOSITION_NODES: usize = 1_024;
+pub const MAX_COMPOSITION_REFERENCES: usize = 4_096;
 const WEIGHT_SUM_TOLERANCE: f64 = 1.0e-9;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -30,7 +32,7 @@ pub struct CompositionGraph {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CompositionNode {
     Deformer {
         node_id: String,
@@ -154,6 +156,9 @@ impl CompositionGraph {
         if self.nodes.is_empty() || self.outputs.is_empty() {
             return Err(CompositionGraphError::EmptyGraph);
         }
+        if self.nodes.len() > MAX_COMPOSITION_NODES {
+            return Err(CompositionGraphError::ResourceLimitExceeded);
+        }
 
         let mut by_id = BTreeMap::new();
         for node in &self.nodes {
@@ -202,8 +207,13 @@ impl CompositionGraph {
                 return Err(CompositionGraphError::MissingNodeReference);
             }
         }
+        let mut reference_count = 0usize;
         for node in &self.nodes {
             let refs = node.references();
+            reference_count = reference_count.saturating_add(refs.len());
+            if reference_count > MAX_COMPOSITION_REFERENCES {
+                return Err(CompositionGraphError::ResourceLimitExceeded);
+            }
             let mut seen = BTreeSet::new();
             for reference in refs {
                 if !by_id.contains_key(reference) {
@@ -431,6 +441,7 @@ pub enum CompositionGraphError {
     ReferenceGeometryMismatch,
     CoordinateSpaceMismatch,
     IncompatibleValueTypes,
+    ResourceLimitExceeded,
 }
 
 impl std::fmt::Display for CompositionGraphError {
@@ -566,6 +577,26 @@ mod tests {
             vec!["seq".into()],
         );
         assert_eq!(missing, Err(CompositionGraphError::MissingNodeReference));
+    }
+
+    #[test]
+    fn graph_rejects_unknown_node_fields_and_resource_overflow() {
+        let graph = CompositionGraph::new(
+            "bounded", 1, target(), reference(), space(),
+            vec![CompositionNode::deformer("one", "missing")],
+            vec!["one".into()],
+        ).unwrap();
+        let json = serde_json::to_string(&graph).unwrap();
+        let changed = json.replacen("{", "{\"unexpected\":true,", 1);
+        assert!(serde_json::from_str::<CompositionGraph>(&changed).is_err());
+
+        let too_many = (0..=MAX_COMPOSITION_NODES)
+            .map(|i| CompositionNode::deformer(format!("n-{i}"), "d"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            CompositionGraph::new("large", 1, target(), reference(), space(), too_many, vec!["n-0".into()]),
+            Err(CompositionGraphError::ResourceLimitExceeded)
+        );
     }
 
     #[test]
