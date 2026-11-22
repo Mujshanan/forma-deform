@@ -846,23 +846,32 @@ Binding editor fields are contextual:
 
 The actual target kinds and setters must be gated by the AniCraft source audit. Do not expose a UI option merely because it exists in the Forma Deform core if AniCraft cannot safely identify, preview and mutate that target.
 
-### 13.6 Native symbol integration
+### 13.6 Native symbol integration — accepted design direction
+
+**First-class target decision:** Graphic symbols are the first-class native symbol targets for Smart Controller pose and switch workflows. They are the preferred symbol type for authored expressions, poses, discrete states and timeline-frame selection because Graphic timelines follow the parent timeline. This is a product architecture decision, not merely a UI preference.
+
+Keep three equally native but separate pathways:
+- **Bone pathway:** read bone transforms as controller inputs, and/or bind controller outputs to supported bone properties through AniCraft's native rig identities and selection.
+- **Symbol pathway:** reference existing Library Graphic symbol definitions and/or specific stage symbol instances through AniCraft's native Library and instance identities.
+- **Other host object/property pathway:** use only host-supported stable identities and typed property contracts.
+
+Do not merge bone assignment and symbol assignment into one ambiguous picker or data model. They share the controller's input/target workflow, but retain their own host identity, selection, validation and property contracts. A bone may be an input or target; a Graphic symbol may be a target or a source of authored switch/pose references where supported.
 
 AniCraft symbols remain authoritative reusable artwork assets in the Library; stage copies are symbol instances. Smart Controller references existing symbol definitions and/or specific symbol instances through stable AniCraft identities. It does not create a parallel "controller symbol", copy symbol artwork into controller data, or replace the Library.
 
 Respect the native symbol distinctions:
-- **Graphic symbols** follow the parent timeline and are the natural first target for frame/pose selection that must scrub with the scene.
+- **Graphic symbols** follow the parent timeline and are the first-class, preferred target for Smart Controller pose and switch workflows, including supported frame/pose selection.
 - **Movie clips** run their own timelines independently of the parent timeline. Do not assume a parent-scene frame value selects their internal frame; require a verified instance-level control/evaluation path.
 - **Button symbols** have native Up, Over, Down and Hit frames driven by pointer interaction in Test Movie/export. Smart Controller should not hijack these built-in interaction states. If a controller needs expression/state selection, use a Graphic symbol or explicit target properties unless AniCraft defines a separate, non-conflicting state API.
 
 Symbol workflows:
-1. **Drive an existing instance:** select a symbol instance on the stage, choose Add Target Binding → Symbol, then select a supported operation such as Graphic frame/pose selection or a verified instance property.
+1. **Drive an existing Graphic instance:** select a Graphic symbol instance on the stage, choose Add Target Binding → Graphic Symbol, then select a supported operation such as frame/pose selection or a verified instance property. This is the default symbol-target workflow for pose and switch controllers.
 2. **Drive all instances of a symbol:** explicitly choose the Library symbol definition as the scope only if AniCraft provides a safe definition-level target contract. Otherwise create one binding per instance; never assume that changing one instance changes every instance.
-3. **Create switch states from symbols:** choose **Add States from Library…**, select existing compatible Graphic symbols or named symbol frames, and create state entries that reference those assets. This creates controller state references, not new symbols.
-4. **Use symbol frames as poses:** select an existing Graphic symbol instance and map discrete states or a continuous pose input to its frame/frame range, with explicit frame bounds and endpoint policy.
+3. **Create switch states from symbols:** choose **Add States from Library…**, select existing Graphic symbols or named Graphic symbol frames, and create state entries that reference those assets. This is the primary symbol-backed switch workflow and creates controller state references, not new symbols.
+4. **Use Graphic symbol frames as poses:** select an existing Graphic symbol instance and map discrete states or a continuous pose input to its frame/frame range, with explicit frame bounds and endpoint policy. This is the primary symbol-backed pose workflow.
 5. **Swap/rename/delete safety:** preserve identity across rename; validate identity after swap; if the referenced symbol/instance is removed, show a broken-reference diagnostic and offer relink. Never silently bind to a same-named replacement.
 
-The native Properties panel should provide a **Symbol** target picker that searches the Library and, where needed, a separate **Instance** picker for stage instances. Clearly label the scope: *this instance* versus *symbol definition*. The latter is only available if supported by a verified host operation.
+The native Properties panel should provide a **Graphic Symbol** target picker that searches the Library and, where needed, a separate **Stage Instance** picker. Clearly label the scope: *this instance* versus *symbol definition*. The latter is only available if supported by a verified host operation. The bone picker remains a distinct native rig picker. In controller creation and Add Target Binding workflows, Graphic Symbol should be the prominently recommended symbol option for pose/switch authoring; Movie clip and Button targets remain advanced, restricted options only where a verified non-conflicting operation exists.
 
 ### 13.7 Switch authoring and symbol-backed states
 
@@ -919,7 +928,7 @@ The native authoring design is ready for implementation only when:
 - each controller family has a versioned input/mapping contract and a tested built-in core mapper;
 - conversion is explicit, loss-aware, previewable and undoable;
 - bone inputs and targets use stable AniCraft identities and host-supported channels;
-- symbol targets distinguish Library definition from stage instance;
+- Graphic symbols are the first-class symbol target for pose and switch workflows; bone and symbol pathways remain distinct native pathways; symbol targets distinguish Library definition from stage instance;
 - Graphic, Movie clip and Button timeline semantics are respected;
 - switch states can reference existing Library symbols/Graphic frames without copying artwork or hijacking Button pointer states;
 - broken references are diagnosed and can be explicitly relinked;
