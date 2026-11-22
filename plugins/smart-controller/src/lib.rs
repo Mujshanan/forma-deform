@@ -426,13 +426,79 @@ mod tests {
         let params = manifest["params"].as_object().unwrap();
         assert!(params.len() <= 32);
         assert_eq!(params["target_action"]["default"], "preview");
-        assert_eq!(params["target_action"]["options"], json!(["preview", "apply_current_frame"]));
+        assert_eq!(params["target_action"]["options"], json!(["preview", "apply_current_frame", "apply_all_current_frame"]));
         for spec in params.values() {
             assert!(matches!(
                 spec["type"].as_str(),
                 Some("number" | "int" | "bool" | "choice" | "color")
             ));
         }
+    }
+
+    fn batch_item(element: &str, pin: &str, verified: bool) -> preview_plan::TargetPreviewItem {
+        let target = TargetMapping::GeometryDeform {
+            element_id: element.into(),
+            pin_id: pin.into(),
+            negative_offset: [0.0, 0.0],
+            neutral_offset: [0.0, 0.0],
+            positive_offset: [1.0, 1.0],
+        };
+        preview_plan::TargetPreviewItem {
+            target_id: TargetId::new(format!("geometry:{element}:{pin}")).unwrap(),
+            target,
+            value: TypedValue::vector2(1.0, 2.0).unwrap(),
+            capability: targets::TargetCapability {
+                status: targets::TargetCapabilityStatus::CommandApply,
+                target_key: format!("geometry:{element}:{pin}"),
+                read_command: Some("warp.info"),
+                apply_command: Some("warp.pin_move"),
+                explanation: "test fixture",
+            },
+            host_verification: if verified {
+                preview_plan::HostTargetVerification::Verified
+            } else {
+                preview_plan::HostTargetVerification::NotAttempted
+            },
+        }
+    }
+
+    #[test]
+    fn multi_apply_accepts_multiple_unique_verified_geometry_targets() {
+        let plan = preview_plan::TargetPreviewPlan {
+            items: vec![batch_item("17", "12", true), batch_item("17", "13", true)],
+            unresolved_targets: vec![],
+        };
+        assert_eq!(multi_apply_candidates(&plan).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn multi_apply_rejects_duplicate_unverified_unresolved_and_unsupported_targets() {
+        let duplicate = preview_plan::TargetPreviewPlan {
+            items: vec![batch_item("17", "12", true), batch_item("17", "12", true)],
+            unresolved_targets: vec![],
+        };
+        assert!(multi_apply_candidates(&duplicate).unwrap_err().contains("duplicate"));
+
+        let unverified = preview_plan::TargetPreviewPlan {
+            items: vec![batch_item("17", "12", false)],
+            unresolved_targets: vec![],
+        };
+        assert!(multi_apply_candidates(&unverified).unwrap_err().contains("not verified"));
+
+        let unresolved = preview_plan::TargetPreviewPlan {
+            items: vec![batch_item("17", "12", true)],
+            unresolved_targets: vec![TargetId::new("missing").unwrap()],
+        };
+        assert!(multi_apply_candidates(&unresolved).unwrap_err().contains("unresolved"));
+    }
+
+    #[test]
+    fn multi_apply_enforces_the_host_batch_limit() {
+        let items = (1..=513)
+            .map(|pin| batch_item("17", &pin.to_string(), true))
+            .collect();
+        let plan = preview_plan::TargetPreviewPlan { items, unresolved_targets: vec![] };
+        assert!(multi_apply_candidates(&plan).unwrap_err().contains("1–512"));
     }
 
     fn valid_geometry_params() -> Value {
