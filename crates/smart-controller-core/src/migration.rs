@@ -77,8 +77,29 @@ impl CanonicalDocument {
         serde_json::to_string_pretty(self).map_err(|e| CoreError::Serialization(e.to_string()))
     }
 
+    /// Parse the current canonical schema or losslessly migrate schema v1.
+    /// The v1->v2 migration changes only the schema version: all v1 mapping
+    /// variants and their payloads retain their exact representation.
     pub fn from_json(source: &str) -> Result<Self, CoreError> {
-        let document: Self = serde_json::from_str(source).map_err(|e| CoreError::Serialization(e.to_string()))?;
+        let mut value: serde_json::Value = serde_json::from_str(source)
+            .map_err(|e| CoreError::Serialization(e.to_string()))?;
+        let schema = value.get_mut("schema")
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| CoreError::Serialization("canonical document is missing schema identity".into()))?;
+        let name = schema.get("name").and_then(serde_json::Value::as_str)
+            .ok_or_else(|| CoreError::Serialization("canonical schema name is missing or invalid".into()))?;
+        if name != SCHEMA_NAME {
+            return Err(CoreError::Serialization(format!("unexpected schema name: {name}")));
+        }
+        let version = schema.get("version").and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| CoreError::Serialization("canonical schema version is missing or invalid".into()))?;
+        match version {
+            1 => { schema.insert("version".into(), serde_json::Value::from(CURRENT_SCHEMA_VERSION)); }
+            v if v == CURRENT_SCHEMA_VERSION as u64 => {}
+            v => return Err(CoreError::UnsupportedSchemaVersion(v as u32)),
+        }
+        let document: Self = serde_json::from_value(value)
+            .map_err(|e| CoreError::Serialization(e.to_string()))?;
         document.validate()?;
         Ok(document)
     }
