@@ -380,7 +380,14 @@ impl EvaluatedGeometryResult {
         let mut freshness = Vec::with_capacity(self.source_stamps.len());
         for captured in &self.source_stamps {
             let current = current_sources.iter()
-                .find(|source| source.target() == captured.target())
+                .find(|source| {
+                    let actual = source.target();
+                    let expected = captured.target();
+                    actual.namespace == expected.namespace
+                        && actual.document_id == expected.document_id
+                        && actual.target_kind == expected.target_kind
+                        && actual.target_id == expected.target_id
+                })
                 .ok_or(EvaluationContractError::MissingSourceTarget)?;
             current.validate_envelope().map_err(EvaluationContractError::HostContract)?;
             freshness.push(
@@ -479,11 +486,15 @@ mod tests {
     use crate::path2d::{PathCommand, Point2};
 
     fn target(generation: u64) -> HostTargetRef {
+        target_with_id(generation, &format!("element-{generation}"))
+    }
+
+    fn target_with_id(generation: u64, element_id: &str) -> HostTargetRef {
         HostTargetRef {
             namespace: HostNamespace::new("anicraft").unwrap(),
             document_id: HostDocumentId::new("doc-1").unwrap(),
             target_kind: HostTargetKind::new("shape").unwrap(),
-            target_id: HostTargetId::new(format!("element-{generation}")).unwrap(),
+            target_id: HostTargetId::new(element_id).unwrap(),
             generation,
         }
     }
@@ -691,6 +702,40 @@ mod tests {
         assert_eq!(
             result.validate_source_freshness(&[snapshot(1, 5, 2)]),
             Err(EvaluationContractError::MissingSourceTarget)
+        );
+    }
+
+    #[test]
+    fn source_freshness_reports_target_reincarnation_as_identity_mismatch() {
+        let request = EvaluationRequest::new(
+            "request-1",
+            vec![snapshot(1, 5, 2)],
+            model(),
+            time(),
+            vec![],
+            "source-rest",
+            None,
+        ).unwrap();
+        let result = EvaluatedGeometryResult::new(
+            "result-1",
+            &request,
+            target(1),
+            GeometryOutputOperation::ReplaceSourceGeometry,
+            path(2.0),
+        ).unwrap();
+        let recreated = GeometrySnapshot::new(
+            target_with_id(2, "element-1"),
+            GeometryRevision(5),
+            TopologyRevision(2),
+            path(0.0).fingerprint(&coordinate_space()).unwrap(),
+            coordinate_space(),
+            "Path2D",
+            1,
+            path(0.0),
+        ).unwrap();
+        assert_eq!(
+            result.validate_source_freshness(&[recreated]),
+            Err(EvaluationContractError::HostContract(ContractError::TargetIdentityMismatch))
         );
     }
 
