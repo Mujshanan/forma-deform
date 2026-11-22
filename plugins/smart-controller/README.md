@@ -9,9 +9,13 @@ AniCraft renders command plug-in settings as a native dialog. The Smart Controll
 - **Geometry Controller** (default): author one Manual or Bone Rotation input, a three-point range/easing, and one GeometryDeform target with negative/neutral/positive vector anchors. The plug-in assembles and validates the canonical document internally, then runs the read-only M2 preview.
 - **Legacy Slider**: retains the compact legacy frame-mapping preview. The native settings schema has no free-form text parameter, so the legacy bone-name field is not user-editable in this dialog; the adapter uses the documented default bone name, Head.
 
-The dialog uses only AniCraft-supported parameter types (number, int, bool, choice, color), stays within the host's 32-parameter limit, and does not ask users to paste canonical JSON. Settings are ephemeral; they are not saved as durable bindings. Cancel must leave the document unchanged.
+The dialog uses only AniCraft-supported parameter types (number, int, bool, choice, color), stays within the host's 32-parameter limit, and does not ask users to paste canonical JSON. Settings are ephemeral; they are not saved as durable bindings. Cancel must leave the document unchanged. The M4 core payload now defines a versioned storage envelope, but it is not connected to AniCraft document storage yet.
 
 The first slice intentionally supports one input, one controller, and one geometry target. It is not yet a persistent docked inspector or a multi-controller authoring workspace.
+
+## Persistent bindings (FD-M4 in progress)
+
+The host-independent core now exposes `PersistentBindingDocument` with strict schema versioning, canonical graph validation, atomic controller upsert/removal, and collection revision tracking. This is a payload contract only. The current command plug-in cannot write document metadata or files; durable save/load and undo/redo require a reviewed AniCraft host extension. See [FD-M4 specification](../../docs/FD-M4-PERSISTENT-BINDINGS.md).
 
 ## Canonical preview (FD-M2)
 
