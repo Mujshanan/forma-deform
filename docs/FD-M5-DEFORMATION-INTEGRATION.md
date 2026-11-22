@@ -1,6 +1,6 @@
 # FD-M5 — Deformation Integration
 
-**Status:** single-target adapter corrected against AniCraft host source; GUI smoke test still required. Batch-bake design specified; AniCraft host implementation is not included in this repository change.
+**Status:** single- and multi-target current-frame apply implemented through AniCraft's `plugin.run` transaction; GUI smoke test still required. Timeline-range bake remains outstanding.
 
 ## 1. Single-target current-playhead apply
 
@@ -32,6 +32,29 @@ Sources inspected in `Mujshanan/anicraft`: `crates/engine/src/cmds_warp.rs`, `cr
 - [ ] Verify Cancel from the native plug-in preview dialog leaves the document unchanged.
 
 A live GUI run has not been performed from this repository session. CI and source checks are not a substitute for that smoke test.
+
+## 2. Multi-target current-frame apply (implemented in Forma Deform)
+
+The native `target_action` choice now includes `apply_all_current_frame`; `preview` remains the default.
+
+### Two-phase algorithm
+
+1. Reject unresolved outputs and require 1–512 resolved targets.
+2. Require every item to be host-verified and mapped to `GeometryDeform`.
+3. Reject duplicate `(element_id, pin_id)` identities.
+4. **Preflight phase:** freshly query `warp.info` for every target, verify its exact `pins[].pin` identity, and build every finite Vector2 `warp.pin_move` payload. No write is issued during this phase.
+5. **Commit phase:** issue the prepared `warp.pin_move` commands in deterministic preview-plan order.
+6. Rely on AniCraft's enclosing `plugin.run` transaction: a nested command failure aborts the plug-in run and restores the document; a successful run is one undo step.
+
+This is a plug-in-side batch over existing host commands, not a new `warp.pin_move_batch` host API. The dedicated host batch command remains a possible optimization and reusable native API.
+
+### Guarantees and limits
+
+- A preflight failure issues zero mutations.
+- A commit-time failure must propagate; do not catch it and continue. AniCraft's outer transaction is responsible for rollback.
+- The initial maximum is 512 target writes per invocation.
+- All writes use the playhead captured by the enclosing command invocation; the adapter omits `frame` so AniCraft applies its current-frame semantics.
+- GUI verification is still required to confirm multi-target apply, one-step undo, redo and rollback in a running AniCraft build.
 
 ## 2. Full M5 bake: host batch operation design
 
@@ -102,7 +125,7 @@ Proposed payload (all coordinates are stage-space pixels):
 ## 3. Scope boundary
 
 - Single-target current-playhead apply is implemented in Forma Deform after the response-shape correction.
-- Multi-target current-frame apply and timeline-range bake are not implemented.
-- The existing `plugin.run` transaction is enough for an initial multi-command plug-in bake once M4 persisted bindings are host-integrated.
+- Multi-target current-frame apply is implemented through `plugin.run`; timeline-range bake is not implemented.
+- The existing `plugin.run` transaction is enough for multi-command plug-in writes; timeline-range bake still needs frame sampling, full-range preflight, resource limits and acceptance tests.
 - `warp.pin_move_batch` is a proposed AniCraft host API, not an existing command. It is the recommended follow-up for native host-owned authoring and a single preflight/commit boundary.
 - M4 durable save/load and in-AniCraft GUI verification remain prerequisites before calling full M5 complete.
