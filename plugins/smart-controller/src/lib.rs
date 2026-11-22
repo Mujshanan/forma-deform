@@ -169,8 +169,22 @@ fn run(p: &Value) -> Result<(), String> {
         return run_canonical_preview(p, source);
     }
 
-    // Preserve the original compact Slider workflow for existing users.
-    let params: Params = serde_json::from_value(p.clone())
+    // Preserve the original compact Slider workflow for existing users. The
+    // canonical-only manifest fields are removed before deserializing Params,
+    // whose schema intentionally rejects unknown fields.
+    let mut legacy_params = p.clone();
+    if let Some(object) = legacy_params.as_object_mut() {
+        for key in [
+            "canonical_document_json",
+            "manual_values_json",
+            "bone_layers_json",
+            "bone_angle_policy",
+            "angle_semantics",
+        ] {
+            object.remove(key);
+        }
+    }
+    let params: Params = serde_json::from_value(legacy_params)
         .map_err(|error| format!("invalid parameters: {error}"))?;
     validation::validate(&params)?;
     if params.mode != Mode::Slider {
