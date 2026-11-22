@@ -40,6 +40,7 @@ pub struct DeformationDefinition {
     target: HostTargetRef,
     reference_geometry: GeometrySnapshotStamp,
     coordinate_space: CoordinateSpaceDescriptor,
+    input_kind: GeometryValueKind,
     output_kind: GeometryValueKind,
     parameters: BTreeMap<String, ParameterValue>,
 }
@@ -78,6 +79,7 @@ impl DeformationDefinition {
         target: HostTargetRef,
         reference_geometry: GeometrySnapshotStamp,
         coordinate_space: CoordinateSpaceDescriptor,
+        input_kind: GeometryValueKind,
         output_kind: GeometryValueKind,
         parameters: BTreeMap<String, ParameterValue>,
     ) -> Result<Self, PersistenceError> {
@@ -89,6 +91,7 @@ impl DeformationDefinition {
             target,
             reference_geometry,
             coordinate_space,
+            input_kind,
             output_kind,
             parameters,
         };
@@ -123,6 +126,7 @@ impl DeformationDefinition {
     pub fn target(&self) -> &HostTargetRef { &self.target }
     pub fn reference_geometry(&self) -> &GeometrySnapshotStamp { &self.reference_geometry }
     pub fn coordinate_space(&self) -> &CoordinateSpaceDescriptor { &self.coordinate_space }
+    pub fn input_kind(&self) -> GeometryValueKind { self.input_kind }
     pub fn output_kind(&self) -> GeometryValueKind { self.output_kind }
     pub fn parameters(&self) -> &BTreeMap<String, ParameterValue> { &self.parameters }
 }
@@ -365,7 +369,7 @@ mod tests {
         assert_eq!(
             DeformationDefinition::new(
                 "bad", 1, "Bad", DeformationKind::PinDeformation, target(), reference(),
-                space(), GeometryValueKind::Displacement,
+                space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
                 BTreeMap::from([("gain".into(), ParameterValue::Number(f64::NAN))]),
             ),
             Err(PersistenceError::NonFiniteParameter)
