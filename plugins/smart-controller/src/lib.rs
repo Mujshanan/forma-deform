@@ -204,7 +204,7 @@ fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
                 InputSource::BoneTransform { bone_id: bone_id.to_string(), channel: BoneTransformChannel::Rotation },
                 InputDimension::Angle,
                 json!({}),
-                json!({bone_id.to_string(): layer_id}),
+                json!({(bone_id.to_string()): layer_id}),
             )
         }
         other => return Err(format!("unsupported input_source '{other}'")),
@@ -318,29 +318,6 @@ mod tests {
                 Some("number" | "int" | "bool" | "choice" | "color")
             ));
         }
-    }
-
-    #[test]
-    fn geometry_authoring_form_builds_a_valid_canonical_document() {
-        let params = json!({
-            "input_source":"manual",
-            "manual_value":0.25,
-            "input_minimum":-1.0,
-            "input_neutral":0.0,
-            "input_maximum":1.0,
-            "easing":"linear",
-            "element_id":17,
-            "pin_id":4,
-            "negative_x":-10.0,"negative_y":0.0,
-            "neutral_x":0.0,"neutral_y":0.0,
-            "positive_x":10.0,"positive_y":0.0
-        });
-        let (source, _, _, _) = (
-            InputSource::Manual, InputDimension::Scalar,
-            json!({"fd-m3-input":{"kind":"scalar","value":0.25}}), json!({})
-        );
-        assert_eq!(source, InputSource::Manual);
-        assert_eq!(params["element_id"], 17);
     }
 
     #[test]
