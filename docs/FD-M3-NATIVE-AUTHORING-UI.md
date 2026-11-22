@@ -1,166 +1,104 @@
 # FD-M3 — Native Authoring UI Integration Specification
 
-**Status:** M3 design and host-integration contract started; native UI implementation is gated on verified AniCraft extension points.  
-**Depends on:** FD-M1 canonical mapper and FD-M2 read-only command preview.  
-**Ownership:** AniCraft owns panels, stage, selection, commands, undo, document state, and plugin lifecycle. Forma Deform owns controller/binding semantics, validation, mapping configuration, and preview diagnostics.
+**Status:** M3 started; first implementation slice uses AniCraft's existing native command-settings dialog.  
+**Depends on:** FD-M1 canonical mapper and FD-M2 read-only preview.  
+**Ownership:** AniCraft owns the egui shell, panels, stage, selection, commands, undo, document state, and plug-in lifecycle. Forma Deform owns controller/binding semantics, validation, mapping, and diagnostics.
 
-## 1. Goal
+## 1. Verified host UI surface
 
-Deliver a native AniCraft authoring workflow for Smart Controllers and deformation bindings. The UI must feel like an AniCraft tool context, reuse existing host panels and stage, and never create a second scene tree, timeline, renderer, document, or undo system.
+The AniCraft source audit confirms:
+- AniCraft is a native Rust/egui application; there is no webview or Tauri UI.
+- Command plug-ins with parameters already receive a native settings dialog. The host renders sliders for numbers, checkboxes for booleans, dropdowns for choices, and colour swatches.
+- The dialog previews command runs on the stage; Cancel rolls back and OK commits one undo step.
+- The WASM command ABI does not expose arbitrary panel registration, a persistent UI lifecycle, or structured custom widgets.
 
-M3 is not a standalone web UI and does not add a custom panel framework to the command-plugin WASM ABI. Until AniCraft exposes a supported UI extension contract, this specification is the implementation contract for the host-side work.
+Therefore M3 must not invent a plug-in panel API or embed a web UI. The first M3 slice will provide a native command-settings authoring form using the host's existing dialog. A docked, continuously present inspector/tool context would require a separately reviewed AniCraft host feature and is not part of this slice.
 
-## 2. M3 scope
+**Important compatibility finding:** the current Smart Controller manifest declares several parameters with type string. AniCraft's actual manifest parser accepts only number, int, bool, choice, and color. The M2 CI did not validate the manifest against the host parser. Correcting the manifest and testing it against the host schema is the first M3 task; until then, the canonical preview command's installability is not established.
 
-### Included
-- Tool-context entry point and contextual tool options.
-- Target inspector for the currently selected compatible target.
-- Controller/binding editor for one supported input and explicitly configured target bindings.
-- Source selection and neutral/range/mapping/easing controls.
-- Validation and diagnostics with actionable messages.
-- Explicit on-demand Preview action using the M2 read-only evaluation path.
-- Clear distinction between preview output and committed authoring changes.
-- Keyboard focus, accessibility labels, selection changes, and cancel behavior consistent with AniCraft conventions.
+## 2. M3 first-slice workflow
 
-### Excluded
-- Durable binding persistence (M4).
-- Apply/bake or target mutation (M5).
-- Live playback evaluator or stage overlay (M6).
-- Multi-axis/joystick authoring, multi-source composition, and pose-library persistence.
-- A duplicate timeline, property system, document model, or undo stack.
+The native settings dialog will expose a constrained, schema-driven single-binding authoring workflow:
 
-## 3. Proposed native layout
+1. Choose Legacy Slider preview or Canonical Geometry preview.
+2. Choose Manual input or Bone Rotation.
+3. For Bone Rotation, provide stable numeric bone ID and explicit numeric AniCraft layer ID. Never infer either from selection order.
+4. Configure minimum, neutral, and maximum input values; angle wrapping and spring-swing policy are explicit.
+5. Choose Linear or Smoothstep mapping.
+6. Identify a GeometryDeform target by numeric element ID and pin ID.
+7. Configure negative, neutral, and positive 2D output anchors.
+8. Run the on-demand preview. Show calculated target values and diagnostics in the plug-in log.
+9. Cancel leaves the document unchanged. No save/persist or apply/bake action is offered.
 
-Reuse AniCraft's existing dockable-panel and stage infrastructure.
+This first slice is intentionally limited to one input, one controller, and one geometry target. It does not claim a general-purpose multi-controller editor.
 
-- **Tool context / left tool strip:** Select Target, Bind Controller, Preview. Pin/Handle tools appear only when the selected target supports them; do not expose nonfunctional tools.
-- **Stage:** AniCraft remains the sole renderer and selection authority. M3 does not draw a parallel stage or claim a live deformation overlay.
-- **Properties / right inspector:**
-  1. Target identity and capability summary.
-  2. Input source (Manual or supported Bone Rotation).
-  3. Neutral, minimum, maximum, and angle semantics.
-  4. Mapping type and easing.
-  5. Output target and typed anchors/gain.
-  6. Validation diagnostics and last preview values.
-- **Bottom timeline:** use AniCraft's existing timeline and playhead without adding a second timeline.
+## 3. Host dialog constraints
 
-The inspector should remain compact and progressive: show only fields relevant to the selected input, mapper, and target type. Unsupported target types must show why they are unavailable rather than offering nonfunctional controls.
+The manifest parser supports at most 32 parameters and these types only:
+- number: bounded slider
+- int: bounded whole-number field/slider
+- bool: checkbox
+- choice: dropdown with 1–32 options
+- color: colour swatch
 
-## 4. Interaction flows
+There is no free-form string or multiline JSON parameter. Canonical JSON must therefore be assembled from validated typed settings inside the plugin; it must not be requested as a raw JSON text field. Enum-like settings must use choice parameters. All labels must be concise and within the host's 48-character limit.
 
-### 4.1 Create a controller binding
-1. User invokes Bind Controller from the AniCraft tool context or selected target context menu.
-2. User chooses a source: Manual input or a supported canonical bone rotation.
-3. For a bone source, choose the bone by stable numeric host ID and display its name as a label only. Never use list position as identity.
-4. Capture/confirm neutral and configure the input range, wrapped/unwrapped angle semantics, and spring-swing policy.
-5. Choose a supported target and configure mapper-specific output values.
-6. Run validation. Block preview for missing IDs, malformed ranges, incompatible typed values, unsupported targets, or unresolved dependencies.
-7. Run Preview explicitly. Show input sample, normalized domain, selected mapping segment/anchor, typed output, target identity, and diagnostics.
-8. Save/commit is intentionally not available in M3 until the M4 host-owned persistence contract exists.
+The settings form must use meaningful defaults and bounds. Numeric host IDs must be bounded to the host's supported positive integer range. Input ranges and output anchors must reject non-finite or semantically invalid configurations through core validation; UI slider clamping is not a substitute for model validation.
 
-### 4.2 Edit an existing binding
-M3 may edit an in-memory draft only. It must clearly label the draft as unsaved and must not imply that it survives document close/reopen. Cancel discards the draft. M4 will define durable save/load and migration.
+## 4. Preview semantics
 
-### 4.3 Preview
-- Preview is an explicit command, not a continuously running evaluator.
-- Preview is read-only and must not move pins, write keyframes, alter selected elements, or mutate document data.
-- Repeated evaluation with the same document revision, frame, controller definition, and host input snapshot must return identical output.
-- Display stale-preview status when the selection, frame, document revision, or draft changes after the last preview.
-- Report host query failures as unavailable input; never substitute zero.
+- Preview remains on-demand and read-only.
+- No pin setter, keyframe write, timeline command, or document mutation is called.
+- Repeated evaluation with identical model, frame, and input snapshot is deterministic.
+- Host query failure remains unavailable; never substitute zero.
+- Geometry target identity is verified with read-only warp.info.
+- Output is a calculated preview plan, not a rendered stage overlay.
+- Cancel must leave the document unchanged; this must be checked in AniCraft.
 
-## 5. UI state model
+## 5. State and diagnostics
 
-Keep ephemeral UI state separate from authored model data:
+The dialog's settings are ephemeral draft state. They are not durable bindings and do not survive document close/reopen. Diagnostics must report:
+- invalid input range or mapping,
+- missing/invalid bone ID or layer mapping,
+- failed bone.info response,
+- missing element/pin,
+- unsupported input/target capability,
+- unresolved controller output.
 
-- Closed: no Forma Deform inspector context.
-- SelectingSource: awaiting a valid source identity.
-- EditingDraft: draft controller and binding configuration in memory.
-- InvalidDraft: validation errors block preview.
-- PreviewReady: validated draft, no preview for current revision.
-- Previewed: output and diagnostics correspond to the current draft/revision/frame/input snapshot.
-- HostUnavailable: required host UI/command capability is not exposed or a query failed.
+The last preview is stale whenever any setting changes. The plug-in should log the effective input, normalized mapping result, target identity, preview value, and stable diagnostic codes where available.
 
-State transitions must be explicit. Selection/frame/document changes invalidate preview state but must not silently rewrite the draft. Closing the context prompts only if the host has an unsaved-draft convention; otherwise discard with a clear notice.
+## 6. Follow-on native inspector
 
-## 6. Host integration contract required
+A persistent docked inspector/tool context is a later host-side enhancement, only if the AniCraft owner approves a versioned extension API. It should reuse the existing Properties panel and selection model, not add a second stage, timeline, scene tree, renderer, or undo system. It would need:
+- native tool/panel registration,
+- stable selection and document-revision context,
+- typed command request/response rather than log scraping,
+- ephemeral draft lifecycle,
+- capability discovery,
+- accessible keyboard/focus behavior.
 
-The current audited WASM command-plugin ABI exposes command invocation, compact document context, selected-element queries, and logging. It does not expose native panel registration or a persistent UI lifecycle. Therefore the M3 host implementation requires a reviewed AniCraft-side API, not speculative calls from the plugin.
+No Forma Deform code may call guessed host APIs. Any new extension point belongs in the AniCraft repository and needs its own reviewed PR.
 
-Minimum host-side capabilities to verify or implement:
+## 7. Acceptance criteria
 
-1. **Tool/panel registration:** register a Forma Deform tool context and inspector using existing dockable panel infrastructure.
-2. **Selection context:** read stable selected element, layer, frame, and document revision identifiers.
-3. **Command bridge:** invoke the existing M2 preview command with validated parameters and receive structured output, not only unstructured log text.
-4. **Draft lifecycle:** hold ephemeral UI draft state in the host UI process; do not serialize it into undocumented document fields.
-5. **Capability discovery:** expose target/input capability information so unsupported controls are not shown.
-6. **Host validation:** confirm stable IDs and active document/frame at preview invocation to avoid stale-selection races.
-7. **Undo boundary:** no undo entry for preview or draft editing. Durable save/apply operations remain future milestones and must use host commands.
+M3 first slice is accepted when:
+- [ ] The Smart Controller manifest parses with AniCraft's real manifest parser.
+- [ ] All declared parameter types are supported and there are at most 32 parameters.
+- [ ] The settings dialog presents the intended native form in AniCraft.
+- [ ] Legacy Slider behavior remains available.
+- [ ] Canonical Geometry preview builds a valid canonical document from typed settings.
+- [ ] Manual and Bone Rotation input paths work with explicit stable identities.
+- [ ] Geometry target identity is verified through warp.info.
+- [ ] Invalid settings fail closed with actionable diagnostics.
+- [ ] Preview is deterministic and read-only; Cancel leaves the document unchanged.
+- [ ] Keyboard, focus, and accessibility behavior follows AniCraft's existing dialog conventions.
 
-Any new AniCraft API must be implemented and reviewed in the AniCraft repository by its owner. This repository must consume only a documented, versioned host contract.
+The persistent docked inspector is explicitly not an M3 acceptance requirement until AniCraft exposes a supported extension contract.
 
-## 7. M2 preview bridge contract
+## 8. Guardrails
 
-The UI should call a typed host facade rather than assemble arbitrary command JSON in view components. Proposed request fields:
-
-- document revision
-- frame
-- controller document JSON
-- optional manual values JSON
-- explicit stable bone ID to layer ID map
-- bone angle policy
-- angle semantics
-- target identity
-
-Proposed response fields:
-
-- status: success or unavailable
-- input samples: source ID, typed value, availability, and source diagnostics
-- normalized inputs
-- mapping results: mapper ID and typed binding outputs
-- target previews: stable target identity and computed values
-- diagnostics: stable code, severity, message, and optional source/binding/target ID
-
-This is a host facade contract proposal, not a claim that the current command ABI already returns this structure. Before implementation, align field names and serialization with the actual M2 core types and AniCraft command response conventions.
-
-## 8. Accessibility and interaction requirements
-
-- All controls have accessible names and keyboard focus order.
-- Source and target selectors expose names plus stable IDs in detail/diagnostic views.
-- Validation errors are associated with the field that caused them.
-- Keyboard shortcuts must not shadow AniCraft global shortcuts.
-- Escape cancels the current picker or draft edit according to host conventions.
-- Preview status is conveyed in text, not color alone.
-- No modal dialog for routine property editing; use existing inspector patterns.
-
-## 9. Acceptance criteria
-
-M3 is accepted only when all of the following are true:
-
-- [ ] AniCraft provides a documented, versioned native tool/panel extension point.
-- [ ] Forma Deform registers inside the existing AniCraft workspace; no separate app/window or duplicate stage/timeline is introduced.
-- [ ] Inspector reflects current selection and invalidates stale preview on frame/document/selection changes.
-- [ ] Manual and supported Bone Rotation sources can be selected by stable identity.
-- [ ] Mapper/target-specific controls are schema-driven and hide unsupported capabilities.
-- [ ] Invalid drafts cannot preview and show actionable diagnostics.
-- [ ] Preview calls the M2 canonical evaluator and is demonstrably read-only.
-- [ ] Repeated preview is deterministic for identical inputs.
-- [ ] Draft edits and preview create no document mutation or undo entry.
-- [ ] Keyboard, focus, and accessibility checks pass.
-- [ ] Native UI integration tests run in AniCraft; Rust/WASM tests alone are insufficient.
-
-## 10. Immediate implementation sequence
-
-1. Review the current AniCraft source for existing native tool/panel extension points and identify the smallest supported integration surface.
-2. If a suitable extension point exists, document its exact API/version and add a thin Forma Deform host adapter.
-3. If none exists, stop plugin-side UI work and prepare a narrowly scoped AniCraft host proposal for panel registration and structured command responses.
-4. Implement the UI shell only against that verified host contract.
-5. Connect the inspector to M2 preview after the structured request/response path is tested.
-6. Defer durable save/load to M4.
-
-## 11. Non-goals and guardrails
-
-- Do not add React/webview UI inside the WASM command plugin unless AniCraft explicitly supports and documents that architecture.
-- Do not invent SDK functions, panel APIs, document metadata fields, setters, or host callbacks.
-- Do not present a mockup as a working native integration.
-- Do not add a second timeline, renderer, undo stack, or persistence mechanism.
-- Do not merge or change AniCraft itself from this repository without a separately reviewed host-side change.
+- No React/webview UI in the WASM plug-in.
+- No arbitrary string/JSON parameters; use typed settings and build canonical JSON internally.
+- No invented SDK functions, panel APIs, document metadata fields, setters, or callbacks.
+- No durable persistence (M4), apply/bake (M5), or live evaluator (M6).
+- No duplicate timeline, renderer, document, or undo system.
