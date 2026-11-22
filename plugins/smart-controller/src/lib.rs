@@ -187,7 +187,17 @@ fn integer_param(p: &Value, key: &str) -> Result<u64, String> {
         .ok_or_else(|| format!("{key} must be a positive integer"))
 }
 
-fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
+/// Pure result of translating native dialog values into the canonical preview inputs.
+#[derive(Debug)]
+struct GeometryAuthoringBuild {
+    document: CanonicalDocument,
+    manual_values: Value,
+    bone_layers: Value,
+}
+
+/// Build a canonical one-input/one-binding document without issuing host commands.
+/// Keeping this separate makes dialog validation and serialization independently testable.
+fn build_geometry_authoring_document(p: &Value) -> Result<GeometryAuthoringBuild, String> {
     let input_source = p.get("input_source").and_then(Value::as_str).unwrap_or("manual");
     let (source, dimension, manual_values, bone_layers) = match input_source {
         "manual" => (
@@ -200,7 +210,10 @@ fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
             let bone_id = integer_param(p, "bone_id")?;
             let layer_id = integer_param(p, "layer_id")?;
             (
-                InputSource::BoneTransform { bone_id: bone_id.to_string(), channel: BoneTransformChannel::Rotation },
+                InputSource::BoneTransform {
+                    bone_id: bone_id.to_string(),
+                    channel: BoneTransformChannel::Rotation,
+                },
                 InputDimension::Angle,
                 json!({}),
                 json!({(bone_id.to_string()): layer_id}),
@@ -208,6 +221,7 @@ fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
         }
         other => return Err(format!("unsupported input_source '{other}'")),
     };
+
     let input = InputDefinition {
         id: InputId::new("fd-m3-input").map_err(|error| error.to_string())?,
         source,
@@ -221,24 +235,33 @@ fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
         "smoothstep" => EasingConfig::Smoothstep,
         other => return Err(format!("unsupported easing '{other}'")),
     };
+    let minimum = number_param(p, "input_minimum")?;
+    let neutral = number_param(p, "input_neutral")?;
+    let maximum = number_param(p, "input_maximum")?;
+    if !(minimum < neutral && neutral < maximum) {
+        return Err("input range must satisfy minimum < neutral < maximum".into());
+    }
+
+    let element_id = integer_param(p, "element_id")?;
+    let pin_id = integer_param(p, "pin_id")?;
     let controller = Controller {
         id: ControllerId::new("fd-m3-controller").map_err(|error| error.to_string())?,
         enabled: true,
         inputs: vec![input.id.clone()],
         dependencies: vec![],
         mapping: MappingConfig::ThreeAnchorRange {
-            minimum: number_param(p, "input_minimum")?,
-            neutral: number_param(p, "input_neutral")?,
-            maximum: number_param(p, "input_maximum")?,
+            minimum,
+            neutral,
+            maximum,
             easing,
         },
         bindings: vec![ControllerBinding {
             id: BindingId::new("fd-m3-geometry-output").map_err(|error| error.to_string())?,
-            target_id: TargetId::new(format!("geometry:{}:{}", integer_param(p, "element_id")?, integer_param(p, "pin_id")?))
+            target_id: TargetId::new(format!("geometry:{element_id}:{pin_id}"))
                 .map_err(|error| error.to_string())?,
             target: TargetMapping::GeometryDeform {
-                element_id: integer_param(p, "element_id")?.to_string(),
-                pin_id: integer_param(p, "pin_id")?.to_string(),
+                element_id: element_id.to_string(),
+                pin_id: pin_id.to_string(),
                 negative_offset: [number_param(p, "negative_x")?, number_param(p, "negative_y")?],
                 neutral_offset: [number_param(p, "neutral_x")?, number_param(p, "neutral_y")?],
                 positive_offset: [number_param(p, "positive_x")?, number_param(p, "positive_y")?],
@@ -254,10 +277,21 @@ fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
         inputs: vec![input],
         controllers: vec![controller],
     };
-    let source = document.to_json().map_err(|error| error.to_string())?;
+    // Round-trip through the canonical serializer/parser so invalid documents fail
+    // before any host input is queried.
+    let serialized = document.to_json().map_err(|error| error.to_string())?;
+    let document = CanonicalDocument::from_json(&serialized)
+        .map_err(|error| format!("built canonical document failed validation: {error}"))?;
+
+    Ok(GeometryAuthoringBuild { document, manual_values, bone_layers })
+}
+
+fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
+    let built = build_geometry_authoring_document(p)?;
+    let source = built.document.to_json().map_err(|error| error.to_string())?;
     let mut preview_params = p.clone();
-    preview_params["manual_values_json"] = Value::String(manual_values.to_string());
-    preview_params["bone_layers_json"] = Value::String(bone_layers.to_string());
+    preview_params["manual_values_json"] = Value::String(built.manual_values.to_string());
+    preview_params["bone_layers_json"] = Value::String(built.bone_layers.to_string());
     run_canonical_preview(&preview_params, &source)
 }
 
@@ -314,6 +348,90 @@ mod tests {
                 Some("number" | "int" | "bool" | "choice" | "color")
             ));
         }
+    }
+
+    fn valid_geometry_params() -> Value {
+        json!({
+            "input_source": "manual",
+            "manual_value": 0.4,
+            "bone_id": 42,
+            "layer_id": 7,
+            "input_minimum": -1.0,
+            "input_neutral": 0.0,
+            "input_maximum": 1.0,
+            "easing": "smoothstep",
+            "element_id": 12,
+            "pin_id": 3,
+            "negative_x": -8.0, "negative_y": 1.0,
+            "neutral_x": 0.0, "neutral_y": 0.0,
+            "positive_x": 8.0, "positive_y": -1.0
+        })
+    }
+
+    #[test]
+    fn manual_authoring_builds_a_valid_canonical_geometry_document() {
+        let built = build_geometry_authoring_document(&valid_geometry_params()).unwrap();
+        assert_eq!(built.document.inputs.len(), 1);
+        assert_eq!(built.document.controllers.len(), 1);
+        assert_eq!(built.document.controllers[0].bindings.len(), 1);
+        assert_eq!(built.manual_values["fd-m3-input"]["value"], 0.4);
+        assert_eq!(built.bone_layers, json!({}));
+        let target = &built.document.controllers[0].bindings[0].target;
+        match target {
+            TargetMapping::GeometryDeform { element_id, pin_id, negative_offset, positive_offset, .. } => {
+                assert_eq!(element_id, "12");
+                assert_eq!(pin_id, "3");
+                assert_eq!(*negative_offset, [-8.0, 1.0]);
+                assert_eq!(*positive_offset, [8.0, -1.0]);
+            }
+            _ => panic!("expected GeometryDeform target"),
+        }
+    }
+
+    #[test]
+    fn bone_rotation_authoring_keeps_stable_bone_and_host_layer_ids_separate() {
+        let mut params = valid_geometry_params();
+        params["input_source"] = json!("bone_rotation");
+        let built = build_geometry_authoring_document(&params).unwrap();
+        assert_eq!(built.manual_values, json!({}));
+        assert_eq!(built.bone_layers, json!({"42": 7}));
+        match &built.document.inputs[0].source {
+            InputSource::BoneTransform { bone_id, channel } => {
+                assert_eq!(bone_id, "42");
+                assert!(matches!(channel, BoneTransformChannel::Rotation));
+            }
+            _ => panic!("expected BoneTransform input"),
+        }
+    }
+
+    #[test]
+    fn authoring_rejects_non_ordered_ranges_and_invalid_ids() {
+        let mut params = valid_geometry_params();
+        params["input_neutral"] = json!(2.0);
+        assert!(build_geometry_authoring_document(&params).unwrap_err().contains("minimum < neutral < maximum"));
+        let mut params = valid_geometry_params();
+        params["element_id"] = json!(0);
+        assert!(build_geometry_authoring_document(&params).is_err());
+    }
+
+    #[test]
+    fn authoring_rejects_non_finite_or_missing_numeric_values() {
+        let mut params = valid_geometry_params();
+        params["positive_x"] = json!("not-a-number");
+        assert!(build_geometry_authoring_document(&params).is_err());
+        let mut params = valid_geometry_params();
+        params.as_object_mut().unwrap().remove("pin_id");
+        assert!(build_geometry_authoring_document(&params).is_err());
+    }
+
+    #[test]
+    fn authoring_rejects_unknown_input_and_easing_modes() {
+        let mut params = valid_geometry_params();
+        params["input_source"] = json!("translation");
+        assert!(build_geometry_authoring_document(&params).is_err());
+        let mut params = valid_geometry_params();
+        params["easing"] = json!("cubic");
+        assert!(build_geometry_authoring_document(&params).is_err());
     }
 
     #[test]
