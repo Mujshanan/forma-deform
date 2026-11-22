@@ -767,7 +767,7 @@ The evaluator retains its `ControllerMapper` injection boundary. New code can no
 | `Range1D` | Explicit minimum / neutral / maximum | Clamped signed normalization to [-1, 1], linear interpolation between negative-neutral-positive target anchors |
 | `ThreeAnchorRange` | Explicit minimum / neutral / maximum | Same signed normalization with symmetric Linear or Smoothstep easing on either side of neutral |
 | `DirectedRange1D` | Directed start / end; reversed endpoints are valid | Normalizes to [0, 1]; anchor-based targets use the corresponding signed value, while FrameRange uses the unit value |
-| `Discrete` | Scalar driver clamped to [-1, 1] | Selects the nearest equally spaced authored value; exact midpoint ties choose the higher index; preserves the selected TypedValue |
+| `Discrete` | Scalar driver clamped to [-1, 1] | Requires exactly one output binding; selects the nearest equally spaced authored value; exact midpoint ties choose the higher index; preserves the selected TypedValue |
 | `PoseSet1D` | Scalar driver clamped to [-1, 1] | Resolves ordered pose IDs from PoseLibrary and interpolates adjacent poses evenly across the domain |
 
 Range inputs may be Scalar or Angle. Angle driver values and Angle property outputs are interpreted in radians and preserve the input's wrapped/unwrapped semantics. Discrete and PoseSet1D currently require Scalar input.
