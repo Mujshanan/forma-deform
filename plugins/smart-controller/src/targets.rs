@@ -117,7 +117,7 @@ pub fn assess_target(target: &TargetMapping) -> TargetCapability {
             explanation: "Frame-range calculation is supported; a host command that applies this calculated frame is not established.",
         },
         TargetMapping::GeometryDeform { element_id, pin_id, .. } => TargetCapability {
-            status: TargetCapabilityStatus::CommandPreviewOnly,
+            status: TargetCapabilityStatus::CommandApply,
             target_key: format!("geometry:{element_id}:{pin_id}"),
             read_command: Some("warp.info"),
             apply_command: Some("warp.pin_move"),
@@ -176,7 +176,7 @@ mod tests {
             neutral_offset: [1.0, 1.0],
             positive_offset: [2.0, 2.0],
         });
-        assert_eq!(capability.status, TargetCapabilityStatus::CommandPreviewOnly);
+        assert_eq!(capability.status, TargetCapabilityStatus::CommandApply);
         assert_eq!(capability.read_command, Some("warp.info"));
         assert_eq!(capability.apply_command, Some("warp.pin_move"));
     }
