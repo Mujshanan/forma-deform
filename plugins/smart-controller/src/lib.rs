@@ -207,7 +207,7 @@ fn single_apply_candidate(
     if item.host_verification != preview_plan::HostTargetVerification::Verified {
         return Err("target identity was not verified by the host; refusing to apply".into());
     }
-    if !matches!(item.target, TargetMapping::GeometryDeform { .. }) {
+    if !matches!(&item.target, TargetMapping::GeometryDeform { .. }) {
         return Err("current-frame apply supports only verified GeometryDeform targets".into());
     }
     Ok(item)
