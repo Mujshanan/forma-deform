@@ -179,8 +179,18 @@ impl GeometrySnapshot {
         if self.payload_kind.trim().is_empty() {
             return Err(ContractError::MissingPayloadKind);
         }
+        if self.payload_kind != crate::path2d::PATH2D_PAYLOAD_KIND {
+            return Err(ContractError::UnsupportedPayloadKind);
+        }
         if self.payload_schema_version == 0 {
             return Err(ContractError::InvalidPayloadSchemaVersion);
+        }
+        if self.payload_schema_version != crate::path2d::PATH2D_SCHEMA_VERSION {
+            return Err(ContractError::UnsupportedPayloadSchemaVersion);
+        }
+        let calculated = self.payload.fingerprint(&self.coordinate_space)?;
+        if calculated != self.fingerprint {
+            return Err(ContractError::FingerprintDoesNotMatchPayload);
         }
         Ok(())
     }
@@ -290,6 +300,9 @@ pub enum ContractError {
     InvalidUnitScale,
     MissingPayloadKind,
     InvalidPayloadSchemaVersion,
+    UnsupportedPayloadKind,
+    UnsupportedPayloadSchemaVersion,
+    FingerprintDoesNotMatchPayload,
     InvalidRevision,
     InvalidGeneration,
     TargetIdentityMismatch,
@@ -305,6 +318,9 @@ impl std::fmt::Display for ContractError {
             Self::InvalidUnitScale => write!(f, "coordinate unit scale must be finite and positive"),
             Self::MissingPayloadKind => write!(f, "geometry payload kind must not be empty"),
             Self::InvalidPayloadSchemaVersion => write!(f, "payload schema version must be non-zero"),
+            Self::UnsupportedPayloadKind => write!(f, "unsupported geometry payload kind"),
+            Self::UnsupportedPayloadSchemaVersion => write!(f, "unsupported Path2D payload schema version"),
+            Self::FingerprintDoesNotMatchPayload => write!(f, "geometry fingerprint does not match the canonical payload"),
             Self::InvalidRevision => write!(f, "geometry and topology revisions must start at one"),
             Self::InvalidGeneration => write!(f, "target generation must be non-zero"),
             Self::TargetIdentityMismatch => write!(f, "snapshot target identities do not match"),
@@ -421,10 +437,7 @@ mod tests {
             axes: AxisOrientation::XRightYDown,
             origin: CoordinateOrigin::TopLeft,
         };
-        let fingerprint = GeometryFingerprint {
-            algorithm: "anicraft-path2d-sha256-v1".into(),
-            digest: vec![7; 32],
-        };
+        let fingerprint = path().fingerprint(&coordinate_space).unwrap();
         assert_eq!(
             GeometrySnapshot::new(
                 target(1), GeometryRevision(0), TopologyRevision(1),
@@ -438,6 +451,29 @@ mod tests {
                 fingerprint, coordinate_space, "Path2D", 1, path(),
             ).unwrap_err(),
             ContractError::InvalidGeneration
+        );
+    }
+
+    #[test]
+    fn snapshot_rejects_fingerprint_that_does_not_match_its_payload() {
+        let coordinate_space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let mut fingerprint = path().fingerprint(&coordinate_space).unwrap();
+        fingerprint.digest[0] ^= 0xff;
+        assert_eq!(
+            GeometrySnapshot::new(
+                target(1), GeometryRevision(1), TopologyRevision(1),
+                fingerprint, coordinate_space, "Path2D", 1, path(),
+            ).unwrap_err(),
+            ContractError::FingerprintDoesNotMatchPayload
         );
     }
 
