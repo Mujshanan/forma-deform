@@ -9,6 +9,8 @@ use crate::host_contract::{
 };
 use crate::path2d::{Path2D, PATH2D_FINGERPRINT_ALGORITHM};
 
+pub const EVALUATION_REQUEST_SCHEMA: &str = "forma-deform-evaluation-request";
+pub const EVALUATION_REQUEST_SCHEMA_VERSION: u32 = 1;
 pub const EVALUATED_GEOMETRY_SCHEMA: &str = "forma-deform-evaluated-geometry";
 pub const EVALUATED_GEOMETRY_SCHEMA_VERSION: u32 = 1;
 
@@ -199,6 +201,8 @@ enum DependencyKey {
 /// Immutable request assembled from one consistent set of host snapshots.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EvaluationRequest {
+    schema_name: String,
+    schema_version: u32,
     request_id: String,
     sources: Vec<GeometrySnapshot>,
     model: ModelRevisionStamp,
@@ -220,6 +224,8 @@ impl EvaluationRequest {
         composition_graph: Option<CompositionGraphStamp>,
     ) -> Result<Self, EvaluationContractError> {
         let value = Self {
+            schema_name: EVALUATION_REQUEST_SCHEMA.into(),
+            schema_version: EVALUATION_REQUEST_SCHEMA_VERSION,
             request_id: request_id.into(),
             sources,
             model,
@@ -233,6 +239,11 @@ impl EvaluationRequest {
     }
 
     pub fn validate(&self) -> Result<(), EvaluationContractError> {
+        if self.schema_name != EVALUATION_REQUEST_SCHEMA
+            || self.schema_version != EVALUATION_REQUEST_SCHEMA_VERSION
+        {
+            return Err(EvaluationContractError::UnsupportedRequestSchema);
+        }
         require_id(&self.request_id)?;
         require_id(&self.stage_id)?;
         self.model.validate()?;
@@ -254,6 +265,8 @@ impl EvaluationRequest {
         Ok(())
     }
 
+    pub fn schema_name(&self) -> &str { &self.schema_name }
+    pub fn schema_version(&self) -> u32 { self.schema_version }
     pub fn request_id(&self) -> &str { &self.request_id }
     pub fn sources(&self) -> &[GeometrySnapshot] { &self.sources }
     pub fn model(&self) -> &ModelRevisionStamp { &self.model }
@@ -450,6 +463,7 @@ pub enum EvaluationContractError {
     SourceStampMismatch,
     CoordinateSpaceMismatch,
     FingerprintMismatch,
+    UnsupportedRequestSchema,
     UnsupportedResultSchema,
     HostContract(ContractError),
 }
@@ -468,6 +482,7 @@ impl std::fmt::Display for EvaluationContractError {
             Self::SourceStampMismatch => write!(f, "the result source stamp does not match the request snapshot"),
             Self::CoordinateSpaceMismatch => write!(f, "the result coordinate space differs from the source coordinate space"),
             Self::FingerprintMismatch => write!(f, "the evaluated geometry fingerprint does not match its payload"),
+            Self::UnsupportedRequestSchema => write!(f, "unsupported evaluation request schema"),
             Self::UnsupportedResultSchema => write!(f, "unsupported evaluated geometry result schema"),
             Self::HostContract(error) => write!(f, "{error}"),
         }
