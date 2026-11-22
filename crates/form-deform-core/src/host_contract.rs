@@ -192,22 +192,48 @@ impl<P> GeometrySnapshot<P> {
     pub fn payload(&self) -> &P { &self.payload }
 
     pub fn stamp(&self) -> GeometrySnapshotStamp {
-        GeometrySnapshotStamp {
-            target: self.target.clone(),
-            geometry_revision: self.geometry_revision,
-            topology_revision: self.topology_revision,
-            fingerprint: self.fingerprint.clone(),
-        }
+        GeometrySnapshotStamp::new(
+            self.target.clone(),
+            self.geometry_revision,
+            self.topology_revision,
+            self.fingerprint.clone(),
+        ).expect("validated snapshot always produces a valid stamp")
     }
 }
 
 /// The exact source dependency an evaluation result must report.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeometrySnapshotStamp {
-    pub target: HostTargetRef,
-    pub geometry_revision: GeometryRevision,
-    pub topology_revision: TopologyRevision,
-    pub fingerprint: GeometryFingerprint,
+    target: HostTargetRef,
+    geometry_revision: GeometryRevision,
+    topology_revision: TopologyRevision,
+    fingerprint: GeometryFingerprint,
+}
+
+impl GeometrySnapshotStamp {
+    pub fn new(
+        target: HostTargetRef,
+        geometry_revision: GeometryRevision,
+        topology_revision: TopologyRevision,
+        fingerprint: GeometryFingerprint,
+    ) -> Result<Self, ContractError> {
+        let stamp = Self { target, geometry_revision, topology_revision, fingerprint };
+        stamp.validate()?;
+        Ok(stamp)
+    }
+
+    pub fn validate(&self) -> Result<(), ContractError> {
+        self.target.validate()?;
+        if self.geometry_revision.0 == 0 || self.topology_revision.0 == 0 {
+            return Err(ContractError::InvalidRevision);
+        }
+        self.fingerprint.validate()
+    }
+
+    pub fn target(&self) -> &HostTargetRef { &self.target }
+    pub fn geometry_revision(&self) -> GeometryRevision { self.geometry_revision }
+    pub fn topology_revision(&self) -> TopologyRevision { self.topology_revision }
+    pub fn fingerprint(&self) -> &GeometryFingerprint { &self.fingerprint }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,6 +263,8 @@ impl SnapshotFreshness {
         captured: &GeometrySnapshotStamp,
         current: &GeometrySnapshotStamp,
     ) -> Result<Self, ContractError> {
+        captured.validate()?;
+        current.validate()?;
         if captured.target != current.target {
             return Err(ContractError::TargetIdentityMismatch);
         }
@@ -298,15 +326,15 @@ mod tests {
     }
 
     fn stamp(generation: u64, geometry: u64, topology: u64, digest: u8) -> GeometrySnapshotStamp {
-        GeometrySnapshotStamp {
-            target: target(generation),
-            geometry_revision: GeometryRevision(geometry),
-            topology_revision: TopologyRevision(topology),
-            fingerprint: GeometryFingerprint {
+        GeometrySnapshotStamp::new(
+            target(generation),
+            GeometryRevision(geometry),
+            TopologyRevision(topology),
+            GeometryFingerprint {
                 algorithm: "sha256-canonical-v1".into(),
                 digest: vec![digest; 32],
             },
-        }
+        ).unwrap()
     }
 
     #[test]
