@@ -1,26 +1,89 @@
 # Forma Deform
 
-**Forma Deform** is a reusable 2D deformation project with an AniCraft plugin suite. The original TypeScript rectangle/timeline demo remains a separate geometry experiment.
+**Forma Deform** is AniCraft's proposed deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
-## AniCraft plugin suite
+The repository currently contains an experimental TypeScript rectangle/timeline demo and a Rust/WASM AniCraft command-plugin suite. Treat those as separate development tracks: the long-term product is the native AniCraft tool, while the current command plugins are prototypes and integration probes.
 
-The branch feat/smart-controller-v1 contains three separate command plugins:
+## What Forma Deform owns
 
-- **Bone Query** — read-only armature, bone, pose, spring, joint-translation, and skin-weight inspection.
-- **Form Deform** — deterministic bone-angle-driven Asset Warp pin deformation using an authored neutral position and per-degree gains.
-- **Smart Controller** — general-purpose neutral-centered input mapping with Linear/Smoothstep easing and three geometry anchors.
+- Deformation specifications and pure deformation mathematics.
+- Smart Controller definitions, input normalization, mapping, easing, validation, and preview.
+- Deformation targets and explicit target bindings.
+- Pin, vector, lattice, and mesh deformation algorithms where AniCraft's native capabilities are insufficient.
+- Corrective poses, blend-shape contributions, and reusable deformation presets.
+- Deterministic, testable evaluation of its own controller and deformation models.
 
-Each plugin has its own crate and manifest. Shared native logic is isolated under crates/. The AniCraft guest SDK is vendored with pinned upstream provenance.
+## What AniCraft owns
 
-See [plugin overview](plugins/README.md) and the [unified build and smoke-test guide](plugins/INSTALL.md), [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md), and [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md).
+- Canonical bone identity, bone transforms, coordinate spaces, and the authoritative rig model.
+- Asset Warp mesh/pin storage and rendering.
+- Timeline, playhead, keyframes, document persistence, undo/redo, command registration, plugin lifecycle, evaluation scheduling, cache invalidation, and export.
+- Host-side document integration needed for durable plugin-owned bindings.
 
-## Important host boundaries
+Forma Deform consumes host data through explicit contracts. It must not introduce a second document model, timeline, renderer, undo stack, or plugin framework.
 
-The current AniCraft command-plugin API supports on-demand bone and warp queries and undoable warp-pin edits. It does not expose durable arbitrary plugin metadata, continuous playback/scrubbing evaluation, or a verified command to set a nested symbol instance's displayed frame. The suite does not claim those capabilities. Apply operations are explicit document edits; calculation-only mode is the default.
+## UI proposal
+
+Forma Deform should appear as a native AniCraft tool/workspace, not as a separate application window.
+
+1. **Stage (center):** the selected artwork with deformation mesh, pins, handles, neutral/rest positions, selected target outlines, and preview overlays.
+2. **Tool strip (left):** Select Target, Pin, Handle, Soft Selection, Bind Controller, and Preview. Show only tools supported by the active target type.
+3. **Properties panel (right):**
+   - Target and binding inspector.
+   - Neutral input, source bone/controller, range, normalization, easing, and mapping.
+   - Per-target gains and axis constraints.
+   - Validation messages and a read-only evaluated preview.
+4. **Timeline (bottom):** use AniCraft's existing timeline and playhead. Do not create a second timeline. V1 preview is explicitly on demand; it does not claim continuous playback evaluation.
+5. **Controller preview:** show input value, normalized value, selected mapping segment/keyform, output value, and target displacement. Preview must be deterministic and must not mutate authored geometry.
+6. **Commands:** expose bind, unbind, capture neutral, preview, and apply/bake as explicit AniCraft commands. Destructive or persistent changes must participate in AniCraft undo.
+
+### Conceptual layout
+
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│ AniCraft menu / tool context / command palette                           │
+├──────────────┬───────────────────────────────────────┬───────────────────┤
+│ Tool strip   │ Stage                                 │ Properties        │
+│              │                                       │                   │
+│ Select       │       artwork + mesh                  │ Target            │
+│ Pin          │       pins / handles                  │ Controller        │
+│ Soft select  │       neutral + preview overlay       │ Mapping           │
+│ Bind         │                                       │ Diagnostics       │
+│ Preview      │                                       │ Preview values    │
+├──────────────┴───────────────────────────────────────┴───────────────────┤
+│ Existing AniCraft timeline / layers / playhead                           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+This is a conceptual arrangement using AniCraft's existing dockable panels and stage. It is not a commitment to new host UI infrastructure.
+
+## Current prototype status and limitations
+
+The current command-plugin suite contains:
+
+- **Bone Query:** read-only inspection of armatures, bones, poses, spring state, joint translation, and skin weights.
+- **Form Deform:** deterministic bone-angle-driven Asset Warp pin positioning from an authored neutral position and per-degree gains.
+- **Smart Controller:** neutral-centered input mapping, easing, and preview output.
+
+The current command-plugin API supports on-demand queries and explicit undoable pin edits. It does not currently establish arbitrary durable plugin metadata or a continuous custom playback evaluator. Do not describe the prototype as providing live Smart Controller playback. Persistent bindings and native evaluation require explicit AniCraft host support.
+
+Smart Controller evaluation and Form Deform pin evaluation remain independent. Do not implicitly combine their outputs. Multi-source composition requires a separately approved semantic design.
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the feature allocation matrix, external code-reuse audit, UI behavior, integration boundaries, milestones, and acceptance criteria.
+
+Additional technical references:
+
+- [Plugin overview](plugins/README.md)
+- [Build and smoke-test guide](plugins/INSTALL.md)
+- [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md)
+- [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md)
+- [Capability limits](docs/CAPABILITIES.md)
 
 ## Verification
 
-Run the complete Rust suite and build all three WASM plugins:
+For the Rust workspace and WASM plugins:
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -31,4 +94,4 @@ cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-pl
 cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
 ```
 
-The TypeScript demo retains its Bun-based scripts. GitHub Actions checks both projects.
+The separate TypeScript demo retains its Bun-based scripts. See the package scripts before running it.
