@@ -2,6 +2,17 @@
 
 **V1 status:** canonical, on-demand host preview plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not apply targets, write keyframes, or run during playback/scrubbing.
 
+## Native authoring dialog (FD-M3 first slice)
+
+AniCraft renders command plug-in settings as a native dialog. The Smart Controller now offers two workflows:
+
+- **Geometry Controller** (default): author one Manual or Bone Rotation input, a three-point range/easing, and one GeometryDeform target with negative/neutral/positive vector anchors. The plug-in assembles and validates the canonical document internally, then runs the read-only M2 preview.
+- **Legacy Slider**: retains the compact legacy frame-mapping preview. The native settings schema has no free-form text parameter, so the legacy bone-name field is not user-editable in this dialog; the adapter uses the documented default bone name, Head.
+
+The dialog uses only AniCraft-supported parameter types (number, int, bool, choice, color), stays within the host's 32-parameter limit, and does not ask users to paste canonical JSON. Settings are ephemeral; they are not saved as durable bindings. Cancel must leave the document unchanged.
+
+The first slice intentionally supports one input, one controller, and one geometry target. It is not yet a persistent docked inspector or a multi-controller authoring workspace.
+
 ## Canonical preview (FD-M2)
 
 Set `canonical_document_json` to a JSON-encoded canonical Smart Controller document (schema `smart-controller`, version `1`). The plugin then:
