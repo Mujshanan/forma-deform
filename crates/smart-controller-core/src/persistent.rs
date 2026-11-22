@@ -3,7 +3,8 @@
 //! AniCraft owns storage and document transactions. This module owns the payload
 //! schema, validation, and atomic collection edits; it never performs I/O.
 use crate::{
-    canonical::{CanonicalDocument, Controller},
+    canonical::Controller,
+    migration::CanonicalDocument,
     error::CoreError,
     ids::ControllerId,
     input::InputDefinition,
