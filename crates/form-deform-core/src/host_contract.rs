@@ -91,6 +91,9 @@ pub struct CoordinateSpaceDescriptor {
     pub kind: CoordinateSpaceKind,
     pub dimensions: u8,
     pub linear_unit: String,
+    /// Canonical unit named by the host for this payload coordinate space.
+    pub canonical_unit: String,
+    /// Canonical units per one payload linear unit.
     pub unit_scale: f64,
     pub axes: AxisOrientation,
     pub origin: CoordinateOrigin,
@@ -101,7 +104,7 @@ impl CoordinateSpaceDescriptor {
         if self.dimensions != 2 {
             return Err(ContractError::UnsupportedDimensions(self.dimensions));
         }
-        if self.linear_unit.trim().is_empty() {
+        if self.linear_unit.trim().is_empty() || self.canonical_unit.trim().is_empty() {
             return Err(ContractError::MissingLinearUnit);
         }
         if !self.unit_scale.is_finite() || self.unit_scale <= 0.0 {
@@ -333,6 +336,7 @@ mod tests {
             kind: CoordinateSpaceKind::TargetLocalRest,
             dimensions: 2,
             linear_unit: "px".into(),
+            canonical_unit: "px".into(),
             unit_scale: 1.0,
             axes: AxisOrientation::XRightYDown,
             origin: CoordinateOrigin::TopLeft,
