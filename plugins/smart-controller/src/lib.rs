@@ -408,7 +408,7 @@ mod tests {
     fn authoring_rejects_non_ordered_ranges_and_invalid_ids() {
         let mut params = valid_geometry_params();
         params["input_neutral"] = json!(2.0);
-        assert!(build_geometry_authoring_document(&params).unwrap_err().contains("minimum < neutral < maximum"));
+        assert!(build_geometry_authoring_document(&params).err().unwrap().contains("minimum < neutral < maximum"));
         let mut params = valid_geometry_params();
         params["element_id"] = json!(0);
         assert!(build_geometry_authoring_document(&params).is_err());
