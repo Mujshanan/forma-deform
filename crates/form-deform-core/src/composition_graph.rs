@@ -27,6 +27,7 @@ pub struct CompositionGraph {
     target: HostTargetRef,
     reference_geometry: GeometrySnapshotStamp,
     coordinate_space: CoordinateSpaceDescriptor,
+    input_kind: GeometryValueKind,
     nodes: Vec<CompositionNode>,
     outputs: Vec<String>,
 }
@@ -125,6 +126,7 @@ impl CompositionGraph {
         target: HostTargetRef,
         reference_geometry: GeometrySnapshotStamp,
         coordinate_space: CoordinateSpaceDescriptor,
+        input_kind: GeometryValueKind,
         nodes: Vec<CompositionNode>,
         outputs: Vec<String>,
     ) -> Result<Self, CompositionGraphError> {
@@ -135,6 +137,7 @@ impl CompositionGraph {
             target,
             reference_geometry,
             coordinate_space,
+            input_kind,
             nodes,
             outputs,
         };
@@ -268,6 +271,9 @@ impl CompositionGraph {
         let mut graph_output_kind = None;
         for output in &self.outputs {
             let signature = signatures.get(output.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
+            if signature.input != self.input_kind {
+                return Err(CompositionGraphError::GraphInputTypeMismatch);
+            }
             if let Some(expected) = graph_output_kind {
                 if signature.output != expected {
                     return Err(CompositionGraphError::IncompatibleValueTypes);
@@ -340,7 +346,7 @@ impl CompositionGraph {
                         return Err(CompositionGraphError::IncompatibleValueTypes);
                     }
                 }
-                NodeSignature { input: first.output, output: first.output }
+                NodeSignature { input: first.input, output: first.output }
             }
         };
         cache.insert(node.node_id(), signature);
@@ -399,6 +405,7 @@ impl CompositionGraph {
     pub fn target(&self) -> &HostTargetRef { &self.target }
     pub fn reference_geometry(&self) -> &GeometrySnapshotStamp { &self.reference_geometry }
     pub fn coordinate_space(&self) -> &CoordinateSpaceDescriptor { &self.coordinate_space }
+    pub fn input_kind(&self) -> GeometryValueKind { self.input_kind }
     pub fn nodes(&self) -> &[CompositionNode] { &self.nodes }
     pub fn outputs(&self) -> &[String] { &self.outputs }
 }
@@ -441,6 +448,7 @@ pub enum CompositionGraphError {
     ReferenceGeometryMismatch,
     CoordinateSpaceMismatch,
     IncompatibleValueTypes,
+    GraphInputTypeMismatch,
     ResourceLimitExceeded,
 }
 
@@ -503,7 +511,7 @@ mod tests {
     fn graph_defaults_to_explicit_nodes_and_ordered_sequential_composition() {
         let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::Displacement, GeometryValueKind::Displacement)];
         let graph = CompositionGraph::new(
-            "graph", 1, target(), reference(), space(),
+            "graph", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::deformer("n-a", "a"),
                 CompositionNode::deformer("n-b", "b"),
@@ -517,7 +525,7 @@ mod tests {
     #[test]
     fn graph_rejects_cycles() {
         let graph = CompositionGraph::new(
-            "cycle", 1, target(), reference(), space(),
+            "cycle", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::sequential("a", vec!["b".into(), "c".into()]),
                 CompositionNode::sequential("b", vec!["a".into(), "c".into()]),
@@ -533,7 +541,7 @@ mod tests {
         assert_eq!(WeightedInput::new("a", 0.0), Err(CompositionGraphError::InvalidWeight));
         let defs = vec![definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement), definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement)];
         let graph = CompositionGraph::new(
-            "blend", 1, target(), reference(), space(),
+            "blend", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::deformer("a", "a"),
                 CompositionNode::deformer("b", "b"),
@@ -556,7 +564,7 @@ mod tests {
             other, GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement, BTreeMap::new(),
         ).unwrap();
         let graph = CompositionGraph::new(
-            "graph", 1, target(), reference(), space(),
+            "graph", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![CompositionNode::deformer("a-node", "a")],
             vec!["a-node".into()],
         ).unwrap();
@@ -566,13 +574,13 @@ mod tests {
     #[test]
     fn graph_rejects_orphan_nodes_and_missing_inputs() {
         let orphan = CompositionGraph::new(
-            "orphan", 1, target(), reference(), space(),
+            "orphan", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![CompositionNode::deformer("a", "a"), CompositionNode::deformer("b", "b")],
             vec!["a".into()],
         );
         assert_eq!(orphan, Err(CompositionGraphError::OrphanNode));
         let missing = CompositionGraph::new(
-            "missing", 1, target(), reference(), space(),
+            "missing", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![CompositionNode::sequential("seq", vec!["x".into(), "y".into()])],
             vec!["seq".into()],
         );
