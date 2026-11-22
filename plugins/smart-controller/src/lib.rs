@@ -65,7 +65,11 @@ fn query_driver_bone(params: &Params) -> Result<f64, String> {
 }
 
 fn parse_json_object_parameter(p: &Value, key: &str) -> Result<Value, String> {
-    let source = p.get(key).and_then(Value::as_str).unwrap_or("{}");
+    let source = match p.get(key) {
+        None | Some(Value::Null) => "{}",
+        Some(Value::String(source)) => source.as_str(),
+        Some(_) => return Err(format!("{key} must be a JSON-encoded string")),
+    };
     let value: Value = serde_json::from_str(source)
         .map_err(|error| format!("{key} must contain valid JSON: {error}"))?;
     if !value.is_object() {
@@ -96,10 +100,7 @@ fn parse_bone_layers(p: &Value) -> Result<BTreeMap<String, u64>, String> {
     }).collect()
 }
 
-fn run_canonical_preview(p: &Value) -> Result<(), String> {
-    let source = p.get("canonical_document_json").and_then(Value::as_str)
-        .filter(|source| !source.trim().is_empty())
-        .ok_or("canonical_document_json is required for canonical preview")?;
+fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
     let document = CanonicalDocument::from_json(source)
         .map_err(|error| format!("invalid canonical controller document: {error}"))?;
     let manual_values = parse_manual_values(p)?;
@@ -158,10 +159,14 @@ fn run_canonical_preview(p: &Value) -> Result<(), String> {
 }
 
 fn run(p: &Value) -> Result<(), String> {
-    if p.get("canonical_document_json").and_then(Value::as_str)
-        .is_some_and(|source| !source.trim().is_empty())
-    {
-        return run_canonical_preview(p);
+    let canonical_document = match p.get("canonical_document_json") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(source)) if source.trim().is_empty() => None,
+        Some(Value::String(source)) => Some(source.as_str()),
+        Some(_) => return Err("canonical_document_json must be a string".into()),
+    };
+    if let Some(source) = canonical_document {
+        return run_canonical_preview(p, source);
     }
 
     // Preserve the original compact Slider workflow for existing users.
@@ -220,7 +225,15 @@ mod tests {
 
     #[test]
     fn canonical_mode_is_selected_only_for_a_non_empty_document() {
-        assert!(!json!({"canonical_document_json":""})["canonical_document_json"].as_str().unwrap().is_empty());
-        assert!(json!({"canonical_document_json":"{}"})["canonical_document_json"].as_str().is_some());
+        let empty = json!({"canonical_document_json":""});
+        let supplied = json!({"canonical_document_json":"{}"});
+        assert!(empty["canonical_document_json"].as_str().unwrap().is_empty());
+        assert!(supplied["canonical_document_json"].as_str().is_some());
+    }
+
+    #[test]
+    fn malformed_json_parameter_types_fail_closed() {
+        assert!(parse_manual_values(&json!({"manual_values_json":[]})).is_err());
+        assert!(parse_bone_layers(&json!({"bone_layers_json":"[]"})).is_err());
     }
 }
