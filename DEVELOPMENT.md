@@ -672,9 +672,9 @@ The old V1 formats are not interchangeable with the canonical document. They enc
 
 | Behavior | Existing implementations | Characterization |
 |---|---|---|
-| Three-anchor normalization | `legacy::InputRange::normalize`; `mapping::range::ThreePointRange::normalize_signed` | Existing `range_mapping_tests.rs` compares them across a range of inputs. They implement the same signed `[-1, 1]` normalization with neutral at zero. |
-| Easing | `legacy::EaseCurve`; `mapping::easing::Easing`; `canonical::EasingConfig` | Three enums describe the same Linear/Smoothstep choices. The new mapping primitive validates non-finite values; the legacy enum is a compatibility implementation. |
-| Directed range normalization | `mapping::normalize_rotation`; `mapping::range::normalize_directed` | Existing tests compare outputs for forward and reversed ranges. The newer helper returns `CoreError`; the V1 helper returns a string error. |
+| Three-anchor normalization | `legacy::InputRange::normalize`; `mapping::range::ThreePointRange::normalize_signed` | The legacy method now delegates to `ThreePointRange`, preserving its V1 error type. Existing `range_mapping_tests.rs` checks numeric parity. |
+| Easing | `legacy::EaseCurve`; `mapping::easing::Easing`; `canonical::EasingConfig` | `canonical::EasingConfig` now re-exports the shared `Easing` type; the legacy enum delegates to it while retaining the old serialized names and V1 surface. |
+| Directed range normalization | `mapping::normalize_rotation`; `mapping::range::normalize_directed` | The V1 helper is now a thin wrapper over `normalize_directed`, translating `CoreError` to the old string error. Existing tests compare forward and reversed ranges. |
 | Frame mapping | `mapping::map_to_frame`; `mapping::frame::map_to_frame` | Existing tests compare endpoint outputs. The newer helper returns `Result` and rejects non-finite values and reversed frame intervals; the V1 helper has a non-fallible signature and a debug-only interval assertion. |
 | Three-anchor configuration | `MappingConfig::Range1D`; `MappingConfig::ThreeAnchorRange` | Both carry minimum/neutral/maximum. `ThreeAnchorRange` additionally carries easing and is the form emitted by V1 BindingSet migration. The duplicate needs a version-aware consolidation decision. |
 | Two-endpoint configuration | `MappingConfig::DirectedRange1D` | Semantically distinct from a three-anchor range: it maps a directed start/end interval into `[0, 1]`, preserving reversed endpoints. Keep this distinct. |
@@ -731,3 +731,20 @@ The source-only audit PR's CI run `44989449828` reached `cargo test --workspace`
 
 The characterization branch fixes these compile-time issues by typing the geometry response cache, publicly re-exporting the shared `EvaluationResult` contract, and moving test-only imports into the test module. The first rerun compiled the workspace and reached tests, then exposed a contradictory plug-in test: one test expected a missing manual sample to make the provider fail immediately, while another expected the provider to return an explicit Missing sample for core fallback handling. The test now asserts the latter contract (missing sample, no fabricated value), consistent with the provider/core responsibility boundary. GitHub Actions CI run #447 on the corrected branch head (`bbf3df5f10af6dd056223612271870262ef7d95a`) passed all steps: Bun install/typecheck/tests/build, `cargo test --workspace`, and all three WASM plug-in release builds. This verifies the current characterization branch at that commit; it does not establish in-app AniCraft behavior or complete canonical mapping semantics.
 
+
+
+### 12.8 Consolidation progress
+
+The first behavior-preserving consolidation is now in the core:
+- `canonical::EasingConfig` re-exports the shared `mapping::easing::Easing` type; canonical documents retain the same `linear`/`smoothstep` serialized values.
+- `legacy::InputRange` delegates validation and normalization to `mapping::range::ThreePointRange`, translating errors back to the V1 `ControllerError` variants.
+- `legacy::EaseCurve` delegates to the shared checked easing implementation.
+- `mapping::normalize_rotation` delegates to `mapping::range::normalize_directed`, preserving its V1 string-error signature.
+
+Still intentionally not consolidated:
+- `mapping::map_to_frame` and `mapping::frame::map_to_frame` have different invalid-input/error contracts. The checked `Result<_, CoreError>` API is the new-code target; retain the V1 wrapper until its callers and invalid-input compatibility are explicitly handled.
+- `MappingConfig::Range1D` and `MappingConfig::ThreeAnchorRange` remain duplicate three-anchor representations. Removing one requires an explicit canonical schema compatibility/migration decision.
+- A built-in canonical `ControllerMapper` is still missing. Do not claim end-to-end canonical mapping is complete while the evaluator relies on an injected mapper.
+- Pose-set, joystick and discrete mapping semantics remain underspecified by the present pose data model and are not silently implemented as scalar ranges.
+
+No target output, controller schema, preview behavior, input fallback policy, or Form Deform behavior was intentionally changed by these refactors. CI must verify the resulting branch before this consolidation increment is considered complete.
