@@ -330,6 +330,90 @@ Evidence:
 - [Render pipeline ADR 0002](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0002-render-pipeline.md)
 - [Tiled stage rendering ADR 0007](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0007-tiled-stage-rendering.md)
 
+### 6.8 CCC-01.5 — Smart Controller and Form Deform separation
+
+**Verification result: production paths are separate, but the current test suite contains a direct cross-path composition that conflicts with accepted CCC-01.5. Do not mark this item complete yet.**
+
+#### Production Smart Controller paths
+
+The V1 plugin `plugins/smart-controller/src/lib.rs`:
+- Reads a bone angle through `bone.info` (or accepts a manual value).
+- Validates and calculates `preview_slider`.
+- Logs the preview.
+- Rejects Transform mode in the V1 adapter.
+- Does not issue timeline commands or mutate the document.
+
+The canonical preview adapter also remains read-only. Its core evaluates a controller DAG and composes controller contributions; `TargetMapping::GeometryDeform` yields a typed `Vector2` target preview. `build_host_target_preview_plan` may query `warp.info` to verify the exact element/pin identity, but does not issue `warp.pin_move`. The composition module explicitly states that it never combines Smart Controller results with Form Deform pin-deformation evaluation.
+
+The production Smart Controller crate depends on `smart-controller-core` and the AniCraft plugin SDK. `form-deform-core` is listed only as a dev-dependency in `plugins/smart-controller/Cargo.toml`, not as a production dependency.
+
+#### Production Form Deform path
+
+The separate `plugins/form-deform/src/lib.rs` command:
+1. Reads the selected bone's keyed angle from `bone.info`; spring swing is opt-in.
+2. Reads the requested shape and pin identity through `warp.info`.
+3. Calls `form_deform_core::evaluate_pin_position` with its own authored neutral position, neutral angle, and per-degree gain.
+4. Defaults to calculation-only mode. Only when `apply=true` does it call `warp.pin_move`.
+
+The pure Form Deform formula is absolute and non-accumulating:
+
+`target = neutral_position + (current_angle - neutral_angle) * gain_per_degree`
+
+Its unit tests cover neutral pose, positive/negative angle results, repeatability, and rejection of non-finite input. Plugin unit tests cover stable bone-ID lookup, exact pin lookup, and malformed host responses. This is a separate command/evaluation path; it does not call the Smart Controller evaluator or consume its outputs.
+
+#### Conflicting integration test
+
+There is one material exception: `plugins/smart-controller/tests/plugin_suite.rs`, test `bone_query_input_flows_through_controller_and_form_deform_math`.
+
+That test:
+1. Reads a sample bone angle.
+2. Evaluates a Smart Controller `GeometryDeform` binding to produce a pin offset.
+3. Adds that offset to the Form Deform neutral pin base.
+4. Passes the combined base into `form_deform_core::evaluate_pin_position`.
+
+The test's own comment explicitly describes the controller result as the Form Deform authored neutral pin base. It therefore asserts the very cross-system composition that CCC-01.5 says must remain separate. The test is part of the Smart Controller crate's integration-test target, and the crate declares `form-deform-core` as a dev-dependency to compile it.
+
+This is not evidence that the two production plugin entry points are currently wired together; they are not. It is, however, an executable test-level integration contract that contradicts the accepted architecture decision and could encourage a future implementation to combine them.
+
+**Required resolution before CCC-01.5 can be marked verified:** reconcile this test with CCC-01.5. Under the currently accepted decision, the test should no longer assert controller-output-to-pin-deformation composition; replace its intent with independent-path tests or remove it after preserving any still-valid isolated coverage. Do not make that change as part of this audit. If the combined behavior is actually desired, it requires a new explicit architecture decision and must not be inferred from the existing test.
+
+#### Existing AniCraft pin behavior — preserved by the inspected host implementation
+
+AniCraft remains authoritative for pin storage, interpolation, and applying pin edits:
+
+- `Warp` stores stable `PinId` values and each pin's rest/current positions in shape-local coordinates.
+- `Warp::lerp` requires the same rest artwork and mesh resolution, pairs pins by stable ID, interpolates matching pin positions, and holds a pin at its existing value when no matching partner exists.
+- The host warp command converts stage-space command coordinates through the inverse element transform before storing local pin coordinates.
+- `Shape::set_warp` derives and stores the bent outline from the warp state.
+- The host's `pin_poses_tween_between_keyframes_with_easing` test verifies midpoint interpolation, keyframe easing, stable pin identity across keyframes, and keying when a pin is moved during a tween.
+- Other host tests cover unchanged rest pose, bending, undo/redo, bitmap rendering/export, persistence, and stale-artwork rebasing.
+
+The FDM Form Deform core computes a desired absolute pin position; when explicitly applied, it delegates the edit to AniCraft's existing `warp.pin_move` command. It does not replace the host's MLS warp algorithm or pin tweening semantics.
+
+#### CCC-01.5 classification
+
+| Area | Current evidence | Result |
+|---|---|---|
+| Smart Controller V1 production plugin | Slider preview only; no timeline/document mutation | Separate |
+| Canonical Smart Controller preview | Pure controller evaluation/composition; GeometryDeform target is preview data; host pin verification is read-only | Separate |
+| Form Deform production plugin | Independent neutral/gain calculation; optional explicit `warp.pin_move` | Separate |
+| Production dependency graph | Form Deform core is a Smart Controller dev-dependency only | No production coupling |
+| Smart Controller integration test | Explicitly feeds controller GeometryDeform offset into Form Deform neutral pin base | **Conflicts with CCC-01.5** |
+| AniCraft pin algorithm and tween behavior | Stable-ID pin interpolation and host tests remain in place | Preserved in inspected host source |
+
+Evidence:
+- [Smart Controller V1 plugin](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/src/lib.rs)
+- [Smart Controller canonical adapter and read-only host preview](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/src/adapter.rs)
+- [Smart Controller target preview plan](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/src/preview_plan.rs)
+- [Smart Controller composition post-pass](https://github.com/Mujshanan/forma-deform/blob/main/crates/smart-controller-core/src/composition.rs)
+- [Form Deform plugin](https://github.com/Mujshanan/forma-deform/blob/main/plugins/form-deform/src/lib.rs)
+- [Form Deform pure pin-position calculation and unit tests](https://github.com/Mujshanan/forma-deform/blob/main/crates/form-deform-core/src/lib.rs)
+- [Smart Controller integration test with conflicting composition](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/tests/plugin_suite.rs)
+- [Smart Controller plugin dependencies](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/Cargo.toml)
+- [AniCraft Warp model and pin interpolation](https://github.com/Mujshanan/anicraft/blob/main/crates/doc/src/warp.rs)
+- [AniCraft warp commands](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_warp.rs)
+- [AniCraft pin tween/easing and behavior tests](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/tests_warp.rs)
+
 ## 8. Updated capability conclusions
 
 | Concern | Verified AniCraft capability | Remaining FDM v2 gap |
@@ -343,6 +427,7 @@ Evidence:
 | Cache | Session display-list cache plus render scene/frame/tile caches keyed by whole-document StateId and view context; pending render work is latest-wins | FDM dependency fingerprint/revision identity; explicit cancellation and stale-result rejection contract |
 | Transactions | Atomic mutating commands, rollback, snapshot undo/redo | FDM multi-target/frame-range bake transaction details |
 | Plugin access | Command/document/elements/log ABI; plugin commands nested in one undo step; exporter plugins read evaluated frames | Durable authored metadata and continuous evaluator/result application are not exposed by this contract |
+| CCC-01.5 | Production Smart Controller and Form Deform paths are separate; AniCraft pin MLS/tween behavior remains host-owned | Smart Controller integration test still composes controller offset into Form Deform math; reconcile test before marking separation verified |
 
 ## 9. M0 deliverables and exit criteria
 
@@ -356,7 +441,7 @@ Evidence:
 - [x] Pure document evaluation and editor display-list cache path inspected.
 - [x] External result application, async cancellation, and full render/cache invalidation paths inspected; no external geometry-result API or FDM stale-result contract was found.
 - [x] Command transactions and snapshot undo/redo inspected; FDM bake representation/provenance remains open.
-- [ ] Smart Controller/pin separation verified against current tests and source.
+- [ ] CCC-01.5 fully verified: production plugin paths are separate and AniCraft pin behavior is preserved, but `plugins/smart-controller/tests/plugin_suite.rs::bone_query_input_flows_through_controller_and_form_deform_math` explicitly combines the two paths and conflicts with the accepted decision. Reconcile this test before checking this item.
 - [ ] Every integration requirement classified with evidence and an owner.
 - [ ] Required AniCraft host extensions listed separately from FDM implementation work.
 
