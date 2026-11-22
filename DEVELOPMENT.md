@@ -189,7 +189,7 @@ The module sketch is conceptual. Do not create empty crates or force the current
 | M4 — Persistent bindings | Versioned binding model stored through host-owned document extension | Save/load, migration, undo and invalidation tests pass |
 | M5 — Deformation integration | Target adapters and explicit apply/bake commands | Stable target identity and atomic undo |
 | M6 — Host evaluation integration | Live evaluator only if AniCraft exposes a supported hook | Scrub/playback determinism, invalidation and performance tests |
-| M7 — Advanced algorithms | Multi-axis keyforms, lattice, RBF/ARAP research, soft selection | Benchmarks justify each addition |
+| M7 — Advanced algorithms | Multi-axis keyforms, lattice, RBF/ARAP research, soft selection | Benchmarks justify each addition; five-pose joystick field is the first implementation slice |
 
 Do not skip M0 to claim capabilities that the host does not expose. M6 is not a prerequisite for a useful authoring/preview tool.
 
@@ -281,3 +281,10 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
+
+
+## 12. FD-M7 — First advanced controller slice
+
+The first M7 implementation enables the existing `JoystickFivePose` mapping in the canonical mapper. It accepts two ordered scalar inputs (X then Y), clamps each to [-1, 1], and interpolates the five authored runtime poses (center/up/right/down/left) using inverse squared Euclidean distance weighting. Exact anchor hits return the exact authored pose. Scalars and vectors use weighted arithmetic blending; wrapped angles use a circular mean and reject ambiguous blends.
+
+The detailed semantics, edge cases, and tests are specified in [FD-M7 multi-axis pose field](docs/FD-M7-MULTIAXIS-POSE-FIELD.md). This does not add durable pose persistence, host evaluation hooks, or host-side document changes.
