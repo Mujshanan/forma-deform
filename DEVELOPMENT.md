@@ -212,6 +212,35 @@ A feature is not complete because a UI control exists. It must have a defined mo
 This document is an architecture and development plan. It does not authorize changes to AniCraft, external repositories, or PR merges.
 
 
+## 11. FD-M5 — Target application first slice
+
+**Status:** one-target current-playhead apply path implemented in the Smart Controller command adapter; multi-target and range bake remain host-extension work.
+
+### Supported operation
+
+1. Evaluate the canonical controller document and build the same deterministic target preview plan used by Preview.
+2. Require exactly one resolved output target and no unresolved targets.
+3. Require the read-only host identity check to have verified the exact geometry element and pin.
+4. Re-query `warp.info` immediately before mutation to reject stale target identity.
+5. Issue one `warp.pin_move` command with absolute stage-space Vector2 coordinates at AniCraft's current playhead.
+6. Let AniCraft own document mutation and the corresponding undo entry.
+
+The operation is explicit and opt-in. Preview remains the default and issues no mutating command. The adapter accepts only positive numeric host element/pin IDs and a Vector2 output; array indices, selected-element order, string aliases, and inferred targets are rejected.
+
+### Deliberate limits
+
+- Only `GeometryDeform` → Asset Warp pin is currently writable.
+- Exactly one target is applied per invocation, avoiding a partially completed multi-command batch.
+- The current-playhead write is a single undoable host command.
+- Timeline-range bake, multi-pin atomic apply, symbol-frame setters, and generic property setters are not implemented. The inspected command contract does not establish a single batch transaction for these writes; a host-owned batch command is required before claiming atomic undo for them.
+
+### Verification and acceptance
+
+- Pure tests cover stable numeric target identity, Vector2 payloads, invalid target kinds, and invalid IDs.
+- Integration still requires an AniCraft smoke test confirming current-playhead keying and undo/redo behavior in the actual host.
+- [ ] Verify host apply and undo/redo in AniCraft.
+- [ ] Design a host-owned batch command before adding multi-target or timeline-range bake.
+
 ## 10. FD-M1 — Canonical one-dimensional Smart Controller mapper
 
 **Implementation area:** `crates/smart-controller-core/src/mapping/canonical.rs`  
