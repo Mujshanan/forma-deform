@@ -1,3 +1,5 @@
+> **Historical evidence snapshot.** This file records a point-in-time source audit only. The root [DEVELOPMENT.md](../DEVELOPMENT.md) is the sole authority for current project status, architecture and roadmap. Do not use this audit as a separate development plan.
+
 # Smart Controllers — Phase 0 Existing Implementation Audit
 
 **Repository:** `Mujshanan/forma-deform`  
