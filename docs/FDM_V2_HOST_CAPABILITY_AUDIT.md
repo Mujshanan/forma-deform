@@ -332,7 +332,7 @@ Evidence:
 
 ### 6.8 CCC-01.5 — Smart Controller and Form Deform separation
 
-**Verification result: production paths are separate, but the current test suite contains a direct cross-path composition that conflicts with accepted CCC-01.5. Do not mark this item complete yet.**
+**Verification result: source/test contract reconciled with CCC-01.5.** The production paths remain independent, the conflicting integration test now tests only Smart Controller preview output, and the Smart Controller plugin no longer has a Form Deform dev-dependency. Existing Form Deform core tests continue to own pin-position formula coverage. AniCraft pin behavior remains unchanged.
 
 #### Production Smart Controller paths
 
@@ -361,21 +361,19 @@ The pure Form Deform formula is absolute and non-accumulating:
 
 Its unit tests cover neutral pose, positive/negative angle results, repeatability, and rejection of non-finite input. Plugin unit tests cover stable bone-ID lookup, exact pin lookup, and malformed host responses. This is a separate command/evaluation path; it does not call the Smart Controller evaluator or consume its outputs.
 
-#### Conflicting integration test
+#### Resolved test discrepancy
 
-There is one material exception: `plugins/smart-controller/tests/plugin_suite.rs`, test `bone_query_input_flows_through_controller_and_form_deform_math`.
+The conflicting test `bone_query_input_flows_through_controller_and_form_deform_math` has been replaced in `plugins/smart-controller/tests/plugin_suite.rs` by `bone_query_input_produces_independent_controller_geometry_preview`.
 
-That test:
-1. Reads a sample bone angle.
-2. Evaluates a Smart Controller `GeometryDeform` binding to produce a pin offset.
-3. Adds that offset to the Form Deform neutral pin base.
-4. Passes the combined base into `form_deform_core::evaluate_pin_position`.
+The replacement:
+1. Reads the sample keyed bone angle from the same `bone.info`-shaped fixture.
+2. Evaluates the Smart Controller `GeometryDeform` binding.
+3. Asserts only the typed controller preview offset (`Vector2 { x: 6.0, y: -2.0 }`).
+4. Does not construct a Form Deform neutral pin base, call `evaluate_pin_position`, or apply a host pin command.
 
-The test's own comment explicitly describes the controller result as the Form Deform authored neutral pin base. It therefore asserts the very cross-system composition that CCC-01.5 says must remain separate. The test is part of the Smart Controller crate's integration-test target, and the crate declares `form-deform-core` as a dev-dependency to compile it.
+The unused `form-deform-core` dev-dependency was removed from `plugins/smart-controller/Cargo.toml`. Form Deform's own core tests remain the isolated coverage for its absolute pin-position formula (neutral pose, positive/negative angles, repeatability, and non-finite rejection); its plugin tests remain responsible for host bone/pin lookup and malformed responses.
 
-This is not evidence that the two production plugin entry points are currently wired together; they are not. It is, however, an executable test-level integration contract that contradicts the accepted architecture decision and could encourage a future implementation to combine them.
-
-**Required resolution before CCC-01.5 can be marked verified:** reconcile this test with CCC-01.5. Under the currently accepted decision, the test should no longer assert controller-output-to-pin-deformation composition; replace its intent with independent-path tests or remove it after preserving any still-valid isolated coverage. Do not make that change as part of this audit. If the combined behavior is actually desired, it requires a new explicit architecture decision and must not be inferred from the existing test.
+This removes the test-level executable composition contract without changing either production plugin path, the Smart Controller preview semantics, the Form Deform formula, or AniCraft's pin implementation. No new composition behavior is authorized. The source change was committed on the FDM documentation branch; CI/test execution was not performed as part of this source audit.
 
 #### Existing AniCraft pin behavior — preserved by the inspected host implementation
 
@@ -397,8 +395,8 @@ The FDM Form Deform core computes a desired absolute pin position; when explicit
 | Smart Controller V1 production plugin | Slider preview only; no timeline/document mutation | Separate |
 | Canonical Smart Controller preview | Pure controller evaluation/composition; GeometryDeform target is preview data; host pin verification is read-only | Separate |
 | Form Deform production plugin | Independent neutral/gain calculation; optional explicit `warp.pin_move` | Separate |
-| Production dependency graph | Form Deform core is a Smart Controller dev-dependency only | No production coupling |
-| Smart Controller integration test | Explicitly feeds controller GeometryDeform offset into Form Deform neutral pin base | **Conflicts with CCC-01.5** |
+| Production/test dependency graph | Smart Controller depends on its own core and AniCraft SDK; Form Deform is no longer a Smart Controller dev-dependency | Independent
+| Smart Controller integration test | Asserts only the independent controller GeometryDeform preview offset; no Form Deform call or dependency | Reconciled
 | AniCraft pin algorithm and tween behavior | Stable-ID pin interpolation and host tests remain in place | Preserved in inspected host source |
 
 Evidence:
@@ -408,8 +406,8 @@ Evidence:
 - [Smart Controller composition post-pass](https://github.com/Mujshanan/forma-deform/blob/main/crates/smart-controller-core/src/composition.rs)
 - [Form Deform plugin](https://github.com/Mujshanan/forma-deform/blob/main/plugins/form-deform/src/lib.rs)
 - [Form Deform pure pin-position calculation and unit tests](https://github.com/Mujshanan/forma-deform/blob/main/crates/form-deform-core/src/lib.rs)
-- [Smart Controller integration test with conflicting composition](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/tests/plugin_suite.rs)
-- [Smart Controller plugin dependencies](https://github.com/Mujshanan/forma-deform/blob/main/plugins/smart-controller/Cargo.toml)
+- [Smart Controller integration test with independent preview assertion](https://github.com/Mujshanan/forma-deform/blob/docs/fdm-v2-architecture-consolidation/plugins/smart-controller/tests/plugin_suite.rs)
+- [Smart Controller plugin dependencies (no Form Deform test dependency)](https://github.com/Mujshanan/forma-deform/blob/docs/fdm-v2-architecture-consolidation/plugins/smart-controller/Cargo.toml)
 - [AniCraft Warp model and pin interpolation](https://github.com/Mujshanan/anicraft/blob/main/crates/doc/src/warp.rs)
 - [AniCraft warp commands](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_warp.rs)
 - [AniCraft pin tween/easing and behavior tests](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/tests_warp.rs)
@@ -427,9 +425,60 @@ Evidence:
 | Cache | Session display-list cache plus render scene/frame/tile caches keyed by whole-document StateId and view context; pending render work is latest-wins | FDM dependency fingerprint/revision identity; explicit cancellation and stale-result rejection contract |
 | Transactions | Atomic mutating commands, rollback, snapshot undo/redo | FDM multi-target/frame-range bake transaction details |
 | Plugin access | Command/document/elements/log ABI; plugin commands nested in one undo step; exporter plugins read evaluated frames | Durable authored metadata and continuous evaluator/result application are not exposed by this contract |
-| CCC-01.5 | Production Smart Controller and Form Deform paths are separate; AniCraft pin MLS/tween behavior remains host-owned | Smart Controller integration test still composes controller offset into Form Deform math; reconcile test before marking separation verified |
+| CCC-01.5 | Production paths and integration-test contract are separate; Form Deform formula tests remain isolated; AniCraft pin MLS/tween behavior remains host-owned | No remaining discrepancy identified; test execution still required in CI |
+
+## 8.1 M0 integration gap and ownership matrix
+
+The matrix separates capabilities already supplied by AniCraft, host extensions required for a complete FDM v2 integration, and responsibilities that remain inside Forma Deform. “Host extension required” means the inspected public host surface does not currently expose the needed contract; it is not a claim that the extension has been designed or authorized.
+
+| Integration concern | Existing AniCraft capability | Remaining gap / required contract | Primary owner |
+|---|---|---|---|
+| Canonical target identity | Document-scoped element/layer/symbol IDs and document allocator | FDM adapter must resolve stable target references; host contract must define validity across deletion/reload and target-kind capability reporting | AniCraft owns identity; FDM owns adapter |
+| Source geometry and snapshots | Shape paths, transforms, shape-owned Asset Warp, evaluated DisplayItems | Immutable geometry snapshot API with explicit coordinate space, target identity, source revision/fingerprint, supported geometry kinds | AniCraft exposes snapshots; FDM consumes |
+| Per-target revisions | Whole-document StateId and command-driven document changes | Explicit target geometry/topology revision or a guaranteed dependency token suitable for stale-result checks and cache keys | AniCraft |
+| Native pin deformation | Shape-specific Asset Warp, MLS pin deformation, stable PinId, pin tweening, undoable warp commands | No replacement needed for compatible targets; FDM should route supported pin edits through host commands and report unsupported targets | AniCraft owns algorithm/storage; FDM adapter reuses it |
+| Lattice/cage topology | Native warp mesh is derived from rest outline/resolution; native envelope is a separate baked/session-oriented capability | Persistent FDM topology schemas for structured lattices and irregular cages, stable control-point IDs, connectivity, revisions, validation | FDM defines schema/semantics; AniCraft persists and owns document lifecycle |
+| Source-to-deformation mapping | Native warp has its own shape-specific mapping; no general FDM mapping contract | Explicit mapping representation, coordinate spaces, compatibility checks, rebase/migration behavior | FDM |
+| Hierarchy and nested deformation | Host owns layer containment and affine rig-parent inheritance | Host supplies hierarchy and transform context; FDM defines nonlinear parent-to-descendant propagation and mapping semantics; do not confuse affine inheritance with nonlinear deformation | AniCraft supplies context; FDM defines nonlinear semantics |
+| Multiple-source composition | No general FDM composition contract in host | Explicit FDM composition graph, deterministic ordering, type/space/reference compatibility, cycle and stale-reference diagnostics | FDM |
+| Smart Controller / Form Deform | Separate production paths; Smart Controller preview is read-only; Form Deform independently computes an absolute pin target | Preserve CCC-01.5 separation; do not combine their outputs absent a new explicit decision | FDM |
+| Timeline and sampling | Host timeline, playhead, keyframes, tweens, armature pose, native pin tweening | Host sampling contract for FDM properties and topology-compatible animation values; FDM defines property semantics and specialized interpolation | AniCraft owns time/tracks/sampling; FDM owns property semantics |
+| Persistent authored data | Explicit Document schema; no generic plugin extension-data API found in inspected contract | Versioned host-owned extension storage, save/load, migration, undo/redo integration | AniCraft provides persistence boundary; FDM defines payload schema |
+| Shared geometry evaluation | Pure document evaluators produce DisplayLists for editing, stage, player and export consumers | One supported FDM integration point before shared geometry consumers diverge; no renderer-only or stage-only injection | AniCraft |
+| Evaluation inputs and outputs | Host resolves document/frame contexts; renderer consumes immutable DisplayLists | Versioned runtime contract: immutable snapshots and sampled inputs in; typed target results with source revisions/coordinate space/compatibility out | FDM defines deformation contract; AniCraft owns host boundary |
+| Scheduling and stale-result handling | Render queues and caches exist; in-flight render work is not cancelled; no FDM result acceptance API found | Host scheduling, cancellation/generation, freshness validation, atomic result acceptance, fail-closed diagnostics | AniCraft |
+| Cache invalidation | Session/render caches use StateId and frame/view context | FDM declares dependencies/fingerprints; host includes relevant revisions in cache identity and invalidates consistently | FDM declares dependencies; AniCraft owns cache |
+| Bake and undo | Host commands, rollback, snapshot undo/redo | Host transaction/command for atomic bake and source retention; FDM supplies evaluated geometry and deformation provenance requirements | AniCraft owns mutation/transaction; FDM owns deformation evaluation/provenance fields |
+| Export/player consistency | Separate host evaluation consumers exist | Ensure the same FDM-evaluated geometry is consumed by editing, hit testing, bounds, stage rendering, player, and all export paths | AniCraft integration; FDM evaluator |
+
+### 8.2 Required AniCraft host extensions (separate from FDM work)
+
+These are the host-side capabilities indicated by the audit. They are requirements for a complete native FDM v2 integration, not implementation instructions or accepted designs for AniCraft.
+
+1. **Versioned FDM document extension storage.** Persist FDM-owned payloads through an explicit document extension boundary, including save/load, schema migration, and undo/redo participation. The host retains ownership of the document and persistence lifecycle.
+2. **Stable target and geometry snapshot contract.** Resolve host target IDs and supply immutable source geometry snapshots with declared coordinate spaces, target kind/capabilities, and revision/fingerprint information.
+3. **Shared evaluated-geometry extension point.** Integrate deformation results before the common evaluated geometry is consumed by hit testing, bounds, stage rendering, player evaluation, and built-in/plugin exports. A rasterizer callback or stage-only overlay is insufficient.
+4. **Timeline property sampling boundary.** Store and sample FDM-specific animatable values using AniCraft's playhead/time/tracks, while preserving host ownership of timeline infrastructure.
+5. **Scheduling, freshness, and cache contract.** Define dependency-aware invalidation, cache identity, cancellation/generation semantics, stale-result rejection, and atomic publication/application of valid results.
+6. **Host transaction/bake boundary.** Provide undoable atomic document mutation for explicit bake/apply operations, including retained-source restoration and deterministic redo.
+7. **Capability and diagnostic reporting.** Expose supported target kinds and explicit failures for stale IDs, incompatible geometry, unsupported target types, and rejected results.
+
+The exact API shapes, storage format, cache-key design, and evaluation scheduling policy remain open. No AniCraft code has been changed.
+
+### 8.3 Forma Deform-owned implementation work
+
+1. Define versioned persistent schemas for deformation domains, structured lattices, irregular cages, stable control-point IDs, topology revisions, and source mappings.
+2. Implement topology construction/validation, source-to-deformation mapping, rebase/migration rules, and compatibility diagnostics.
+3. Define deformation algorithms and their explicit input/output types, coordinate spaces, reference geometry, numerical tolerances, and degenerate-input behavior.
+4. Define nonlinear nested-deformation propagation separately from AniCraft's ordinary affine transform inheritance.
+5. Define the explicit composition graph and deterministic sequential, parallel, and weighted-blend semantics; preserve the CCC-01.5 Smart Controller/Form Deform separation.
+6. Define deformation-specific animatable property schemas, interpolation rules, topology-revision compatibility, and stable animation references.
+7. Implement deterministic pure evaluation against immutable host snapshots and sampled inputs; return typed results and dependency descriptors without mutating authored data.
+8. Define deformation-specific bake requirements and provenance payloads; AniCraft remains responsible for document mutation, transactions, and undo/redo.
+9. Reuse AniCraft Asset Warp for supported shape-pin deformation instead of introducing a competing pin solver without a measured need.
 
 ## 9. M0 deliverables and exit criteria
+
 
 - [x] Native Asset Warp source and command surface documented.
 - [x] Existing plugin SDK capability audit reconciled as prior evidence.
@@ -441,9 +490,9 @@ Evidence:
 - [x] Pure document evaluation and editor display-list cache path inspected.
 - [x] External result application, async cancellation, and full render/cache invalidation paths inspected; no external geometry-result API or FDM stale-result contract was found.
 - [x] Command transactions and snapshot undo/redo inspected; FDM bake representation/provenance remains open.
-- [ ] CCC-01.5 fully verified: production plugin paths are separate and AniCraft pin behavior is preserved, but `plugins/smart-controller/tests/plugin_suite.rs::bone_query_input_flows_through_controller_and_form_deform_math` explicitly combines the two paths and conflicts with the accepted decision. Reconcile this test before checking this item.
-- [ ] Every integration requirement classified with evidence and an owner.
-- [ ] Required AniCraft host extensions listed separately from FDM implementation work.
+- [x] CCC-01.5 source/test contract reconciled: production paths remain separate; the Smart Controller integration test asserts only its own preview output; the Form Deform dev-dependency was removed; AniCraft pin behavior remains unchanged. CI/test execution is still pending.
+- [x] Every identified integration requirement classified with source evidence and an owner in the M0 integration gap and ownership matrix.
+- [x] Required AniCraft host extensions listed separately from Forma Deform-owned implementation work.
 
 ## 10. Sources
 
@@ -459,4 +508,4 @@ Evidence:
 - [AniCraft ADR 0079 — Asset Warp](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0079-asset-warp.md)
 - [Forma Deform SDK capability audit](ANICRAFT_SDK_AUDIT.md)
 
-**M0 status: In progress.** This first pass does not authorize changes to AniCraft. Any host extension requires its own design review and explicit authorization.
+**M0 status: Audit complete.** The source-based capability audit, CCC-01.5 reconciliation, integration gap/ownership matrix, and separate host-extension list are complete. Implementation-level contracts and API designs remain open; this audit does not authorize changes to AniCraft. The modified Smart Controller test has not yet been executed in CI.
