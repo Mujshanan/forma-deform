@@ -17,12 +17,12 @@ This matrix is the release gate for the FDM v2 host boundary. A passing Forma De
 | FDM-M1-006 | Coordinate interpretation affects fingerprint | Unit, scale, axes, origin or coordinate-space ID change the digest | Implemented in PR #20 |
 | FDM-M1-007 | Snapshot verifies supplied fingerprint | Payload/fingerprint mismatch is rejected | Implemented in PR #20 |
 | FDM-M1-008 | Freshness detects target mismatch, revision change/regression and fingerprint mismatch | Each condition has a distinct outcome | Implemented in PR #20 |
-| FDM-M1-009 | Evaluation result validates every dependency stamp | Missing/invalid dependency prevents result construction | Required by lifecycle contract |
-| FDM-M1-010 | Identical request produces identical output | Result and diagnostics are deterministic | Required by lifecycle contract |
-| FDM-M1-011 | Evaluation does not mutate source snapshot or authored model | Inputs remain byte/value-equivalent after evaluation | Required by lifecycle contract |
-| FDM-M1-012 | Composition graph is explicit, acyclic and versioned | Ambiguous or cyclic composition is rejected | Required by lifecycle contract |
-| FDM-M1-013 | Persistence round-trip and named migrations | Authored IDs/settings survive; unknown versions fail closed | Required by lifecycle contract |
-| FDM-M1-014 | Result fingerprint covers output schema and canonical payload | Equivalent outputs match; semantic changes differ | Required by lifecycle contract |
+| FDM-M1-009 | Evaluation request validates source snapshots, model/time stamps and external dependencies | Missing, duplicate or invalid dependency prevents request construction | Implemented in PR #30 follow-up |
+| FDM-M1-010 | Evaluated result binds to the exact request | Target, source stamp, model, time, dependencies and graph stamp must match | Implemented in PR #30 follow-up |
+| FDM-M1-011 | Evaluated result preserves source coordinate semantics | Output coordinate descriptor must exactly match the source descriptor in v1 | Implemented in PR #30 follow-up |
+| FDM-M1-012 | Composition graph identity is explicit and versioned | Result records the exact graph stamp; graph structure/cycle validation remains a separate core task | Graph-stamp binding implemented in PR #30 follow-up |
+| FDM-M1-013 | Persistence round-trip and named migrations | Authored IDs/settings survive; unknown versions fail closed | Not implemented; contract specified |
+| FDM-M1-014 | Result fingerprint is deterministic for canonical output payload | Equivalent payload/coordinate values match; semantic payload changes differ. Result schema/operation are separately versioned and validated, not included in this Path2D digest | Implemented in PR #30 follow-up |
 
 ## 2. AniCraft host conformance tests
 
