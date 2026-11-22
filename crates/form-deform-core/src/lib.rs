@@ -1,6 +1,7 @@
 //! Deterministic, non-accumulating bone-to-warp-pin deformation math.
 
 pub mod host_contract;
+pub mod path2d;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 { pub x: f64, pub y: f64 }
