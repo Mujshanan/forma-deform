@@ -60,7 +60,7 @@ const MANIFEST: &str = r##"{
     "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
     "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
     "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"},
-    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame"], "default": "preview", "label": "Target action (Apply writes one pin key at the playhead)"}
+    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame", "apply_all_current_frame"], "default": "preview", "label": "Target action (apply one or all verified pins at the playhead)"}
   }
 }"##;
 
@@ -186,6 +186,23 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
                 item.target_id, result
             ));
         }
+        "apply_all_current_frame" => {
+            let items = multi_apply_candidates(&session.target_preview)?;
+            // Phase 1: re-read and validate every target. No mutation occurs here.
+            let prepared = items.iter()
+                .map(|item| targets::prepare_geometry_target(&item.target, item.value))
+                .collect::<Result<Vec<_>, _>>()?;
+            // Phase 2: commit all writes. AniCraft executes the command plug-in
+            // inside one plugin.run transaction, so any command error rolls back
+            // the complete batch and the successful batch is one undo step.
+            for params in prepared {
+                targets::apply_prepared_geometry_target(params)?;
+            }
+            ac::log(&format!(
+                "Applied {} verified geometry target(s) at the current playhead in one plugin.run transaction.",
+                items.len()
+            ));
+        }
         other => return Err(format!("unsupported target_action '{other}'")),
     }
     Ok(())
@@ -211,6 +228,35 @@ fn single_apply_candidate(
         return Err("current-frame apply supports only verified GeometryDeform targets".into());
     }
     Ok(item)
+}
+
+/// Validate a complete current-frame geometry batch before any host write.
+fn multi_apply_candidates(
+    plan: &preview_plan::TargetPreviewPlan,
+) -> Result<&[preview_plan::TargetPreviewItem], String> {
+    if !plan.unresolved_targets.is_empty() {
+        return Err("cannot apply batch while preview contains unresolved output targets".into());
+    }
+    if plan.items.is_empty() || plan.items.len() > 512 {
+        return Err(format!(
+            "current-frame batch requires 1–512 resolved targets; found {}",
+            plan.items.len()
+        ));
+    }
+    let mut identities = std::collections::BTreeSet::new();
+    for item in &plan.items {
+        if item.host_verification != preview_plan::HostTargetVerification::Verified {
+            return Err(format!("target {} was not verified by the host; refusing entire batch", item.target_id));
+        }
+        let (element, pin) = match &item.target {
+            TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
+            _ => return Err(format!("target {} is not a GeometryDeform target; refusing entire batch", item.target_id)),
+        };
+        if !identities.insert((element, pin)) {
+            return Err(format!("duplicate geometry target element={element}, pin={pin}; refusing entire batch"));
+        }
+    }
+    Ok(&plan.items)
 }
 
 fn number_param(p: &Value, key: &str) -> Result<f64, String> {
