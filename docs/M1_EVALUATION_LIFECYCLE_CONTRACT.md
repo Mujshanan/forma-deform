@@ -74,7 +74,7 @@ Every prepared result must contain:
 
 - result schema name and version;
 - exact `HostTargetRef`;
-- source `GeometrySnapshotStamp`;
+- the complete set of source `GeometrySnapshotStamp` values, including every source geometry consumed by a multi-source request;
 - complete non-geometry dependency stamp set;
 - FDM model identity, model revision and algorithm identifier/version;
 - explicit time-sample identity;
