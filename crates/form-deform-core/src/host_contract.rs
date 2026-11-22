@@ -42,6 +42,15 @@ pub struct HostTargetRef {
     pub generation: u64,
 }
 
+impl HostTargetRef {
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if self.generation == 0 {
+            return Err(ContractError::InvalidGeneration);
+        }
+        Ok(())
+    }
+}
+
 /// Host-issued, target-scoped source revisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GeometryRevision(pub u64);
@@ -205,11 +214,19 @@ pub struct SnapshotFreshness {
     pub geometry_changed: bool,
     pub topology_changed: bool,
     pub fingerprint_changed: bool,
+    pub geometry_revision_regressed: bool,
+    pub topology_revision_regressed: bool,
 }
 
 impl SnapshotFreshness {
     pub fn is_current(self) -> bool {
         !self.geometry_changed && !self.topology_changed && !self.fingerprint_changed
+    }
+
+    /// Equal revisions with different content indicate a host snapshot-integrity
+    /// failure rather than an ordinary source edit.
+    pub fn is_fingerprint_integrity_error(self) -> bool {
+        self.fingerprint_changed && !self.geometry_changed && !self.topology_changed
     }
 
     /// Compare a captured dependency with the host's current source state.
@@ -226,6 +243,8 @@ impl SnapshotFreshness {
             geometry_changed: captured.geometry_revision != current.geometry_revision,
             topology_changed: captured.topology_revision != current.topology_revision,
             fingerprint_changed: captured.fingerprint != current.fingerprint,
+            geometry_revision_regressed: current.geometry_revision.0 < captured.geometry_revision.0,
+            topology_revision_regressed: current.topology_revision.0 < captured.topology_revision.0,
         })
     }
 }
@@ -240,6 +259,7 @@ pub enum ContractError {
     MissingPayloadKind,
     InvalidPayloadSchemaVersion,
     InvalidRevision,
+    InvalidGeneration,
     TargetIdentityMismatch,
 }
 
@@ -254,6 +274,7 @@ impl std::fmt::Display for ContractError {
             Self::MissingPayloadKind => write!(f, "geometry payload kind must not be empty"),
             Self::InvalidPayloadSchemaVersion => write!(f, "payload schema version must be non-zero"),
             Self::InvalidRevision => write!(f, "geometry and topology revisions must start at one"),
+            Self::InvalidGeneration => write!(f, "target generation must be non-zero"),
             Self::TargetIdentityMismatch => write!(f, "snapshot target identities do not match"),
         }
     }
@@ -307,11 +328,14 @@ mod tests {
             geometry_changed: true,
             topology_changed: false,
             fingerprint_changed: false,
+            geometry_revision_regressed: false,
+            topology_revision_regressed: false,
         });
         let topology = SnapshotFreshness::compare(&captured, &stamp(1, 4, 8, 9)).unwrap();
         assert!(topology.topology_changed);
         let fingerprint = SnapshotFreshness::compare(&captured, &stamp(1, 4, 7, 8)).unwrap();
         assert!(fingerprint.fingerprint_changed);
+        assert!(fingerprint.is_fingerprint_integrity_error());
     }
 
     #[test]
