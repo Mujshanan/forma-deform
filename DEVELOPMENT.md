@@ -491,7 +491,7 @@ This section is the current status authority. Update it when code or verified ho
 
 | Capability | Status |
 |---|---|
-| Independent Rust Smart Controller core | Canonical DAG/evaluation/composition foundations and legacy V1 paths are present; overlapping DTOs/mapping primitives and missing built-in canonical mapper are under characterization |
+| Independent Rust Smart Controller core | Canonical DAG/evaluation/composition plus a built-in one-dimensional mapper for range, directed-range, discrete and pose-set configurations; joystick and multi-input mapping remain deferred |
 | Smart Controller command plug-in | Present as an on-demand prototype/compatibility adapter |
 | Deterministic preview-only V1 direction | Required behavior to preserve |
 | Bone input through `bone.info` | Documented/audited on-demand host path; verify against current AniCraft source and in-app behavior |
@@ -705,14 +705,14 @@ Adopt these boundaries:
 3. **One numeric mapping implementation:** make the checked `CoreError` mapping primitives authoritative. Legacy functions become thin compatibility wrappers only where their public signatures must be retained; otherwise deprecate them after all callers move.
 4. **One easing type:** use the canonical mapping easing type in the runtime model and map legacy `EaseCurve` values at the compatibility boundary.
 5. **One three-anchor variant:** consolidate `Range1D` and `ThreeAnchorRange` into a single canonical three-anchor representation with explicit easing semantics. Retain `DirectedRange1D` as the separate two-endpoint mapping. Because canonical documents are already versioned, define a schema migration/compatibility path before changing serialized variants; do not silently reinterpret schema version 1.
-6. **Built-in canonical mapper:** implement the mapping behavior in `smart-controller-core`, not in AniCraft or the WASM adapter. Keep `ControllerMapper` as a seam if useful for tests/alternate algorithms, but provide a first-party implementation that consumes canonical `MappingConfig`, resolved typed inputs and target bindings. Unsupported mapping kinds must return explicit typed errors/diagnostics rather than fabricate outputs.
+6. **Built-in canonical mapper:** implement mapping behavior in `smart-controller-core`, not AniCraft or the WASM adapter. Keep `ControllerMapper` as a seam for tests/alternate algorithms, and provide a first-party implementation that consumes canonical `MappingConfig`, resolved typed inputs and target bindings. Unsupported mapping kinds must return explicit typed errors/diagnostics rather than fabricate outputs. The first one-dimensional implementation now covers Range1D, ThreeAnchorRange, DirectedRange1D, Discrete and PoseSet1D; JoystickFivePose remains explicitly deferred to a dedicated two-dimensional mapper.
 7. **Host adapter stays thin:** it resolves AniCraft identities, gathers attributed/freshness-aware input snapshots, invokes the core, verifies target capabilities and presents preview data. It does not define mapping or composition semantics.
 
 ### 12.5 Safe implementation order
 
 1. Preserve and run the existing V1 characterization and migration tests as the behavioral baseline.
 2. Add direct canonical mapping tests for every supported mapping kind, including neutral, endpoints, clamping, reversed ranges, easing, typed-value mismatch and numeric overflow.
-3. Specify the canonical mapper contract and its behavior for one-input versus multi-input controllers, PoseSet/Joystick/Discrete mappings, and target anchor interpolation. Do not infer multi-input semantics from the current data structures.
+3. Specify the canonical mapper contract and its behavior for one-input versus multi-input controllers, PoseSet/Joystick/Discrete mappings, and target anchor interpolation. Do not infer multi-input semantics from the current data structures. The initial one-dimensional contract is now recorded in section 12.9; multi-input and JoystickFivePose remain deferred.
 4. Decide whether schema version 1 is experimental-only or must remain readable. If it must remain readable, implement an explicit schema migration before removing/renaming `Range1D` or changing its JSON representation.
 5. Consolidate the mapping/easing helpers behind the canonical implementation, retaining compatibility wrappers until all legacy callers and fixtures are accounted for.
 6. Move V1 DTOs behind a clearly named compatibility module/API and migrate the plug-in adapter to canonical preview orchestration.
@@ -745,7 +745,47 @@ The first behavior-preserving consolidation is now in the core:
 Still intentionally not consolidated:
 - `mapping::map_to_frame` and `mapping::frame::map_to_frame` have different invalid-input/error contracts. The checked `Result<_, CoreError>` API is the new-code target; retain the V1 wrapper until its callers and invalid-input compatibility are explicitly handled.
 - `MappingConfig::Range1D` and `MappingConfig::ThreeAnchorRange` remain duplicate three-anchor representations. Removing one requires an explicit canonical schema compatibility/migration decision.
-- A built-in canonical `ControllerMapper` is still missing. Do not claim end-to-end canonical mapping is complete while the evaluator relies on an injected mapper.
+- A first-party `CanonicalControllerMapper` now implements the supported one-dimensional mapping variants. The evaluator still accepts the `ControllerMapper` abstraction so tests and alternate strategies remain injectable; this does not imply JoystickFivePose, general multi-input mapping, native authoring, persistence, or playback support.
 - Pose-set, joystick and discrete mapping semantics remain underspecified by the present pose data model and are not silently implemented as scalar ranges.
 
 No target output, controller schema, preview behavior, input fallback policy, or Form Deform behavior was intentionally changed by these refactors. CI must verify the resulting branch before this consolidation increment is considered complete.
+
+
+### 12.9 First built-in canonical mapper (FD-M1)
+
+**Implementation:** `crates/smart-controller-core/src/mapping/canonical.rs`  
+**Public entry point:** `mapping::CanonicalControllerMapper`  
+**Runtime pose lookup:** `mapping::PoseLibrary`  
+**Tests:** `crates/smart-controller-core/tests/canonical_mapper_tests.rs`
+
+The evaluator retains its `ControllerMapper` injection boundary. New code can now use the first-party `CanonicalControllerMapper` instead of supplying a closure or a custom implementation. The mapper consumes one declared, already-resolved input and emits uncomposed typed values keyed by the controller's canonical BindingIds.
+
+#### Supported mapping semantics
+
+| Mapping | Driver domain | Output behavior |
+|---|---|---|
+| `Range1D` | Explicit minimum / neutral / maximum | Clamped signed normalization to [-1, 1], linear interpolation between negative-neutral-positive target anchors |
+| `ThreeAnchorRange` | Explicit minimum / neutral / maximum | Same signed normalization with symmetric Linear or Smoothstep easing on either side of neutral |
+| `DirectedRange1D` | Directed start / end; reversed endpoints are valid | Normalizes to [0, 1]; anchor-based targets use the corresponding signed value, while FrameRange uses the unit value |
+| `Discrete` | Scalar driver clamped to [-1, 1] | Selects the nearest equally spaced authored value; exact midpoint ties choose the higher index; preserves the selected TypedValue |
+| `PoseSet1D` | Scalar driver clamped to [-1, 1] | Resolves ordered pose IDs from PoseLibrary and interpolates adjacent poses evenly across the domain |
+
+Range inputs may be Scalar or Angle. Angle driver values and Angle property outputs are interpreted in radians and preserve the input's wrapped/unwrapped semantics. Discrete and PoseSet1D currently require Scalar input.
+
+#### Target behavior
+
+- SymbolFrame interpolates the negative, neutral and positive frame anchors and rounds to the nearest integer frame.
+- FrameRange maps the normalized unit value through the configured inclusive/exclusive endpoint policy; the default remains Exclusive.
+- GeometryDeform interpolates each vector component independently. RelativeDelta emits the difference from the neutral anchor so the evaluator's explicit additive base restores the authored absolute target value.
+- Property maps the signed normalized value by the authored scale. Scalar inputs produce Scalar outputs; Angle inputs produce Angle outputs.
+- PoseSet1D emits a complete pose. Every registered pose must have a compatible binding/value schema, and the resulting binding-ID set must exactly match the controller's declared bindings.
+
+#### Explicit limits
+
+- One controller currently declares exactly one driver input. Multi-input controllers are rejected as a mapping-domain failure rather than selecting an arbitrary input.
+- PoseLibrary is runtime-only. It is not serialized into CanonicalDocument schema v1 and does not claim durable host persistence.
+- JoystickFivePose returns an explicit mapping-domain failure from this one-dimensional mapper. It is not approximated as a scalar range; a dedicated two-dimensional mapping implementation remains a later milestone.
+- Mapping returns uncomposed contributions only. It does not apply target state, mutate AniCraft documents, or feed Form Deform pin evaluation.
+- Unsupported or invalid mapping behavior is reported through the evaluator's existing `SC_MAPPING_DOMAIN` diagnostic and marks the controller's outputs unavailable.
+
+The new integration tests exercise range endpoints and clamping, symmetric easing, reversed directed ranges, frame endpoint policy, discrete typed outputs, pose-set interpolation by binding identity, relative geometry deltas, angle semantics, missing pose references, exact pose binding sets, unsupported joystick behavior and ambiguous multi-input rejection. This implementation is a core mapping milestone, not evidence of native AniCraft UI, durable pose storage, continuous playback evaluation or Smart Controller/Form Deform composition.
