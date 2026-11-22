@@ -165,6 +165,7 @@ mod tests {
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
+        frame: None,
         };
         let snapshot = collect_host_input_snapshot(&[definition.clone()], &context).unwrap();
         let sample = snapshot.get(&definition.id).unwrap();
@@ -205,6 +206,7 @@ mod tests {
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
+        frame: None,
         };
         let snapshot = collect_document_input_snapshot(&document, &context).unwrap();
         assert!(snapshot.samples.is_empty());
@@ -226,6 +228,7 @@ mod tests {
                 bone_layers: BTreeMap::new(),
                 bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
                 wrapped_angles: false,
+            frame: None,
             },
         ).unwrap();
 
