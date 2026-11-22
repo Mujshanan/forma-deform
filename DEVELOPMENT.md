@@ -253,3 +253,38 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
+
+## 11. FDM v2 accepted architecture baseline
+
+**Architecture status:** ADM-001 through ADM-007 are accepted. CCC-01.5 remains an accepted integration constraint. These decisions supersede the older readiness text that described the ADM topics as unresolved; they do not retroactively change implementation status or prove that host integration exists.
+
+| Decision | Accepted architecture |
+|---|---|
+| ADM-001 — Geometry ownership | Hybrid: AniCraft owns canonical artwork, source topology, identities, transforms, hierarchy, and native Asset Warp; FDM owns additional deformation-specific geometry. Exchange immutable, revisioned snapshots through an adapter. |
+| ADM-002 — Lattice topology | FDM supports multiple explicit topology types, initially regular structured lattices and irregular cages; generated and directly authored topology; explicit mappings; stable control-point IDs; revisioned structural changes. |
+| ADM-003 — Nested deformation | Parent deformation propagates to descendants; child deformation does not affect ancestors or siblings; local-rest-space authoring; explicit mappings and acyclic dependencies. |
+| ADM-004 — Multiple-source composition | Sources evaluate independently by default; sequential, parallel, and compatible weighted composition require an explicit deterministic composition graph. |
+| ADM-005 — Animation ownership | AniCraft owns timeline, tracks, keyframes, time, sampling, scheduling, and persistence; FDM owns deformation-specific animatable properties and specialized interpolation. |
+| ADM-006 — Baking representation | Retained, non-destructive bake into AniCraft-native geometry; provenance, source restoration, frame-range support where available, and transactional undo/redo. |
+| ADM-007 — Runtime representation | Persistent data, runtime state, and results are separate; AniCraft owns scheduling/snapshots/cache lifecycle/application; FDM owns prepared evaluators and deformation runtime models. |
+
+### 11.1 CCC-01.5 remains a specific restriction
+
+Smart Controller binding evaluation and Form Deform pin-deformation evaluation remain independent. Smart Controller V1 remains preview-only, and the existing pin-deformation formula/behavior is preserved. ADM-004 does not authorize combining these outputs. Such composition requires a separate explicit decision.
+
+### 11.2 Authoritative architecture and M0 audit
+
+- [FDM v2 Architecture and Integration Specification](docs/FDM_V2_ARCHITECTURE.md) — consolidated accepted decisions, responsibilities, invariants, lifecycle, and open implementation questions.
+- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Current status: in progress.
+
+The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior.
+
+### 11.3 Development sequence
+
+1. Complete M0 by inspecting document identity/geometry revisions, hierarchy/transforms, timeline sampling, persistence/extension APIs, evaluation/render/cache lifecycle, transactions/undo, baking, and CCC-01.5 implementation/tests.
+2. Define versioned host and FDM contracts from the verified capability matrix.
+3. Specify initial topology and algorithm mathematical contracts, schema/migration, composition, animation, and bake contracts.
+4. Approve a crate-level implementation plan and acceptance tests.
+5. Implement FDM-owned work separately from any AniCraft host extension. Host changes require separate explicit authorization.
+
+**Governance:** Accepted architecture decisions are not blanket authorization to modify AniCraft, implement every proposed topology/algorithm, or merge pull requests. Preserve this boundary in issues, PRs, and subsequent milestones.
