@@ -118,7 +118,7 @@ Adopt hierarchical parent-driven deformation propagation:
 
 Multiple operations on the same target require explicit deterministic composition and ordering. Do not assume nonlinear deformation mappings have inverses. Do not assume AniCraft's current shape-specific Asset Warp implements group deformation.
 
-AniCraft owns host hierarchy, transforms, scheduling, persistence, undo, and application. FDM owns deformation semantics and algorithms.
+AniCraft owns host hierarchy, transforms, scheduling, persistence, undo, and application. FDM owns deformation semantics and algorithms. AniCraft already provides affine layer-parent inheritance from a parent's lead object (position, rotation, scale, and skew); FDM consumes that host hierarchy/transform context and must not duplicate it. This affine inheritance is not itself nonlinear parent-deformation propagation.
 
 ### ADM-004 — Multiple-source composition
 **Status: Accepted**
