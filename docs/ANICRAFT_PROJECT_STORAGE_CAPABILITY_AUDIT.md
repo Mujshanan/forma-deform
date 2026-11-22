@@ -7,7 +7,7 @@
 
 ## Executive result
 
-<badge>Host extension required</badge>
+**Result: a first-party host extension is required.**
 
 The current AniCraft command plug-in API does **not** provide durable document metadata storage. A plug-in cannot save files or access arbitrary filesystem paths, and the ABI exposes only `command`, `document`, `elements`, and `log` requests. The host's native `.anicraft` format serializes a concrete `Document` model; it has no generic plug-in metadata/extensions collection.
 
