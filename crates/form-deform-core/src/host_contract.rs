@@ -455,6 +455,60 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_accepts_matching_path2d_payload_and_fingerprint() {
+        let coordinate_space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let payload = path();
+        let fingerprint = payload.fingerprint(&coordinate_space).unwrap();
+        let snapshot = GeometrySnapshot::new(
+            target(1), GeometryRevision(1), TopologyRevision(1),
+            fingerprint, coordinate_space, "Path2D", 1, payload,
+        ).unwrap();
+        assert_eq!(snapshot.payload_kind(), "Path2D");
+        assert_eq!(snapshot.payload_schema_version(), 1);
+        assert_eq!(snapshot.payload().commands().len(), 1);
+        assert!(snapshot.stamp().validate().is_ok());
+    }
+
+    #[test]
+    fn snapshot_rejects_unknown_payload_kind_and_schema() {
+        let coordinate_space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let payload = path();
+        let fingerprint = payload.fingerprint(&coordinate_space).unwrap();
+        assert_eq!(
+            GeometrySnapshot::new(
+                target(1), GeometryRevision(1), TopologyRevision(1),
+                fingerprint.clone(), coordinate_space.clone(), "Mesh", 1, path(),
+            ).unwrap_err(),
+            ContractError::UnsupportedPayloadKind
+        );
+        assert_eq!(
+            GeometrySnapshot::new(
+                target(1), GeometryRevision(1), TopologyRevision(1),
+                fingerprint, coordinate_space, "Path2D", 2, path(),
+            ).unwrap_err(),
+            ContractError::UnsupportedPayloadSchemaVersion
+        );
+    }
+
+    #[test]
     fn snapshot_rejects_fingerprint_that_does_not_match_its_payload() {
         let coordinate_space = CoordinateSpaceDescriptor {
             id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
