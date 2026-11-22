@@ -49,7 +49,7 @@ pub fn collect_host_input_snapshot(
     definitions: &[InputDefinition],
     context: &HostInputContext,
 ) -> Result<InputSnapshot, String> {
-    let mut responses: BTreeMap<u64, serde_json::Value> = BTreeMap::new();
+    let mut responses: BTreeMap<u64, Result<serde_json::Value, String>> = BTreeMap::new();
     let mut samples = Vec::new();
 
     for definition in definitions {
