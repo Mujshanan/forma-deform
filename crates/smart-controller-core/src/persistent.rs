@@ -292,3 +292,17 @@ mod tests {
         assert_eq!(payload.revision, 0);
     }
 }
+
+#[cfg(test)]
+mod embedded_canonical_migration_tests {
+    use super::*;
+
+    #[test]
+    fn persistent_v1_envelope_migrates_embedded_canonical_v1_only() {
+        let mut payload = serde_json::to_value(PersistentBindingDocument::new()).unwrap();
+        payload["controller_document"]["schema"]["version"] = serde_json::json!(1);
+        let loaded = PersistentBindingDocument::from_json(&payload.to_string()).unwrap();
+        assert_eq!(loaded.schema.version, CURRENT_PERSISTED_BINDINGS_VERSION);
+        assert_eq!(loaded.controller_document.schema.version, CURRENT_SCHEMA_VERSION);
+    }
+}
