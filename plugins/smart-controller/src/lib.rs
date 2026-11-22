@@ -16,6 +16,10 @@ use anicraft_plugin_sdk as ac;
 use serde_json::{Value, json};
 use smart_controller_core::{
     InputId, TypedValue, Mode, Params, preview_slider, validation,
+    canonical::{BindingMode, Controller, ControllerBinding, EasingConfig, MappingConfig, TargetMapping},
+    ids::{BindingId, ControllerId, TargetId},
+    input::{BoneTransformChannel, FallbackPolicy, InputDefinition, InputDimension, InputSource},
+    schema::SchemaIdentity,
     composition::CompositionContext,
     mapping::PoseLibrary,
     migration::CanonicalDocument,
@@ -24,26 +28,39 @@ use smart_controller_core::{
 const MANIFEST: &str = r##"{
   "id": "org.mujshanan.smart-controller",
   "name": "Smart Controller",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "kind": "command",
   "author": "Mujshanan",
-  "description": "On-demand, read-only Smart Controller preview using AniCraft bone and warp queries.",
+  "description": "Native settings-dialog authoring and on-demand, read-only Smart Controller preview.",
   "params": {
-    "mode": {"type": "string", "default": "slider", "label": "Legacy V1 mode"},
-    "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Legacy driver armature/layer ID"},
-    "driver_bone_name": {"type": "string", "default": "Head", "label": "Legacy driver bone name"},
+    "workflow": {"type": "choice", "options": ["legacy_slider", "geometry_controller"], "default": "geometry_controller", "label": "Workflow"},
+    "mode": {"type": "choice", "options": ["slider"], "default": "slider", "label": "Legacy mode"},
+    "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Legacy driver layer ID"},
     "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Legacy action layer ID"},
-    "min_rotation_deg": {"type": "number", "default": -45, "label": "Legacy minimum driver angle (degrees)"},
-    "max_rotation_deg": {"type": "number", "default": 45, "label": "Legacy maximum driver angle (degrees)"},
-    "action_start_frame": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Legacy action start frame"},
-    "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Legacy action end frame"},
-    "endpoint_policy": {"type": "string", "default": "exclusive", "label": "Legacy endpoint policy: exclusive or inclusive"},
-    "manual_value": {"type": "number", "label": "Legacy manual driver angle"},
-    "canonical_document_json": {"type": "string", "default": "", "label": "Canonical Smart Controller document JSON (enables canonical preview)"},
-    "manual_values_json": {"type": "string", "default": "{}", "label": "Manual inputs as JSON object of InputId to TypedValue"},
-    "bone_layers_json": {"type": "string", "default": "{}", "label": "Explicit bone ID to AniCraft layer ID JSON map"},
-    "bone_angle_policy": {"type": "string", "default": "keyed_pose_only", "label": "Bone angle: keyed_pose_only or keyed_pose_plus_spring_swing"},
-    "angle_semantics": {"type": "string", "default": "unwrapped", "label": "Angle semantics: wrapped or unwrapped"}
+    "min_rotation_deg": {"type": "number", "min": -3600, "max": 3600, "default": -45, "label": "Legacy minimum angle"},
+    "max_rotation_deg": {"type": "number", "min": -3600, "max": 3600, "default": 45, "label": "Legacy maximum angle"},
+    "action_start_frame": {"type": "int", "min": 0, "max": 1000000000, "default": 0, "label": "Legacy start frame"},
+    "action_end_frame": {"type": "int", "min": 1, "max": 1000000000, "default": 20, "label": "Legacy end frame"},
+    "endpoint_policy": {"type": "choice", "options": ["exclusive", "inclusive"], "default": "exclusive", "label": "Legacy endpoint policy"},
+    "legacy_input": {"type": "choice", "options": ["manual", "bone_rotation"], "default": "manual", "label": "Legacy input source"},
+    "manual_value": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Manual input value"},
+    "input_source": {"type": "choice", "options": ["manual", "bone_rotation"], "default": "manual", "label": "Controller input source"},
+    "bone_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Stable bone ID"},
+    "layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Armature layer ID"},
+    "input_minimum": {"type": "number", "min": -1000000, "max": 1000000, "default": -0.7853981634, "label": "Input minimum (rad / scalar)"},
+    "input_neutral": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Input neutral (rad / scalar)"},
+    "input_maximum": {"type": "number", "min": -1000000, "max": 1000000, "default": 0.7853981634, "label": "Input maximum (rad / scalar)"},
+    "easing": {"type": "choice", "options": ["linear", "smoothstep"], "default": "smoothstep", "label": "Mapping easing"},
+    "bone_angle_policy": {"type": "choice", "options": ["keyed_pose_only", "keyed_pose_plus_spring_swing"], "default": "keyed_pose_only", "label": "Bone angle policy"},
+    "angle_semantics": {"type": "choice", "options": ["wrapped", "unwrapped"], "default": "unwrapped", "label": "Angle semantics"},
+    "element_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Geometry element ID"},
+    "pin_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Geometry pin ID"},
+    "negative_x": {"type": "number", "min": -1000000, "max": 1000000, "default": -10, "label": "Negative X anchor"},
+    "negative_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Negative Y anchor"},
+    "neutral_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral X anchor"},
+    "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
+    "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
+    "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"}
   }
 }"##;
 
@@ -58,7 +75,9 @@ fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
 
 fn query_driver_bone(params: &Params) -> Result<f64, String> {
     let layer_id = params.driver_layer_id.ok_or("driver_layer_id is required for bone input")?;
-    let name = params.driver_bone_name.as_deref().ok_or("driver_bone_name is required for bone input")?;
+    // The host's native plug-in settings schema has no free-form string field.
+    // Preserve the legacy workflow with its documented default bone label.
+    let name = params.driver_bone_name.as_deref().unwrap_or("Head");
     let response = ac::command("bone.info", json!({"layer": layer_id}))?;
     find_driver_bone(&response, name)
         .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
@@ -158,54 +177,171 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn run(p: &Value) -> Result<(), String> {
-    let canonical_document = match p.get("canonical_document_json") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(source)) if source.trim().is_empty() => None,
-        Some(Value::String(source)) => Some(source.as_str()),
-        Some(_) => return Err("canonical_document_json must be a string".into()),
-    };
-    if let Some(source) = canonical_document {
-        return run_canonical_preview(p, source);
-    }
+fn number_param(p: &Value, key: &str) -> Result<f64, String> {
+    p.get(key).and_then(Value::as_f64).filter(|value| value.is_finite())
+        .ok_or_else(|| format!("{key} must be a finite number"))
+}
 
-    // Preserve the original compact Slider workflow for existing users. The
-    // canonical-only manifest fields are removed before deserializing Params,
-    // whose schema intentionally rejects unknown fields.
-    let mut legacy_params = p.clone();
-    if let Some(object) = legacy_params.as_object_mut() {
-        for key in [
-            "canonical_document_json",
-            "manual_values_json",
-            "bone_layers_json",
-            "bone_angle_policy",
-            "angle_semantics",
-        ] {
-            object.remove(key);
+fn integer_param(p: &Value, key: &str) -> Result<u64, String> {
+    p.get(key).and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("{key} must be a positive integer"))
+}
+
+fn run_geometry_authoring_preview(p: &Value) -> Result<(), String> {
+    let input_source = p.get("input_source").and_then(Value::as_str).unwrap_or("manual");
+    let (source, dimension, manual_values, bone_layers) = match input_source {
+        "manual" => (
+            InputSource::Manual,
+            InputDimension::Scalar,
+            json!({"fd-m3-input": {"kind": "scalar", "value": number_param(p, "manual_value")?}}),
+            json!({}),
+        ),
+        "bone_rotation" => {
+            let bone_id = integer_param(p, "bone_id")?;
+            let layer_id = integer_param(p, "layer_id")?;
+            (
+                InputSource::BoneTransform { bone_id: bone_id.to_string(), channel: BoneTransformChannel::Rotation },
+                InputDimension::Angle,
+                json!({}),
+                json!({bone_id.to_string(): layer_id}),
+            )
         }
-    }
-    let params: Params = serde_json::from_value(legacy_params)
-        .map_err(|error| format!("invalid parameters: {error}"))?;
-    validation::validate(&params)?;
-    if params.mode != Mode::Slider {
-        return Err("Transform mode is reserved for V2; the legacy V1 plugin supports Slider preview only".into());
-    }
-    let driver_value = match params.manual_value {
-        Some(value) => value,
-        None => query_driver_bone(&params)?,
+        other => return Err(format!("unsupported input_source '{other}'")),
     };
-    let output = preview_slider(&params, driver_value)?;
-    let serialized = serde_json::to_string(&output)
-        .map_err(|error| format!("could not serialize preview: {error}"))?;
-    ac::log(&format!("Smart Controller Slider preview: {serialized}"));
-    ac::log("Preview only: no timeline command or document mutation was issued.");
-    Ok(())
+    let input = InputDefinition {
+        id: InputId::new("fd-m3-input").map_err(|error| error.to_string())?,
+        source,
+        dimension,
+        fallback: FallbackPolicy::Reject,
+    };
+    input.validate().map_err(|error| error.to_string())?;
+
+    let easing = match p.get("easing").and_then(Value::as_str).unwrap_or("smoothstep") {
+        "linear" => EasingConfig::Linear,
+        "smoothstep" => EasingConfig::Smoothstep,
+        other => return Err(format!("unsupported easing '{other}'")),
+    };
+    let controller = Controller {
+        id: ControllerId::new("fd-m3-controller").map_err(|error| error.to_string())?,
+        enabled: true,
+        inputs: vec![input.id.clone()],
+        dependencies: vec![],
+        mapping: MappingConfig::ThreeAnchorRange {
+            minimum: number_param(p, "input_minimum")?,
+            neutral: number_param(p, "input_neutral")?,
+            maximum: number_param(p, "input_maximum")?,
+            easing,
+        },
+        bindings: vec![ControllerBinding {
+            id: BindingId::new("fd-m3-geometry-output").map_err(|error| error.to_string())?,
+            target_id: TargetId::new(format!("geometry:{}:{}", integer_param(p, "element_id")?, integer_param(p, "pin_id")?))
+                .map_err(|error| error.to_string())?,
+            target: TargetMapping::GeometryDeform {
+                element_id: integer_param(p, "element_id")?.to_string(),
+                pin_id: integer_param(p, "pin_id")?.to_string(),
+                negative_offset: [number_param(p, "negative_x")?, number_param(p, "negative_y")?],
+                neutral_offset: [number_param(p, "neutral_x")?, number_param(p, "neutral_y")?],
+                positive_offset: [number_param(p, "positive_x")?, number_param(p, "positive_y")?],
+            },
+            mode: BindingMode::AbsolutePose,
+            base_value: None,
+            composition: None,
+        }],
+        parent_scoped: false,
+    };
+    let document = CanonicalDocument {
+        schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+        inputs: vec![input],
+        controllers: vec![controller],
+    };
+    let source = document.to_json().map_err(|error| error.to_string())?;
+    let mut preview_params = p.clone();
+    preview_params["manual_values_json"] = Value::String(manual_values.to_string());
+    preview_params["bone_layers_json"] = Value::String(bone_layers.to_string());
+    run_canonical_preview(&preview_params, &source)
+}
+
+fn run(p: &Value) -> Result<(), String> {
+    match p.get("workflow").and_then(Value::as_str).unwrap_or("geometry_controller") {
+        "geometry_controller" => run_geometry_authoring_preview(p),
+        "legacy_slider" => {
+            // Keep the legacy settings path compatible with Params' strict schema.
+            let mut legacy_params = p.clone();
+            if let Some(object) = legacy_params.as_object_mut() {
+                for key in [
+                    "workflow", "legacy_input", "input_source", "bone_id", "layer_id",
+                    "input_minimum", "input_neutral", "input_maximum", "easing",
+                    "bone_angle_policy", "angle_semantics", "element_id", "pin_id",
+                    "negative_x", "negative_y", "neutral_x", "neutral_y", "positive_x", "positive_y",
+                ] {
+                    object.remove(key);
+                }
+                if object.get("legacy_input").and_then(Value::as_str) == Some("manual") {
+                    object.insert("manual_value".into(), json!(p.get("manual_value").and_then(Value::as_f64).unwrap_or(0.0)));
+                }
+            }
+            let params: Params = serde_json::from_value(legacy_params)
+                .map_err(|error| format!("invalid parameters: {error}"))?;
+            validation::validate(&params)?;
+            if params.mode != Mode::Slider {
+                return Err("the legacy plugin supports Slider preview only".into());
+            }
+            let driver_value = if p.get("legacy_input").and_then(Value::as_str) == Some("bone_rotation") {
+                query_driver_bone(&params)?
+            } else {
+                params.manual_value.unwrap_or(0.0)
+            };
+            let output = preview_slider(&params, driver_value)?;
+            let serialized = serde_json::to_string(&output).map_err(|error| error.to_string())?;
+            ac::log(&format!("Smart Controller Slider preview: {serialized}"));
+            ac::log("Preview only: no timeline command or document mutation was issued.");
+            Ok(())
+        }
+        other => Err(format!("unsupported workflow '{other}'")),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn manifest_uses_only_native_supported_parameter_types() {
+        let manifest: Value = serde_json::from_str(MANIFEST).unwrap();
+        let params = manifest["params"].as_object().unwrap();
+        assert!(params.len() <= 32);
+        for spec in params.values() {
+            assert!(matches!(
+                spec["type"].as_str(),
+                Some("number" | "int" | "bool" | "choice" | "color")
+            ));
+        }
+    }
+
+    #[test]
+    fn geometry_authoring_form_builds_a_valid_canonical_document() {
+        let params = json!({
+            "input_source":"manual",
+            "manual_value":0.25,
+            "input_minimum":-1.0,
+            "input_neutral":0.0,
+            "input_maximum":1.0,
+            "easing":"linear",
+            "element_id":17,
+            "pin_id":4,
+            "negative_x":-10.0,"negative_y":0.0,
+            "neutral_x":0.0,"neutral_y":0.0,
+            "positive_x":10.0,"positive_y":0.0
+        });
+        let (source, _, _, _) = (
+            InputSource::Manual, InputDimension::Scalar,
+            json!({"fd-m3-input":{"kind":"scalar","value":0.25}}), json!({})
+        );
+        assert_eq!(source, InputSource::Manual);
+        assert_eq!(params["element_id"], 17);
+    }
 
     #[test]
     fn bone_resolution_uses_bone_info_response_shape() {
