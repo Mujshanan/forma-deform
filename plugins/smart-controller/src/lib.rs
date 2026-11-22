@@ -60,7 +60,7 @@ const MANIFEST: &str = r##"{
     "neutral_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Neutral Y anchor"},
     "positive_x": {"type": "number", "min": -1000000, "max": 1000000, "default": 10, "label": "Positive X anchor"},
     "positive_y": {"type": "number", "min": -1000000, "max": 1000000, "default": 0, "label": "Positive Y anchor"},
-    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame"], "default": "preview", "label": "Target action (Apply writes one pin key at the playhead)"},
+    "target_action": {"type": "choice", "options": ["preview", "apply_current_frame"], "default": "preview", "label": "Target action (Apply writes one pin key at the playhead)"}
   }
 }"##;
 
