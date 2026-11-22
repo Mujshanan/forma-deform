@@ -529,6 +529,32 @@ mod canonical_schema_migration_tests {
     }
 
     #[test]
+    fn canonical_v1_migration_preserves_existing_controller_payloads() {
+        let v1 = serde_json::json!({
+            "schema": {"name": SCHEMA_NAME, "version": 1},
+            "inputs": [{
+                "id": "driver",
+                "source": {"kind": "manual"},
+                "dimension": "scalar",
+                "fallback": {"kind": "reject"}
+            }],
+            "controllers": [{
+                "id": "controller",
+                "enabled": true,
+                "inputs": ["driver"],
+                "dependencies": [],
+                "mapping": {"kind": "range1_d", "minimum": -2.0, "neutral": 0.25, "maximum": 3.0},
+                "bindings": [],
+                "parent_scoped": false
+            }]
+        });
+        let migrated = CanonicalDocument::from_json(&v1.to_string()).unwrap();
+        let output: serde_json::Value = serde_json::from_str(&migrated.to_json().unwrap()).unwrap();
+        assert_eq!(output["inputs"], v1["inputs"]);
+        assert_eq!(output["controllers"], v1["controllers"]);
+    }
+
+    #[test]
     fn schema_v1_cannot_smuggle_a_v2_only_mapping() {
         let v1 = serde_json::json!({
             "schema": {"name": SCHEMA_NAME, "version": 1},
