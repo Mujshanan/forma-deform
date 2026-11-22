@@ -342,7 +342,7 @@ impl CompositionGraph {
                 let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
                 for item in resolved {
                     let current = item?;
-                    if current.output != first.output {
+                    if current.input != first.input || current.output != first.output {
                         return Err(CompositionGraphError::IncompatibleValueTypes);
                     }
                 }
