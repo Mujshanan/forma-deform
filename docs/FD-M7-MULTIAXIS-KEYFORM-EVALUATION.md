@@ -119,7 +119,15 @@ Do not include these in the first implementation:
 - Compare only against the existing five-pose IDW mapper as a context baseline, not as a direct quality-equivalent algorithm.
 - Do not add a dependency for this feature.
 
-## 6. Registry decision record
+## 6. Schema and migration gate
+
+The current canonical document schema is version 1 and rejects versions other than the current version. MappingConfig is serialized inside Controller. Adding PoseGrid under schema v1 would make newer readers accept the new mapping while older readers would fail on an unknown tagged variant without a version signal.
+
+**Required approach:** introduce canonical schema version 2 for PoseGrid and provide an explicit, lossless v1-to-v2 migration before emitting v2 documents. Existing v1 mapping variants must retain their exact meaning and payloads. The migration must preserve controller/input/binding IDs, ordering, composition settings, and all existing mapping configuration. The outer persistent-binding envelope version should be reviewed separately; it may remain unchanged if its wire structure is unchanged, but its validation and round-trip tests must cover an embedded canonical v2 document. Unsupported future versions must continue to fail closed.
+
+The current CanonicalDocument::from_json path parses and validates only the current version; it does not yet migrate canonical v1 documents. Implement and test that migration before adding the new mapping variant.
+
+## 7. Registry decision record
 
 | Field | Decision |
 |---|---|
@@ -131,11 +139,11 @@ Do not include these in the first implementation:
 | Dependencies | No new dependencies |
 | Correctness gate | Typed pose validation, exact key reproduction, boundary and wrapped-angle tests |
 | Performance gate | 2D/3D benchmark, <=256 forms |
-| Status | **Approved for design; implementation pending** |
+| Status | **Approved for design; implementation pending canonical schema v1-to-v2 migration** |
 
-## 7. Go / no-go
+## 8. Go / no-go
 
-**Go** for a bounded 2D/3D multilinear pose grid after the schema and validation contract above are accepted.
+**Go** for a bounded 2D/3D multilinear pose grid after canonical schema v1-to-v2 migration and the validation contract above are implemented.
 
 **No-go** for copying Aether Canvas code, adopting its crate, enabling Catmull–Rom/cyclic behavior, or expanding into editing operations in this slice.
 
