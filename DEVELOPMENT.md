@@ -738,6 +738,7 @@ The characterization branch fixes these compile-time issues by typing the geomet
 The first behavior-preserving consolidation is now in the core:
 - `canonical::EasingConfig` re-exports the shared `mapping::easing::Easing` type; canonical documents retain the same `linear`/`smoothstep` serialized values.
 - `legacy::InputRange` delegates validation and normalization to `mapping::range::ThreePointRange`, translating errors back to the V1 `ControllerError` variants.
+- The V1 wrapper preserves validation precedence (invalid range before non-finite sample); a regression test pins that ordering.
 - `legacy::EaseCurve` delegates to the shared checked easing implementation.
 - `mapping::normalize_rotation` delegates to `mapping::range::normalize_directed`, preserving its V1 string-error signature.
 
