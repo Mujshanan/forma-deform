@@ -15,6 +15,7 @@ pub mod model;
 pub mod migration;
 pub mod preview;
 pub mod pose;
+pub mod persistent;
 pub mod schema;
 pub mod validation;
 pub mod value;
