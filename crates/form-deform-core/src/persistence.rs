@@ -323,7 +323,7 @@ mod tests {
     fn sample_document() -> FdmDocument {
         let definitions = vec![definition("deformer-a"), definition("deformer-b")];
         let graph = CompositionGraph::new(
-            "graph-main", 1, target(), reference(), space(),
+            "graph-main", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![
                 CompositionNode::deformer("node-a", "deformer-a"),
                 CompositionNode::deformer("node-b", "deformer-b"),
@@ -395,7 +395,7 @@ mod tests {
     fn document_rejects_invalid_graph_reference_or_type() {
         let definitions = vec![definition("deformer-a")];
         let graph = CompositionGraph::new(
-            "graph", 1, target(), reference(), space(),
+            "graph", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
             vec![CompositionNode::deformer("node", "missing")],
             vec!["node".into()],
         ).unwrap();
