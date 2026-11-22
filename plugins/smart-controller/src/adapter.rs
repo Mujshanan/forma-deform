@@ -284,6 +284,7 @@ mod tests {
             bone_layers: std::collections::BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
+            frame: None,
         };
         let mapper = |_controller: &smart_controller_core::canonical::Controller,
                       _inputs: &smart_controller_core::evaluator::ResolvedInputs|
