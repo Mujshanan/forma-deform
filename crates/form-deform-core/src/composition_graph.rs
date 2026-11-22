@@ -55,10 +55,58 @@ pub enum CompositionNode {
     },
 }
 
+/// Runtime shape of a node's output. Parallel is a collection of independent
+/// branch values, never a single geometry and never an implicit blend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct NodeSignature {
+pub enum NodeOutputCardinality {
+    Geometry,
+    BranchCollection,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeSignature {
     input: GeometryValueKind,
     output: GeometryValueKind,
+    cardinality: NodeOutputCardinality,
+}
+
+impl NodeSignature {
+    pub fn input_kind(&self) -> GeometryValueKind { self.input }
+    pub fn output_kind(&self) -> GeometryValueKind { self.output }
+    pub fn output_cardinality(&self) -> NodeOutputCardinality { self.cardinality }
+}
+
+/// One node in deterministic execution order. Dependencies retain their
+/// authored semantic order (stage/branch/weight order), even though independent
+/// ready nodes are selected lexicographically by stable node ID.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlannedNode {
+    node_id: String,
+    dependencies: Vec<String>,
+}
+
+impl PlannedNode {
+    pub fn node_id(&self) -> &str { &self.node_id }
+    pub fn dependencies(&self) -> &[String] { &self.dependencies }
+}
+
+/// Immutable plan produced only after graph and deformation definitions pass
+/// validation. This is a plan, not an executor or scheduler.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompositionExecutionPlan {
+    graph_id: String,
+    graph_revision: u64,
+    nodes: Vec<PlannedNode>,
+    outputs: Vec<String>,
+    output_signature: NodeSignature,
+}
+
+impl CompositionExecutionPlan {
+    pub fn graph_id(&self) -> &str { &self.graph_id }
+    pub fn graph_revision(&self) -> u64 { self.graph_revision }
+    pub fn nodes(&self) -> &[PlannedNode] { &self.nodes }
+    pub fn outputs(&self) -> &[String] { &self.outputs }
+    pub fn output_signature(&self) -> NodeSignature { self.output_signature }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -268,18 +316,21 @@ impl CompositionGraph {
             let signature = self.resolve_signature(node, &node_map, &definitions_by_id, &mut signatures)?;
             signatures.insert(node.node_id(), signature);
         }
-        let mut graph_output_kind = None;
+        let mut graph_output_signature: Option<NodeSignature> = None;
         for output in &self.outputs {
             let signature = signatures.get(output.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
             if signature.input != self.input_kind {
                 return Err(CompositionGraphError::GraphInputTypeMismatch);
             }
-            if let Some(expected) = graph_output_kind {
-                if signature.output != expected {
+            if let Some(expected) = graph_output_signature {
+                if signature.output != expected.output {
                     return Err(CompositionGraphError::IncompatibleValueTypes);
                 }
+                if signature.cardinality != expected.cardinality {
+                    return Err(CompositionGraphError::GraphOutputCardinalityMismatch);
+                }
             } else {
-                graph_output_kind = Some(signature.output);
+                graph_output_signature = Some(*signature);
             }
         }
         Ok(())
@@ -302,6 +353,7 @@ impl CompositionGraph {
                 NodeSignature {
                     input: definition.input_kind(),
                     output: definition.output_kind(),
+                    cardinality: NodeOutputCardinality::Geometry,
                 }
             }
             CompositionNode::Sequential { stages, .. } => {
@@ -310,15 +362,25 @@ impl CompositionGraph {
                     self.resolve_signature(child, nodes, definitions, cache)
                 });
                 let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                if first.cardinality != NodeOutputCardinality::Geometry {
+                    return Err(CompositionGraphError::SequentialRequiresSingleGeometry);
+                }
                 let mut previous_output = first.output;
                 for item in resolved {
                     let current = item?;
+                    if current.cardinality != NodeOutputCardinality::Geometry {
+                        return Err(CompositionGraphError::SequentialRequiresSingleGeometry);
+                    }
                     if current.input != previous_output {
                         return Err(CompositionGraphError::IncompatibleValueTypes);
                     }
                     previous_output = current.output;
                 }
-                NodeSignature { input: first.input, output: previous_output }
+                NodeSignature {
+                    input: first.input,
+                    output: previous_output,
+                    cardinality: NodeOutputCardinality::Geometry,
+                }
             }
             CompositionNode::Parallel { branches, .. } => {
                 let mut resolved = branches.iter().map(|id| {
@@ -326,13 +388,23 @@ impl CompositionGraph {
                     self.resolve_signature(child, nodes, definitions, cache)
                 });
                 let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                if first.cardinality != NodeOutputCardinality::Geometry {
+                    return Err(CompositionGraphError::ParallelBranchRequiresSingleGeometry);
+                }
                 for item in resolved {
                     let current = item?;
+                    if current.cardinality != NodeOutputCardinality::Geometry {
+                        return Err(CompositionGraphError::ParallelBranchRequiresSingleGeometry);
+                    }
                     if current.input != first.input || current.output != first.output {
                         return Err(CompositionGraphError::IncompatibleValueTypes);
                     }
                 }
-                first
+                NodeSignature {
+                    input: first.input,
+                    output: first.output,
+                    cardinality: NodeOutputCardinality::BranchCollection,
+                }
             }
             CompositionNode::WeightedBlend { inputs, .. } => {
                 let mut resolved = inputs.iter().map(|input| {
@@ -340,17 +412,98 @@ impl CompositionGraph {
                     self.resolve_signature(child, nodes, definitions, cache)
                 });
                 let first = resolved.next().ok_or(CompositionGraphError::InsufficientInputs)??;
+                if first.cardinality != NodeOutputCardinality::Geometry {
+                    return Err(CompositionGraphError::WeightedBlendRequiresSingleGeometry);
+                }
                 for item in resolved {
                     let current = item?;
+                    if current.cardinality != NodeOutputCardinality::Geometry {
+                        return Err(CompositionGraphError::WeightedBlendRequiresSingleGeometry);
+                    }
                     if current.input != first.input || current.output != first.output {
                         return Err(CompositionGraphError::IncompatibleValueTypes);
                     }
                 }
-                NodeSignature { input: first.input, output: first.output }
+                NodeSignature {
+                    input: first.input,
+                    output: first.output,
+                    cardinality: NodeOutputCardinality::Geometry,
+                }
             }
         };
         cache.insert(node.node_id(), signature);
         Ok(signature)
+    }
+
+    /// Validate the graph against its authored definitions, then produce a
+    /// deterministic topological plan. Independent ready nodes are ordered by
+    /// node ID; authored stage/branch/input order is preserved within each node.
+    pub fn execution_plan(
+        &self,
+        definitions: &[DeformationDefinition],
+    ) -> Result<CompositionExecutionPlan, CompositionGraphError> {
+        self.validate_against(definitions)?;
+
+        let by_id: BTreeMap<&str, &CompositionNode> =
+            self.nodes.iter().map(|node| (node.node_id(), node)).collect();
+        let mut indegree: BTreeMap<String, usize> = BTreeMap::new();
+        let mut dependents: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for node in &self.nodes {
+            let dependencies = node.references();
+            indegree.insert(node.node_id().to_owned(), dependencies.len());
+            for dependency in dependencies {
+                dependents.entry(dependency.to_owned()).or_default()
+                    .push(node.node_id().to_owned());
+            }
+        }
+        for values in dependents.values_mut() {
+            values.sort();
+        }
+
+        let mut ready: BTreeSet<String> = indegree.iter()
+            .filter_map(|(id, count)| (*count == 0).then_some(id.clone()))
+            .collect();
+        let mut planned = Vec::with_capacity(self.nodes.len());
+        while let Some(id) = ready.iter().next().cloned() {
+            ready.remove(&id);
+            let node = by_id.get(id.as_str()).ok_or(CompositionGraphError::MissingNodeReference)?;
+            planned.push(PlannedNode {
+                node_id: id.clone(),
+                dependencies: node.references().into_iter().map(str::to_owned).collect(),
+            });
+            if let Some(children) = dependents.get(&id) {
+                for child in children {
+                    let count = indegree.get_mut(child).ok_or(CompositionGraphError::MissingNodeReference)?;
+                    *count = count.checked_sub(1).ok_or(CompositionGraphError::CycleDetected)?;
+                    if *count == 0 {
+                        ready.insert(child.clone());
+                    }
+                }
+            }
+        }
+        if planned.len() != self.nodes.len() {
+            return Err(CompositionGraphError::CycleDetected);
+        }
+
+        let node_map: BTreeMap<&str, &CompositionNode> =
+            self.nodes.iter().map(|node| (node.node_id(), node)).collect();
+        let definitions_by_id: BTreeMap<&str, &DeformationDefinition> =
+            definitions.iter().map(|definition| (definition.id(), definition)).collect();
+        let mut signatures = BTreeMap::new();
+        for node in &self.nodes {
+            let signature = self.resolve_signature(node, &node_map, &definitions_by_id, &mut signatures)?;
+            signatures.insert(node.node_id(), signature);
+        }
+        let output_signature = *signatures.get(self.outputs[0].as_str())
+            .ok_or(CompositionGraphError::MissingNodeReference)?;
+
+        Ok(CompositionExecutionPlan {
+            graph_id: self.graph_id.clone(),
+            graph_revision: self.revision,
+            nodes: planned,
+            outputs: self.outputs.clone(),
+            output_signature,
+        })
     }
 
     fn validate_acyclic(&self, nodes: &BTreeMap<&str, &CompositionNode>) -> Result<(), CompositionGraphError> {
@@ -449,6 +602,10 @@ pub enum CompositionGraphError {
     CoordinateSpaceMismatch,
     IncompatibleValueTypes,
     GraphInputTypeMismatch,
+    SequentialRequiresSingleGeometry,
+    ParallelBranchRequiresSingleGeometry,
+    WeightedBlendRequiresSingleGeometry,
+    GraphOutputCardinalityMismatch,
     ResourceLimitExceeded,
 }
 
@@ -623,6 +780,219 @@ mod tests {
             vec!["seq".into()],
         ).unwrap();
         assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::IncompatibleValueTypes));
+    }
+
+    #[test]
+    fn parallel_node_has_branch_collection_cardinality() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "parallel", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::parallel("branches", vec!["a-node".into(), "b-node".into()]),
+            ],
+            vec!["branches".into()],
+        ).unwrap();
+        let plan = graph.execution_plan(&defs).unwrap();
+        assert_eq!(plan.output_signature().output_cardinality(), NodeOutputCardinality::BranchCollection);
+    }
+
+    #[test]
+    fn sequential_rejects_parallel_branch_collection_input() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "bad-sequential-cardinality", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::parallel("parallel", vec!["a-node".into(), "b-node".into()]),
+                CompositionNode::deformer("c-node", "c"),
+                CompositionNode::sequential("seq", vec!["parallel".into(), "c-node".into()]),
+            ],
+            vec!["seq".into()],
+        ).unwrap();
+        assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::SequentialRequiresSingleGeometry));
+    }
+
+    #[test]
+    fn weighted_blend_rejects_parallel_branch_collection_input() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "bad-blend-cardinality", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::parallel("parallel", vec!["a-node".into(), "b-node".into()]),
+                CompositionNode::weighted_blend("blend", vec![
+                    WeightedInput::new("parallel", 0.5).unwrap(),
+                    WeightedInput::new("a-node", 0.5).unwrap(),
+                ]),
+            ],
+            vec!["blend".into()],
+        ).unwrap();
+        assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::WeightedBlendRequiresSingleGeometry));
+    }
+
+    #[test]
+    fn parallel_rejects_nested_branch_collection() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("c", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "bad-parallel-cardinality", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::parallel("inner", vec!["a-node".into(), "b-node".into()]),
+                CompositionNode::deformer("c-node", "c"),
+                CompositionNode::parallel("outer", vec!["inner".into(), "c-node".into()]),
+            ],
+            vec!["outer".into()],
+        ).unwrap();
+        assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::ParallelBranchRequiresSingleGeometry));
+    }
+
+    #[test]
+    fn graph_rejects_mixed_output_cardinality() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "mixed-outputs", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::parallel("parallel", vec!["a-node".into(), "b-node".into()]),
+            ],
+            vec!["a-node".into(), "parallel".into()],
+        ).unwrap();
+        assert_eq!(graph.validate_against(&defs), Err(CompositionGraphError::GraphOutputCardinalityMismatch));
+    }
+
+    #[test]
+    fn execution_plan_uses_lexical_tie_breaking_not_authored_node_storage_order() {
+        let defs = vec![
+            definition("z", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
+        ];
+        let make_graph = |nodes| CompositionGraph::new(
+            "stable-plan", 7, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            nodes, vec!["sequence".into()],
+        ).unwrap();
+        let first = make_graph(vec![
+            CompositionNode::deformer("z-node", "z"),
+            CompositionNode::deformer("a-node", "a"),
+            CompositionNode::deformer("c-node", "c"),
+            CompositionNode::sequential("sequence", vec!["a-node".into(), "c-node".into()]),
+        ]);
+        // z-node must also reach an output; use a weighted blend to make its use explicit.
+        let defs = vec![
+            definition("z", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("c", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "stable-plan", 7, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("z-node", "z"),
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("c-node", "c"),
+                CompositionNode::sequential("sequence", vec!["a-node".into(), "c-node".into()]),
+                CompositionNode::weighted_blend("output", vec![
+                    WeightedInput::new("z-node", 0.5).unwrap(),
+                    WeightedInput::new("sequence", 0.5).unwrap(),
+                ]),
+            ],
+            vec!["output".into()],
+        ).unwrap();
+        let first_plan = graph.execution_plan(&defs).unwrap();
+        let reordered = CompositionGraph::new(
+            "stable-plan", 7, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::weighted_blend("output", vec![
+                    WeightedInput::new("z-node", 0.5).unwrap(),
+                    WeightedInput::new("sequence", 0.5).unwrap(),
+                ]),
+                CompositionNode::sequential("sequence", vec!["a-node".into(), "c-node".into()]),
+                CompositionNode::deformer("c-node", "c"),
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("z-node", "z"),
+            ],
+            vec!["output".into()],
+        ).unwrap();
+        let second_plan = reordered.execution_plan(&defs).unwrap();
+        let ids = |plan: &CompositionExecutionPlan| plan.nodes().iter().map(|node| node.node_id()).collect::<Vec<_>>();
+        assert_eq!(ids(&first_plan), ids(&second_plan));
+        assert_eq!(ids(&first_plan), vec!["a-node", "c-node", "z-node", "sequence", "output"]);
+        assert_eq!(first_plan.nodes()[3].dependencies(), &["a-node".to_string(), "c-node".to_string()]);
+        let _ = first;
+    }
+
+    #[test]
+    fn execution_plan_preserves_weighted_input_order() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+        ];
+        let graph = CompositionGraph::new(
+            "weighted-order", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::weighted_blend("blend", vec![
+                    WeightedInput::new("b-node", 0.75).unwrap(),
+                    WeightedInput::new("a-node", 0.25).unwrap(),
+                ]),
+            ],
+            vec!["blend".into()],
+        ).unwrap();
+        let plan = graph.execution_plan(&defs).unwrap();
+        let blend = plan.nodes().iter().find(|node| node.node_id() == "blend").unwrap();
+        assert_eq!(blend.dependencies(), &["b-node".to_string(), "a-node".to_string()]);
+    }
+
+    #[test]
+    fn execution_planning_rejects_cycles_and_invalid_connections() {
+        let defs = vec![
+            definition("a", GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement),
+            definition("b", GeometryValueKind::Displacement, GeometryValueKind::Displacement),
+        ];
+        let cycle = CompositionGraph::new(
+            "cycle-plan", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::sequential("left", vec!["right".into(), "a-node".into()]),
+                CompositionNode::sequential("right", vec!["left".into(), "a-node".into()]),
+                CompositionNode::deformer("a-node", "a"),
+            ],
+            vec!["left".into()],
+        );
+        assert_eq!(cycle, Err(CompositionGraphError::CycleDetected));
+
+        let bad_type = CompositionGraph::new(
+            "bad-connection", 1, target(), reference(), space(), GeometryValueKind::AbsoluteGeometry,
+            vec![
+                CompositionNode::deformer("a-node", "a"),
+                CompositionNode::deformer("b-node", "b"),
+                CompositionNode::sequential("sequence", vec!["b-node".into(), "a-node".into()]),
+            ],
+            vec!["sequence".into()],
+        ).unwrap();
+        assert_eq!(bad_type.execution_plan(&defs), Err(CompositionGraphError::IncompatibleValueTypes));
     }
 
     #[test]
