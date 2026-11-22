@@ -8,6 +8,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+pub use crate::mapping::easing::Easing as EasingConfig;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MappingConfig {
@@ -18,10 +20,6 @@ pub enum MappingConfig {
     Discrete { values: Vec<TypedValue> },
     ThreeAnchorRange { minimum: f64, neutral: f64, maximum: f64, easing: EasingConfig },
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EasingConfig { Linear, Smoothstep }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
