@@ -1,6 +1,6 @@
 # Smart Controller
 
-**V1 status:** canonical, on-demand host preview and explicit single-target current-playhead apply, plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not run during playback/scrubbing.
+**V1 status:** canonical, on-demand host preview and explicit single- or multi-target current-playhead apply, plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not run during playback/scrubbing.
 
 ## Native authoring dialog (FD-M3 first slice)
 
@@ -22,10 +22,11 @@ The host-independent core now exposes `PersistentBindingDocument` with strict sc
 The Smart Controller now supports an explicit **Target action** choice:
 
 - **Preview** (default) remains read-only.
-- **Apply current frame** re-queries `warp.info`, verifies the exact element and pin IDs, then issues exactly one `warp.pin_move` command with the composed Vector2 output. The host command writes at AniCraft's current playhead and owns its undo step.
-- Apply refuses unresolved targets, unverified identity, non-geometry targets, or anything other than exactly one resolved target. It does not partially apply a multi-target plan.
+- **Apply current frame** re-queries `warp.info`, verifies the exact element and pin IDs, then issues one `warp.pin_move` command for the composed Vector2 output.
+- **Apply all current frame** requires 1–512 resolved, host-verified GeometryDeform targets with unique `(element, pin)` identities. It preflights every target and payload before issuing any writes, then applies the prepared `warp.pin_move` calls inside AniCraft's enclosing `plugin.run` transaction.
+- A preflight failure issues no writes. A commit-time command failure propagates so AniCraft can roll back the complete run. A successful batch is one undo step.
 
-AniCraft's `plugin.run` already groups nested commands into one undo step and restores the document if any nested command fails. The first batch-bake implementation can therefore preflight all outputs, then issue multiple `warp.pin_move` calls inside one plug-in run. A proposed `warp.pin_move_batch` host command is documented for a lower-overhead, host-owned preflight/commit API. Neither multi-target nor timeline-range bake is implemented yet; see [FD-M5 design](../../docs/FD-M5-DEFORMATION-INTEGRATION.md).
+Timeline-range bake is not implemented yet. The proposed `warp.pin_move_batch` host command remains an optional lower-overhead API, not a prerequisite for this plug-in-side batch. See [FD-M5 design](../../docs/FD-M5-DEFORMATION-INTEGRATION.md).
 
 ## Canonical preview (FD-M2)
 
@@ -104,7 +105,7 @@ For this example, set `bone_layers_json` to `{"42":7}` if bone 42 belongs to Ani
 - Controller-output inputs are resolved by the core dependency graph and are not queried from AniCraft.
 - Bone IDs and layer IDs are numeric host identities; mappings are explicit.
 - Bone angle is read at the current playhead. This is an on-demand command, not a playback observer.
-- GeometryDeform targets are verified through `warp.info`; `warp.pin_move` is never called.
+- GeometryDeform targets are verified through `warp.info`; `warp.pin_move` is called only for explicit current-frame apply actions.
 - SymbolFrame, FrameRange, and Property targets are calculated only because a matching host application command has not been verified.
 - PoseSet1D runtime pose records are not supplied by the current plugin invocation. Durable pose storage is not available in the documented AniCraft extension boundary.
 - JoystickFivePose and multi-input mapping remain unsupported by the one-dimensional mapper.
@@ -149,4 +150,4 @@ Install the WASM file through AniCraft's **Commands → Install Plug-in…** wor
 
 ## Verification status
 
-Native test execution, WASM compilation, and an in-app run must pass before this milestone is marked complete. The plugin is intentionally on-demand and preview-only; no live playback evaluator, durable binding persistence, generic property setter, symbol-frame setter, or mutating geometry-preview transaction is claimed.
+Native test execution, WASM compilation, and an in-app run must pass before this milestone is marked complete. The plugin is intentionally on-demand; no live playback evaluator, durable binding persistence, generic property setter, symbol-frame setter, or timeline-range bake is claimed.
