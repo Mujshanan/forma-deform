@@ -26,7 +26,7 @@ The Smart Controller now supports an explicit **Target action** choice:
 - **Apply all current frame** requires 1–512 resolved, host-verified GeometryDeform targets with unique `(element, pin)` identities. It preflights every target and payload before issuing any writes, then applies the prepared `warp.pin_move` calls inside AniCraft's enclosing `plugin.run` transaction.
 - A preflight failure issues no writes. A commit-time command failure propagates so AniCraft can roll back the complete run. A successful batch is one undo step.
 
-Timeline-range bake is not implemented yet. The proposed `warp.pin_move_batch` host command remains an optional lower-overhead API, not a prerequisite for this plug-in-side batch. See [FD-M5 design](../../docs/FD-M5-DEFORMATION-INTEGRATION.md).
+**Bake range** evaluates each requested frame using frame-specific bone inputs, verifies and prepares every pin write before mutation, then commits the entire range inside one `plugin.run` transaction. The inclusive frame range is limited to 512 frames and 512 total target writes. Manual inputs remain constant across the range. The proposed `warp.pin_move_batch` host command remains an optional lower-overhead API, not a prerequisite for this plug-in-side batch. See [FD-M5 design](../../docs/FD-M5-DEFORMATION-INTEGRATION.md).
 
 ## Canonical preview (FD-M2)
 
