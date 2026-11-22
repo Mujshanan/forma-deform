@@ -367,9 +367,9 @@ impl EvaluatedGeometryResult {
         Ok(())
     }
 
-    /// Compare all host-owned dependencies against their current values before
-    /// the host applies this result. This check is not a substitute for atomic
-    /// validation inside the host's final transaction.
+    /// Compare every captured source geometry dependency with the host's current values.
+    /// A non-output source used by a multi-source request must not be ignored.
+    /// This check is not a substitute for atomic validation inside the host's final transaction.
     pub fn validate_source_freshness(
         &self,
         current_sources: &[GeometrySnapshot],
