@@ -1,6 +1,9 @@
+pub mod canonical;
 pub mod easing;
 pub mod frame;
 pub mod range;
+
+pub use canonical::{CanonicalControllerMapper, PoseLibrary};
 
 use crate::model::EndpointPolicy;
 
