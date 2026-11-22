@@ -81,7 +81,15 @@ impl PersistentBindingDocument {
     }
 
     pub fn from_json(source: &str) -> Result<Self, CoreError> {
-        let document: Self = serde_json::from_str(source)
+        let mut value: serde_json::Value = serde_json::from_str(source)
+            .map_err(|error| CoreError::Serialization(error.to_string()))?;
+        let canonical_value = value.get("controller_document")
+            .ok_or_else(|| CoreError::Serialization("persistent payload is missing controller_document".into()))?;
+        let canonical = CanonicalDocument::from_json(&canonical_value.to_string())?;
+        value.as_object_mut().expect("JSON object checked by deserialization")
+            .insert("controller_document".into(), serde_json::to_value(canonical)
+                .map_err(|error| CoreError::Serialization(error.to_string()))?);
+        let document: Self = serde_json::from_value(value)
             .map_err(|error| CoreError::Serialization(error.to_string()))?;
         document.validate()?;
         Ok(document)
