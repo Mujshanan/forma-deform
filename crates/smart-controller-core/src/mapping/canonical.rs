@@ -17,7 +17,6 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::{
     canonical::{BindingMode, Controller, MappingConfig, TargetMapping},
-    endpoint::EndpointPolicy,
     error::CoreError,
     evaluator::{ControllerMapper, ResolvedInputs},
     ids::BindingId,
@@ -113,6 +112,7 @@ impl ControllerMapper for CanonicalControllerMapper {
         controller: &Controller,
         inputs: &ResolvedInputs,
     ) -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+        controller.validate_local()?;
         if controller.inputs.len() != 1 {
             return Err(CoreError::InvalidMapping(format!(
                 "canonical mapping currently requires exactly one declared driver input; controller {} declares {}",
@@ -264,7 +264,7 @@ fn map_anchored_bindings_with_unit(
                 endpoint_policy,
                 ..
             } => {
-                let policy = endpoint_policy.unwrap_or(EndpointPolicy::Exclusive);
+                let policy = endpoint_policy.unwrap_or_default();
                 let frame_value = frame::map_to_frame(unit, *start_frame, *end_frame, policy)?;
                 TypedValue::scalar(frame_value as f64)?
             }
