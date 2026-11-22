@@ -491,7 +491,7 @@ This section is the current status authority. Update it when code or verified ho
 
 | Capability | Status |
 |---|---|
-| Independent Rust Smart Controller core | Present in repository; current model directions require characterization/consolidation |
+| Independent Rust Smart Controller core | Canonical DAG/evaluation/composition foundations and legacy V1 paths are present; overlapping DTOs/mapping primitives and missing built-in canonical mapper are under characterization |
 | Smart Controller command plug-in | Present as an on-demand prototype/compatibility adapter |
 | Deterministic preview-only V1 direction | Required behavior to preserve |
 | Bone input through `bone.info` | Documented/audited on-demand host path; verify against current AniCraft source and in-app behavior |
@@ -645,4 +645,89 @@ This audit did not establish that no suitable internal hook could ever be added;
 - No AniCraft build, test suite, GUI session or live MCP/plug-in smoke test was run as part of this source-only audit.
 - This is not a comprehensive security review or a proof that every possible internal extension point is absent.
 - Any future implementation must re-check the source commit at the time of coding; the host repository is actively changing.
+
+
+
+---
+
+## 12. Smart Controller core characterization and consolidation
+
+**Characterization baseline:** branch `audit/anicraft-native-tool-feasibility`, source commit `ec9c8b4738cb396c78bf53829df142b7be9d63cf`.  
+**Scope:** inspect the existing core, migration layer, plug-in adapter and tests before changing controller semantics. The current work fixes two compile-time integration blockers and records the characterization; it does not yet change serialized controller semantics.
+
+### 12.1 Existing model inventory
+
+| Existing type/path | Actual responsibility | Classification |
+|---|---|---|
+| `legacy::BindingSet`, `legacy::ControllerBinding` | Versioned V1 binding collection; one binding owns a driver ID, three-point input range, easing, target anchors, mode and enabled state. Its evaluator directly calculates symbol-frame or geometry-deform preview values. | Compatibility format and reference behavior; preserve through fixtures and migration/export. |
+| `model::Params`, `model::Mode`, `preview::preview_slider`, `preview::preview_transform` | The older plug-in command payload. Slider uses a directed two-endpoint rotation range and frame interval; Transform uses the directed range and a scaled property output. | V1 command/adapter DTO and compatibility preview; not the long-term authored document model. |
+| `migration::CanonicalDocument`, `canonical::Controller`, `canonical::ControllerBinding`, `input::InputDefinition` | Versioned document containing shared inputs, controller nodes, dependencies, typed target bindings and explicit composition configuration. | Intended authoritative authored/runtime model. |
+| `graph::ControllerGraph`, `evaluator::evaluate` | Validates the controller DAG, resolves immutable input snapshots, checks dependencies and unavailable/stale inputs, then collects typed binding contributions in deterministic topological order. | Canonical orchestration. |
+| `composition::compose` | Independent post-pass for Replace, Additive, WeightedBlend and PriorityOverride target contributions. | Canonical composition stage; remains separate from evaluation and from Form Deform. |
+| `evaluator::ControllerMapper` | Injected mapping interface. The core evaluator delegates per-controller mapping to this interface. | Test/extension seam, but currently no complete built-in canonical mapper was identified. |
+
+The old V1 formats are not interchangeable with the canonical document. They encode different use cases and identity guarantees. In particular, `Params` has no authored controller/binding IDs; migration assigns deterministic temporary identities and reports when fields are discarded. Do not promote those generated IDs to durable authored identity without an explicit first-save replacement policy.
+
+### 12.2 Duplicated mapping primitives
+
+| Behavior | Existing implementations | Characterization |
+|---|---|---|
+| Three-anchor normalization | `legacy::InputRange::normalize`; `mapping::range::ThreePointRange::normalize_signed` | Existing `range_mapping_tests.rs` compares them across a range of inputs. They implement the same signed `[-1, 1]` normalization with neutral at zero. |
+| Easing | `legacy::EaseCurve`; `mapping::easing::Easing`; `canonical::EasingConfig` | Three enums describe the same Linear/Smoothstep choices. The new mapping primitive validates non-finite values; the legacy enum is a compatibility implementation. |
+| Directed range normalization | `mapping::normalize_rotation`; `mapping::range::normalize_directed` | Existing tests compare outputs for forward and reversed ranges. The newer helper returns `CoreError`; the V1 helper returns a string error. |
+| Frame mapping | `mapping::map_to_frame`; `mapping::frame::map_to_frame` | Existing tests compare endpoint outputs. The newer helper returns `Result` and rejects non-finite values and reversed frame intervals; the V1 helper has a non-fallible signature and a debug-only interval assertion. |
+| Three-anchor configuration | `MappingConfig::Range1D`; `MappingConfig::ThreeAnchorRange` | Both carry minimum/neutral/maximum. `ThreeAnchorRange` additionally carries easing and is the form emitted by V1 BindingSet migration. The duplicate needs a version-aware consolidation decision. |
+| Two-endpoint configuration | `MappingConfig::DirectedRange1D` | Semantically distinct from a three-anchor range: it maps a directed start/end interval into `[0, 1]`, preserving reversed endpoints. Keep this distinct. |
+
+The existing tests already characterize much of the old/new numeric equivalence. The remaining work is to make the canonical configuration actually select the canonical mapping implementation, rather than maintaining parallel helpers indefinitely.
+
+### 12.3 What is already characterized by tests
+
+The inspected core test suite includes:
+- captured V1 BindingSet and Params JSON fixtures, strict deserialization and round trips;
+- legacy symbol-frame and geometry-deform endpoint, midpoint, neutral and disabled behavior;
+- host-driven and manual Slider preview values;
+- reversed rotation ranges and inclusive/exclusive frame endpoints;
+- equivalence tests for old/new three-anchor normalization, directed normalization and frame mapping;
+- BindingSet and Params migration/export round trips, including explicit loss reporting;
+- canonical schema version/unknown-field rejection and controller-output dependency validation;
+- deterministic graph ordering, missing dependency and cycle rejection;
+- typed contribution composition, ordering, explicit additive bases and invalid composition handling.
+
+These tests are compatibility evidence, not proof that the canonical model has a complete end-to-end mapper. Most evaluator tests inject a closure implementing `ControllerMapper`; that verifies orchestration and composition while leaving the actual canonical mapping algorithm outside the tested production path.
+
+### 12.4 Consolidation target
+
+Adopt these boundaries:
+
+1. **Canonical authored/runtime model:** `CanonicalDocument`, `Controller`, `InputDefinition`, `ControllerBinding`, `MappingConfig`, `TargetMapping` and typed values are the only model used by new core and host features.
+2. **Compatibility ingress/egress:** keep `legacy::BindingSet` and `model::Params` only for explicit import, migration, export and the existing V1 command adapter. They must not become a second runtime state model.
+3. **One numeric mapping implementation:** make the checked `CoreError` mapping primitives authoritative. Legacy functions become thin compatibility wrappers only where their public signatures must be retained; otherwise deprecate them after all callers move.
+4. **One easing type:** use the canonical mapping easing type in the runtime model and map legacy `EaseCurve` values at the compatibility boundary.
+5. **One three-anchor variant:** consolidate `Range1D` and `ThreeAnchorRange` into a single canonical three-anchor representation with explicit easing semantics. Retain `DirectedRange1D` as the separate two-endpoint mapping. Because canonical documents are already versioned, define a schema migration/compatibility path before changing serialized variants; do not silently reinterpret schema version 1.
+6. **Built-in canonical mapper:** implement the mapping behavior in `smart-controller-core`, not in AniCraft or the WASM adapter. Keep `ControllerMapper` as a seam if useful for tests/alternate algorithms, but provide a first-party implementation that consumes canonical `MappingConfig`, resolved typed inputs and target bindings. Unsupported mapping kinds must return explicit typed errors/diagnostics rather than fabricate outputs.
+7. **Host adapter stays thin:** it resolves AniCraft identities, gathers attributed/freshness-aware input snapshots, invokes the core, verifies target capabilities and presents preview data. It does not define mapping or composition semantics.
+
+### 12.5 Safe implementation order
+
+1. Preserve and run the existing V1 characterization and migration tests as the behavioral baseline.
+2. Add direct canonical mapping tests for every supported mapping kind, including neutral, endpoints, clamping, reversed ranges, easing, typed-value mismatch and numeric overflow.
+3. Specify the canonical mapper contract and its behavior for one-input versus multi-input controllers, PoseSet/Joystick/Discrete mappings, and target anchor interpolation. Do not infer multi-input semantics from the current data structures.
+4. Decide whether schema version 1 is experimental-only or must remain readable. If it must remain readable, implement an explicit schema migration before removing/renaming `Range1D` or changing its JSON representation.
+5. Consolidate the mapping/easing helpers behind the canonical implementation, retaining compatibility wrappers until all legacy callers and fixtures are accounted for.
+6. Move V1 DTOs behind a clearly named compatibility module/API and migrate the plug-in adapter to canonical preview orchestration.
+7. Only after the core has a tested built-in mapper, stable migration behavior and a clean workspace build should native AniCraft UI work begin.
+
+### 12.6 Form Deform boundary
+
+This consolidation does not change the accepted independence rule: Smart Controller evaluation produces its own typed contributions and target preview results. It does not feed values into Form Deform pin-deformation evaluation, alter the existing pin formula, or introduce multi-source composition. Any such behavior requires a separate FDM v2 decision.
+
+### 12.7 Baseline CI finding and current patch
+
+The source-only audit PR's CI run `44989449828` reached `cargo test --workspace` and failed while compiling `anicraft-smart-controller-plugin`:
+- `plugins/smart-controller/src/preview_plan.rs:94`: the geometry response `BTreeMap` lacked explicit key/value types (`E0282`);
+- `plugins/smart-controller/src/preview_plan.rs:138`: tests imported `EvaluationResult` through `composition`, but that module did not publicly re-export the evaluator result (`E0603`);
+- `composition.rs` also contained unused imports.
+
+The characterization branch fixes these compile-time issues by typing the geometry response cache, publicly re-exporting the shared `EvaluationResult` contract, and moving test-only imports into the test module. The fix is intentionally behavior-neutral. CI must be rerun on this branch; until then, workspace test success is unverified.
 
