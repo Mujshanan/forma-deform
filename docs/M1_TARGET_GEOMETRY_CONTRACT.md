@@ -2,21 +2,21 @@
 
 **Status:** M1 contract semantics drafted and FDM-side primitives implemented; host conformance and architecture acceptance remain pending
 
-## Implementation progress — FDM-side contract primitives
+## Implementation progress — M1 FDM-side contract
 
-The first implementation slice now exists in `form-deform-core::host_contract`:
+The FDM-side M1 contract is implemented in `form-deform-core`:
 
-- Distinct opaque host namespace, document, target-kind, target, and coordinate-space identifiers.
-- Mandatory host target generation token, so ID reuse cannot silently resurrect an old binding.
-- Separate target-scoped geometry and topology revision tokens.
-- Fingerprints carry an explicit algorithm identifier and digest.
-- A typed coordinate-space descriptor validates 2D scope, declared linear units, and finite positive scale.
-- Generic, versioned geometry snapshot envelopes keep payload encoding independent from identity and revision semantics.
-- Snapshot stamps compare target identity, geometry revision, topology revision, and fingerprint independently.
+- Opaque host namespace, document, target-kind, target, and coordinate-space identifiers.
+- Mandatory non-zero target incarnation generation.
+- Independent non-zero geometry and topology revision epochs.
+- Validated coordinate-space descriptors with explicit units, scale, axes, origin, and rest-space kind.
+- An owned immutable Path2D v1 payload with private command storage and validated command sequencing.
+- Deterministic SHA-256 fingerprint generation using the versioned `fdm-path2d-sha256-v1` canonical byte encoding.
+- Snapshot construction that rejects unsupported payload kind/schema and recomputes the fingerprint to verify that it matches the payload and coordinate descriptor.
+- Snapshot stamps and freshness comparison that distinguish target identity mismatch, ordinary staleness, revision regression, and equal-revision fingerprint integrity failures.
 
-This is intentionally only the FDM-side contract layer. It does not generate host identities, acquire snapshots, persist data, implement AniCraft revision tracking, or apply results. The AniCraft-side gaps and open decisions below remain blocking for end-to-end host integration. The current implementation uses no new dependencies and includes native unit tests; CI is running on this PR revision.
+The implementation does not create host IDs, read AniCraft documents, persist bindings, acquire host snapshots, update host revisions, or apply deformation results. Those remain AniCraft-side conformance work and are not included in this M1 FDM-side change. Native Asset Warp and pin tweening remain untouched.
 
-  
 **Scope:** Forma Deform ↔ AniCraft host boundary  
 **Depends on:** ADM-001, ADM-002, ADM-007, CCC-01.5  
 **Out of scope:** AniCraft implementation, persistence API design, evaluated-geometry injection, scheduling/cancellation, cache policy, animation sampling, bake transactions, multi-source composition
@@ -273,9 +273,9 @@ trait GeometryHost {
 
 This is conceptual. It does not prescribe synchronous calls, Rust trait-object transport, serialization, plugin ABI, or a specific AniCraft implementation. A plugin boundary may need request/response DTOs instead.
 
-## 10. Acceptance tests for the contract
+## 10. Host conformance acceptance tests (future AniCraft adapter)
 
-The design is not implementation-complete until host and adapter tests cover:
+The FDM-side contract tests are implemented in `form-deform-core`. End-to-end host acceptance remains blocked until AniCraft separately supplies the capabilities listed in §11.9. The future host adapter must demonstrate:
 
 1. A target reference resolves to the same target after save/reopen.
 2. A reference from another document never resolves by coincidentally matching a target ID.
@@ -359,23 +359,36 @@ A revision is a change epoch, not a content hash and not an undo-history index. 
 - A snapshot remains unchanged after subsequent host edits. A newer snapshot is a new value with new dependency stamps.
 - A snapshot is not proof that its source remains current. Freshness must be checked against current host state immediately before any future result-application operation.
 
-### 11.6 Fingerprint canonicalization proposal
+### 11.6 Fingerprint canonicalization
 
-The implemented fingerprint identifier is `fdm-path2d-sha256-v1`. It hashes the FDM-owned canonical Path2D payload, not AniCraft's native object layout. AniCraft adapters must map the host path into this schema before snapshot creation. Its canonical byte stream is defined exactly as follows:
+The implemented algorithm identifier is `fdm-path2d-sha256-v1`. It hashes the FDM-owned canonical Path2D payload, not AniCraft's native object layout. An AniCraft adapter must map the host's authored path into this schema before constructing a snapshot.
 
-1. A fixed domain-separation prefix and payload kind/schema version.
-2. The complete coordinate-space descriptor (space kind, stable space ID, dimensionality, source unit, canonical unit, scale, axis orientation, and origin).
-3. The Path2D schema's ordered sequence of path commands/segments, explicit segment-kind tags, all authored endpoint/control values, and closure state.
+The exact canonical byte stream is:
 
-Numeric rules:
+1. ASCII domain prefix `FORMA-DEFORM\\0PATH2D\\0`.
+2. Schema version `1` as little-endian `u32`. The payload kind is fixed as `Path2D` by the domain and schema.
+3. Coordinate descriptor, in this exact order:
+   - Coordinate-space ID: UTF-8 bytes preceded by byte length as little-endian `u32`.
+   - Space-kind tag: `0x01` = `TargetLocalRest`.
+   - Dimensionality: one `u8` (must equal 2).
+   - Source linear unit and canonical linear unit: each UTF-8 with little-endian `u32` byte length.
+   - Unit scale: little-endian IEEE-754 binary64.
+   - Axis tag: `0x01` = X-right/Y-up; `0x02` = X-right/Y-down.
+   - Origin tag: `0x01` = top-left; `0x02` = bottom-left; `0x03` = center.
+4. Command count as little-endian `u64`.
+5. Commands in authored order, each with a one-byte tag and its coordinate values:
+   - `0x01` MoveTo: x, y.
+   - `0x02` LineTo: x, y.
+   - `0x03` QuadraticTo: control x, control y, endpoint x, endpoint y.
+   - `0x04` CubicTo: control1 x/y, control2 x/y, endpoint x/y.
+   - `0x05` Close: no coordinate values.
+6. SHA-256 over the complete byte stream. The resulting digest is exactly 32 bytes.
 
-- Coordinates and scale must be finite; NaN and infinities are rejected before hashing.
-- Normalize negative zero to positive zero.
-- Encode finite IEEE-754 binary64 values in a specified byte order (little-endian); do not round, quantize, or stringify floating-point values.
-- Preserve segment ordering and every schema-defined structural distinction. Do not hash object memory, map iteration order, runtime IDs, pointers, or display metadata.
-- Hash the canonical byte stream with SHA-256. The algorithm identifier includes the canonicalization version; any change to the byte stream requires a new identifier.
+Every coordinate and scale is finite. NaN and infinities are rejected before hashing. Negative zero is normalized to positive zero. All finite floating-point values are encoded as little-endian IEEE-754 binary64; no rounding, quantization, or stringification is performed. Strings are UTF-8 and length-prefixed, command order and command tags are significant, and no object memory, map iteration order, runtime IDs, pointers, display names, target identity, or revision numbers enter the digest.
 
-Path2D v1 requires a non-empty command list beginning with MoveTo. Drawing commands require an active subpath; Close requires an open subpath. Point construction rejects non-finite coordinates. The FDM-owned `Path2D` stores its command vector privately and exposes only shared access. The fingerprint is a snapshot-content verification token; revisions remain the efficient change epochs. The target identity and revision numbers themselves are not included in the content digest. The SHA-256 digest is exactly 32 bytes; the validator rejects a digest of any other length for this algorithm ID.
+Path2D v1 requires a non-empty command list beginning with MoveTo. LineTo and curve commands require an active subpath; Close requires an open subpath. A new MoveTo starts another subpath. Point construction rejects non-finite coordinates. The FDM-owned Path2D stores its command vector privately and exposes only shared access.
+
+Snapshot construction validates the Path2D payload kind and schema version, calculates the fingerprint from the payload plus coordinate descriptor, and rejects a supplied fingerprint that does not match. This prevents a host adapter from accidentally pairing a revision stamp with unrelated geometry bytes. Revisions remain change epochs; the fingerprint remains a content-verification token. Any future change to this canonical byte stream requires a new algorithm identifier.
 
 ### 11.7 Coordinate-space semantics
 
