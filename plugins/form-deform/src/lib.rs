@@ -56,9 +56,9 @@ fn run(params: &Value) -> Result<(), String> {
     if let Some(frame) = frame { bone_query["frame"] = Value::from(frame); }
     let bone_data = ac::command("bone.info", bone_query)?;
     let bone = find_bone(&bone_data, bone_id)
-        .ok_or_else(|| format!("bone {bone_id} is not present in an armature at the playhead"))?;
+        .ok_or_else(|| format!("bone {bone_id} is not present in the selected driver layer at the requested frame"))?;
     let keyed_angle = bone["angle"].as_f64()
-        .ok_or_else(|| format!("bone {bone_id} has no evaluated angle at the playhead"))?;
+        .ok_or_else(|| format!("bone {bone_id} has no evaluated angle at the requested frame"))?;
     let swing = bone["swing"].as_f64().unwrap_or(0.0);
     let input_angle = keyed_angle + if include_spring { swing } else { 0.0 };
 
