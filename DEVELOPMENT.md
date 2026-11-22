@@ -150,6 +150,8 @@ The repositories below were inspected at source level for selected modules. This
 
 **Reuse policy:** do not copy a subsystem because it is written in Rust or has a permissive repository-level license. Verify the exact file license, copyright headers, dependency licenses, tests, numerical behavior, and whether the algorithm duplicates AniCraft. Prefer small, isolated, well-tested algorithms over whole frameworks.
 
+The maintained module-level inventory, AniCraft capability map, external candidate statuses, and adoption checklist live in [Code Reuse Registry](docs/CODE-REUSE-REGISTRY.md). Update that registry whenever modules, host capabilities, or reuse decisions change.
+
 ## 6. Code and ownership architecture
 
 ```text
