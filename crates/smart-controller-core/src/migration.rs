@@ -83,8 +83,7 @@ impl CanonicalDocument {
     pub fn from_json(source: &str) -> Result<Self, CoreError> {
         let mut value: serde_json::Value = serde_json::from_str(source)
             .map_err(|e| CoreError::Serialization(e.to_string()))?;
-        let schema = value.get_mut("schema")
-            .and_then(serde_json::Value::as_object_mut)
+        let schema = value.get("schema").and_then(serde_json::Value::as_object)
             .ok_or_else(|| CoreError::Serialization("canonical document is missing schema identity".into()))?;
         let name = schema.get("name").and_then(serde_json::Value::as_str)
             .ok_or_else(|| CoreError::Serialization("canonical schema name is missing or invalid".into()))?;
@@ -104,7 +103,9 @@ impl CanonicalDocument {
                 if has_v2_mapping {
                     return Err(CoreError::Serialization("PoseGrid is not valid in canonical schema v1".into()));
                 }
-                schema.insert("version".into(), serde_json::Value::from(CURRENT_SCHEMA_VERSION));
+                value.get_mut("schema").and_then(serde_json::Value::as_object_mut)
+                    .expect("schema object was validated above")
+                    .insert("version".into(), serde_json::Value::from(CURRENT_SCHEMA_VERSION));
             }
             v if v == CURRENT_SCHEMA_VERSION as u64 => {}
             v => return Err(CoreError::UnsupportedSchemaVersion(v as u32)),
