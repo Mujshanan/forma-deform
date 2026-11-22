@@ -184,13 +184,16 @@ The module sketch is conceptual. Do not create empty crates or force the current
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0 — Contract audit | Confirm bone, warp, command, storage, undo, and evaluator APIs | Documented supported/unsupported capabilities with source references |
-| M1 — Pure controller core | Stable IDs, normalization, validation, deterministic preview, and the initial built-in one-dimensional mapping subset (see section 10) | Core implementation and CI-tested; joystick and multi-input mapping remain deferred |
-| M2 — Plugin preview | Read verified AniCraft inputs and produce preview results | On-demand preview is repeatable and does not mutate document |
-| M3 — Native authoring UI | Tool context, binding editor, target inspector, diagnostics | Uses AniCraft panels/commands; keyboard and undo behavior verified |
-| M4 — Persistent bindings | Versioned binding model stored through host-owned document extension | Save/load, migration, undo and invalidation tests pass |
-| M5 — Deformation integration | Target adapters and explicit apply/bake commands | Stable target identity and atomic undo |
-| M6 — Host evaluation integration | Live evaluator only if AniCraft exposes a supported hook | Scrub/playback determinism, invalidation and performance tests |
-| M7 — Advanced algorithms | Multi-axis keyforms, lattice, RBF/ARAP research, soft selection | Benchmarks justify each addition |
+| FD-M1 — Pure controller core | Stable IDs, normalization, validation, deterministic preview, and the initial built-in one-dimensional mapping subset (see section 10) | Core implementation and CI-tested; joystick and multi-input mapping remain deferred |
+| FDM-v2 M1 — Host geometry/evaluation contracts | Stable host target identity, immutable source snapshots, evaluated geometry input/output, time/dependency stamps, persistence, cache invalidation, and transactional apply/bake boundaries | FDM-side contracts and acceptance matrix reviewed; AniCraft conformance explicitly tracked separately |
+| FD-M2 — Plugin preview | Read verified AniCraft inputs and produce preview results | On-demand preview is repeatable and does not mutate document |
+| FD-M3 — Native authoring | Typed command authoring and host-extension requirements | Uses verified AniCraft command/settings capabilities; host-dependent features remain explicit |
+| FD-M4 — Persistent bindings | Versioned binding model stored through host-owned document extension | Core payload plus host save/load, migration, undo and invalidation tests pass |
+| FD-M5 — Deformation integration | Target adapters and explicit apply/bake commands | Stable target identity and atomic undo; GUI and host transaction tests pass |
+| FD-M6 — Host evaluation integration | Live evaluator only if AniCraft exposes a supported hook | Scrub/playback determinism, invalidation and performance tests |
+| FD-M7 — Advanced algorithms | Multi-axis keyforms, lattice, RBF/ARAP research, soft selection | Benchmarks justify each addition |
+
+**Milestone naming:** `FD-M1` is the Smart Controller one-dimensional mapper described in section 10. `FDM-v2 M1` is the separate host-geometry/evaluation contract phase. They are not the same milestone. FD-M2 through FD-M5 are the Smart Controller preview/authoring/persistence/apply track; they do not, by themselves, prove FDM-v2 M1 host conformance.
 
 Do not skip M0 to claim capabilities that the host does not expose. M6 is not a prerequisite for a useful authoring/preview tool.
 
@@ -211,7 +214,6 @@ Do not skip M0 to claim capabilities that the host does not expose. M6 is not a 
 A feature is not complete because a UI control exists. It must have a defined model, deterministic semantics, validation, tests, and a verified host boundary where applicable.
 
 This document is an architecture and development plan. It does not authorize changes to AniCraft, external repositories, or PR merges.
-
 
 ## 10. FD-M1 — Canonical one-dimensional Smart Controller mapper
 
@@ -278,22 +280,25 @@ Smart Controller binding evaluation and Form Deform pin-deformation evaluation r
 - [FDM v2 Architecture and Integration Specification](docs/FDM_V2_ARCHITECTURE.md) — consolidated accepted decisions, responsibilities, invariants, lifecycle, and open implementation questions.
 - [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Status: audit and ownership matrix complete; CCC-01.5 discrepancy resolved and the Smart Controller changes passed the full GitHub Actions CI workflow, including workspace tests and all three release WASM plugin builds.
 
-The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior. The CCC-01.5 source audit found separate production plugin paths and preserved host pin behavior, but also found a Smart Controller integration test that explicitly combines the two systems; this discrepancy remains unresolved.
+The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior.
 
-### 11.3 Development sequence
+### 11.3 FDM v2 M1 contract package and status
 
-1. M0 is complete: the CCC-01.5 test discrepancy was resolved; the integration gap/ownership matrix and required AniCraft host-extension list are recorded; CI passed `cargo test --workspace` and release WASM builds for bone-query, Form Deform, and Smart Controller.
-2. M1 host-integration contract design begins with stable target identity and revisioned geometry snapshots. The current proposal is [M1 — Stable Target Identity and Revisioned Geometry Snapshots](docs/M1_TARGET_GEOMETRY_CONTRACT.md). It is proposed for review, not yet an accepted decision or implementation authorization.
-3. Continue M1 with the evaluated-geometry input/output boundary, then separate contracts for persistence, timeline sampling, scheduling/freshness/cache invalidation, and host transactions/baking.
-4. Specify initial topology and algorithm mathematical contracts, schema/migration, composition, animation, and bake requirements.
-5. Approve a crate-level implementation plan and acceptance tests.
-6. Implement FDM-owned work separately from any AniCraft host extension. Host changes require separate explicit authorization.
+The FDM v2 M1 contract package is split into three focused documents:
+
+1. [Stable target identity and revisioned geometry snapshots](docs/M1_TARGET_GEOMETRY_CONTRACT.md) — implemented FDM-side opaque identity, Path2D v1 snapshot, canonical fingerprint and source freshness primitives.
+2. [Evaluation and host lifecycle contracts](docs/M1_EVALUATION_LIFECYCLE_CONTRACT.md) — evaluated geometry input/output, explicit time sampling, dependency stamps, cache invalidation, persistence ownership, and transactional apply/bake boundaries.
+3. [Host conformance and acceptance test matrix](docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md) — FDM automated gates and AniCraft host conformance tests with explicit evidence rules.
+
+The contract documents complete the FDM-side design specification for review. They do not claim that the remaining runtime result DTOs, host document identity/revision store, timeline sampler, persistent extension, cache lifecycle, or native transaction implementation already exist. The AniCraft conformance tests remain blocked pending a separately reviewed and authorized host implementation.
+
+### 11.4 Next implementation sequence
+
+1. Review and accept the complete FDM v2 M1 contract package.
+2. Implement and test FDM-owned evaluation request/result/dependency DTOs against the contracts.
+3. Separately authorize and implement AniCraft document/target identity, revision, snapshot and coordinate conformance.
+4. Implement host persistence and explicit transaction/bake commands only against verified host APIs.
+5. Validate the FD-M2 through FD-M5 Smart Controller plugin chain as a related but separate workflow; do not count it as proof of FDM v2 M1 conformance.
+6. Continue with host evaluation scheduling only if AniCraft exposes a supported hook.
 
 **Governance:** Accepted architecture decisions are not blanket authorization to modify AniCraft, implement every proposed topology/algorithm, or merge pull requests. Preserve this boundary in issues, PRs, and subsequent milestones.
-
-
-### 11.4 M1 host-integration contract design
-
-The first M1 design artifact is [M1 — Stable Target Identity and Revisioned Geometry Snapshots](docs/M1_TARGET_GEOMETRY_CONTRACT.md). It defines a proposed persistent host-target reference, separate FDM/runtime identities, target-scoped geometry and topology revisions, immutable source-geometry snapshots, coordinate-space metadata, failure behavior, and acceptance tests.
-
-This proposal deliberately leaves host document-identity guarantees, target-ID reuse/generation semantics, initial target kinds and geometry payloads, revision update ownership, fingerprint canonicalization, coordinate conventions, native Asset Warp staging, and plugin transport open pending source verification and explicit design decisions. It does not authorize AniCraft changes. The existing `FD-M1` Smart Controller mapper milestone in section 10 is a separate implementation milestone and must not be confused with this FDM v2 host-integration M1 phase.
