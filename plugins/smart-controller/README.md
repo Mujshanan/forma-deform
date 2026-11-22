@@ -17,6 +17,16 @@ The first slice intentionally supports one input, one controller, and one geomet
 
 The host-independent core now exposes `PersistentBindingDocument` with strict schema versioning, canonical graph validation, atomic controller upsert/removal, and collection revision tracking. This is a payload contract only. The current command plug-in cannot write document metadata or files; durable save/load and undo/redo require a reviewed AniCraft host extension. See [FD-M4 specification](../../docs/FD-M4-PERSISTENT-BINDINGS.md).
 
+## Target application (FD-M5 first slice)
+
+The Smart Controller now supports an explicit **Target action** choice:
+
+- **Preview** (default) remains read-only.
+- **Apply current frame** re-queries `warp.info`, verifies the exact element and pin IDs, then issues exactly one `warp.pin_move` command with the composed Vector2 output. The host command writes at AniCraft's current playhead and owns its undo step.
+- Apply refuses unresolved targets, unverified identity, non-geometry targets, or anything other than exactly one resolved target. It does not partially apply a multi-target plan.
+
+This is a one-target, one-playhead apply/bake operation. Multi-target transactions and timeline-range baking are not claimed: the inspected plugin boundary does not expose a batch transaction that guarantees one atomic undo across multiple writes. Those require a reviewed AniCraft host command.
+
 ## Canonical preview (FD-M2)
 
 Set `canonical_document_json` to a JSON-encoded canonical Smart Controller document (schema `smart-controller`, version `1`). The plugin then:
