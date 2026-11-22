@@ -150,4 +150,4 @@ Install the WASM file through AniCraft's **Commands → Install Plug-in…** wor
 
 ## Verification status
 
-Native test execution, WASM compilation, and an in-app run must pass before this milestone is marked complete. The plugin is intentionally on-demand; no live playback evaluator, durable binding persistence, generic property setter, symbol-frame setter, or timeline-range bake is claimed.
+Native test execution, WASM compilation, and an in-app run must pass before this milestone is marked complete. The plugin is intentionally on-demand; no live playback evaluator, durable binding persistence, generic property setter, or symbol-frame setter is claimed. The bounded timeline-range bake described above is implemented as an explicit command-plugin operation; GUI verification of keyed frames, undo/redo, Cancel, and rollback remains pending.
