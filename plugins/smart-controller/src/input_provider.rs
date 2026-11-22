@@ -72,24 +72,26 @@ pub fn collect_host_input_snapshot(
                 }
                 let layer_id = *context.bone_layers.get(bone_id)
                     .ok_or_else(|| format!("bone input {} has no explicit layer mapping for bone {}", definition.id, bone_id))?;
-                if !responses.contains_key(&layer_id) {
-                    if let Ok(response) = query_bone_info(layer_id, None) {
-                        responses.insert(layer_id, response);
-                    } else {
-                        // A failed host read is explicitly unavailable; the
-                        // core applies the authored fallback policy.
-                        samples.push(InputSample::unavailable(definition.id.clone()));
-                        continue;
-                    }
-                }
-                match sample_bone_rotation(
-                    definition,
-                    responses.get(&layer_id).expect("response inserted"),
-                    context.bone_angle_policy,
-                    context.wrapped_angles,
-                ) {
-                    Ok(sample) => sample,
-                    Err(_) => InputSample::invalid(definition.id.clone()),
+                // Cache both successful and failed reads so each required host
+                // layer is queried at most once during this invocation.
+                let response = if let Some(response) = responses.get(&layer_id) {
+                    response.clone()
+                } else {
+                    let response = query_bone_info(layer_id, None);
+                    responses.insert(layer_id, response.clone());
+                    response
+                };
+                match response {
+                    Ok(response) => match sample_bone_rotation(
+                        definition,
+                        &response,
+                        context.bone_angle_policy,
+                        context.wrapped_angles,
+                    ) {
+                        Ok(sample) => sample,
+                        Err(_) => InputSample::invalid(definition.id.clone()),
+                    },
+                    Err(_) => InputSample::unavailable(definition.id.clone()),
                 }
             }
             InputSource::ControllerOutput { .. } => continue,
