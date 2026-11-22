@@ -729,3 +729,25 @@ Implemented on `feat/smart-controller-phase6a-mapping`:
 - `tests/advanced_pose_tests.rs` with coverage for barycentric interpolation, boundary handling, degenerate meshes, overlap ambiguity, bilinear interpolation, grid validation, and wrapped angles.
 
 **Verification:** GitHub Actions run [44934254912](https://github.com/Mujshanan/forma-deform/actions/runs/44934254912) passed on `3ef3f57e55ae6165885edf6588a704670bf08f9d`: 191 Rust tests (including 17 advanced-pose tests), Bun typecheck, Bun tests (9/9), Bun build, and release WASM builds for bone-query, form-deform and smart-controller. Rustfmt/Clippy are not part of the workflow. AniCraft in-app smoke testing remains external. The new mapping types are pure reusable core APIs; they are not yet selected by a concrete production `ControllerMapper` or serialized as new canonical `MappingConfig` variants. That integration is intentionally not smuggled into schema v1. Any serialized mapping representation requires an explicit schema/version compatibility decision. Phase 6B host authoring remains deferred pending a separate verified host-capability audit.
+
+
+### Runtime mapper bridge — implementation added, verification pending
+
+The advanced mapping algorithms are now connected to the existing evaluator contract without changing canonical schema v1:
+
+- `mapping/advanced/controller_mapper.rs` adds `AdvancedMappingRegistry`, keyed by stable `ControllerId`. Each registration explicitly names the `InputId` whose resolved `Vector2` value samples the registered Grid or Triangulated mapping.
+- `AdvancedControllerMapper<M>` decorates an existing `ControllerMapper`. Registered controllers use their advanced mapping; unregistered controllers are delegated to the existing mapper unchanged.
+- A registered mapping must reference an input declared by its controller, receive a resolved Vector2 value, and emit exactly the controller's declared BindingId set.
+- Failures for a registered advanced mapping are surfaced as mapping diagnostics. They do not silently invoke the fallback mapper.
+- The bridge returns binding values only. Evaluator graph traversal, unavailable-input handling, contribution collection, and the Phase 4 composition post-pass remain unchanged.
+
+**Compatibility boundary:** no fields or variants were added to `Controller`, `MappingConfig`, `SchemaEnvelope`, or schema version 1. The registry is explicitly runtime-only; it does not make advanced mapping selections durable or portable. Persisting authored advanced mappings requires a separately versioned extension contract and remains an open follow-up decision. This prevents an implicit V1 schema migration and preserves the existing V1 Slider preview path.
+
+**New integration tests:** seven tests cover advanced Grid dispatch through the evaluator, fallback delegation for unregistered controllers, no fallback after registered mapping failure, declared-input enforcement, Vector2 type enforcement, exact BindingId output matching, and duplicate registration rejection.
+
+Implementation commits:
+- `629c547b7122164e6b8970fc2fe9dba0fd6aec34` — runtime mapper bridge
+- `cd3a9ea748412b0b7d21d2aa98ae3c0cd499fea2` — public exports
+- `14e4f7f48d34c2ecc76fd4f64b320d8846131a42` — integration tests
+
+CI for these integration commits is pending; no passing test or build result is claimed yet. No PR or merge has been created.
