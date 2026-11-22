@@ -172,7 +172,9 @@ The first implementation should not silently convert stage-space coordinates to 
 
 The initial snapshot must identify whether the payload is canonical authored source geometry or a named evaluated pipeline stage. FDM must not infer whether native Asset Warp, parent transforms, or any other upstream deformation has already been applied.
 
-For the first contract, prefer canonical authored source geometry before native Asset Warp deformation. Existing pin edits continue through AniCraft's native warp commands; this proposal does not define composition between native Asset Warp and new FDM deformation sources.
+**AniCraft source finding:** for a shape without Asset Warp, `Shape.path` is the authored path. For a warped shape, AniCraft documents that `Shape.path` is the bent/shown outline while `Warp.rest` retains the outline as drawn. Therefore, the canonical pre-warp source snapshot must use `Warp.rest` when a live warp exists, and `Shape.path` otherwise. It must not snapshot the already-bent `Shape.path` and label it rest geometry. This also means native pin positions are not folded into the source-geometry revision; a change to the rest outline/rebase changes source geometry, while pin edits remain in the native Asset Warp state.
+
+Existing pin edits continue through AniCraft's native warp commands; this proposal does not define composition between native Asset Warp and new FDM deformation sources.
 
 ### 5.2 Geometry payload
 
@@ -279,14 +281,14 @@ The design is not implementation-complete until host and adapter tests cover:
 
 The following require explicit resolution before calling this contract accepted or implementing it:
 
-1. **Host document identity:** confirm AniCraft's persistent document identity guarantees and copy/duplicate semantics. If it has no suitable identity, define a host-owned document UUID and lifecycle.
-2. **Target ID generation:** confirm whether AniCraft's document-local numeric IDs are never reused within a document lifetime and across save/reopen. If not, add a generation/incarnation token.
+1. **Host document identity:** the inspected AniCraft `Document` / `DocumentFile` model has no persistent document UUID field. Its `next_id` is serialized, but that is an allocator, not document identity. The host therefore needs a persistent document UUID (or equivalent stable host-issued identity) and explicit copy/duplicate/Save As semantics before a durable cross-document target reference can be guaranteed.
+2. **Target ID generation:** AniCraft's `ElementId`, `LayerId`, and `SymbolId` are document-local `u64` wrappers. `Document::alloc_id` allocates from serialized `next_id`, so the inspected design is monotonic under normal operation, but no generation/incarnation is part of the ID type. Confirm deletion, migration, import, and overflow behavior; retain a generation token in the external contract unless the host can formally guarantee non-reuse.
 3. **Initial target kinds:** choose the first supported target kinds and exact capability queries; do not equate every ElementId with deformable geometry.
 4. **Geometry payload:** confirm whether the first host snapshot is path-only or needs an additional explicit geometry kind.
 5. **Revision ownership:** define where per-target geometry/topology counters live and how every mutation path advances them, including commands, undo/redo, imports, and document migrations.
 6. **Fingerprint algorithm:** select a stable canonicalization and digest algorithm, including float normalization and versioning.
 7. **Coordinate descriptor:** align units, axis orientation, origin, and local-rest semantics with AniCraft's actual geometry conventions.
-8. **Native Asset Warp stage:** confirm that the initial snapshot is pre-warp canonical source geometry and that existing pin edits remain on the native host path.
+8. **Native Asset Warp stage:** source inspection establishes that `Warp.rest` is the authored rest outline and `Shape.path` is the bent outline for a warped shape. Confirm the snapshot adapter uses `Warp.rest` when present and that existing pin edits remain on the native host path.
 9. **Plugin transport:** choose how immutable snapshot payloads cross the current plugin boundary without leaking host implementation types.
 
 ## 12. Non-goals and preserved constraints
@@ -311,4 +313,4 @@ The M0 audit records the inspected AniCraft implementation and ownership finding
 - [AniCraft Asset Warp commands](https://github.com/Mujshanan/anicraft/blob/main/crates/engine/src/cmds_warp.rs)
 - [AniCraft Asset Warp ADR 0079](https://github.com/Mujshanan/anicraft/blob/main/docs/adr/0079-asset-warp.md)
 
-The M0 audit found document-scoped numeric element/layer/symbol IDs and whole-document state IDs, but did not establish a cross-cutting persistent document identity contract, target-ID generation semantics, or per-target geometry/topology revisions. Those guarantees must be verified before implementation.
+The M0 audit and follow-up source inspection establish the following: AniCraft has document-scoped numeric `ElementId`, `LayerId`, and `SymbolId` wrappers; `Document::next_id` is serialized and `Document::alloc_id` allocates IDs within the document; the inspected `Document`/`DocumentFile` schema has no persistent document UUID; and a warped shape's `Shape.path` is the bent outline while `Warp.rest` preserves the authored rest outline. The inspected public model still does not expose a cross-cutting persistent document identity, target-ID generation token, or per-target geometry/topology revisions. These guarantees must be addressed before implementation.
