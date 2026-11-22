@@ -1,6 +1,6 @@
 # Smart Controller
 
-**V1 status:** canonical, on-demand host preview plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not apply targets, write keyframes, or run during playback/scrubbing.
+**V1 status:** canonical, on-demand host preview and explicit single-target current-playhead apply, plus the original Slider preview. The canonical path reads verified AniCraft inputs and produces a deterministic target preview plan. It does not run during playback/scrubbing.
 
 ## Native authoring dialog (FD-M3 first slice)
 
@@ -25,7 +25,7 @@ The Smart Controller now supports an explicit **Target action** choice:
 - **Apply current frame** re-queries `warp.info`, verifies the exact element and pin IDs, then issues exactly one `warp.pin_move` command with the composed Vector2 output. The host command writes at AniCraft's current playhead and owns its undo step.
 - Apply refuses unresolved targets, unverified identity, non-geometry targets, or anything other than exactly one resolved target. It does not partially apply a multi-target plan.
 
-This is a one-target, one-playhead apply/bake operation. Multi-target transactions and timeline-range baking are not claimed: the inspected plugin boundary does not expose a batch transaction that guarantees one atomic undo across multiple writes. Those require a reviewed AniCraft host command.
+AniCraft's `plugin.run` already groups nested commands into one undo step and restores the document if any nested command fails. The first batch-bake implementation can therefore preflight all outputs, then issue multiple `warp.pin_move` calls inside one plug-in run. A proposed `warp.pin_move_batch` host command is documented for a lower-overhead, host-owned preflight/commit API. Neither multi-target nor timeline-range bake is implemented yet; see [FD-M5 design](../../docs/FD-M5-DEFORMATION-INTEGRATION.md).
 
 ## Canonical preview (FD-M2)
 
