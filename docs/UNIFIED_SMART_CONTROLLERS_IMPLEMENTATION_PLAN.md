@@ -752,3 +752,19 @@ Implementation commits:
 - `ff3baff3361334a064ce191be0c1946f014818f1` — Triangulated dispatch regression test
 
 CI for these integration commits is pending; no passing test or build result is claimed yet. No PR or merge has been created.
+
+
+### Separately versioned persistence extension — implementation added, verification pending
+
+The runtime bridge now has a durable, independently versioned data contract:
+
+- mapping/advanced/persistence.rs defines extension ID `io.github.mujshanan.forma-deform.smart-controller.advanced-mappings`, extension version 1, and serialized records keyed by canonical `ControllerId` and `InputId`.
+- The payload supports Grid mappings (coordinate axes, row-major typed poses, explicit Reject/Clamp boundary policy) and Triangulated mappings (authored vertices/typed poses, explicit triangle-index topology, explicit Reject/ClampToMesh boundary policy).
+- The extension is a standalone envelope stored alongside the canonical controller document. It is not nested in or added to `SchemaEnvelope`, `Controller`, or `MappingConfig`; canonical schema v1 remains unchanged.
+- `AdvancedMappingExtension::from_json` checks extension identity and version. `into_runtime_registry` then checks controller existence, declared driver input, duplicate registrations, mapping geometry/grid validity and exact pose BindingId schema before building the runtime registry.
+- The loader reconstructs the same `AdvancedMappingRegistry` consumed by `AdvancedControllerMapper`. The evaluator and mapper contracts are unchanged; no alternate execution path or silent fallback is added.
+- Added persistence tests for JSON round-trip, identity/version rejection, unknown controllers, undeclared inputs, duplicate registrations, output binding schema mismatch, invalid grid data, and triangulated topology/boundary round-trip.
+
+**Integration boundary:** this commit defines the durable extension contract and conversion into runtime state. It does not yet bind the extension envelope to a particular AniCraft project-file metadata container or add host UI for authoring/import/export. That requires a separately verified host storage capability and remains part of the deferred host-facing work. Existing V1 documents without this optional extension continue to use the existing mapper path.
+
+**Verification pending:** the persistence implementation and tests have been committed to the Phase 6A branch; no test/build result is claimed until the branch workflow completes. No PR or merge has been created.
