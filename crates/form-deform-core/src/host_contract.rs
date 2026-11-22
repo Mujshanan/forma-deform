@@ -167,6 +167,7 @@ impl<P> GeometrySnapshot<P> {
     }
 
     pub fn validate_envelope(&self) -> Result<(), ContractError> {
+        self.target.validate()?;
         self.fingerprint.validate()?;
         self.coordinate_space.validate()?;
         if self.geometry_revision.0 == 0 || self.topology_revision.0 == 0 {
