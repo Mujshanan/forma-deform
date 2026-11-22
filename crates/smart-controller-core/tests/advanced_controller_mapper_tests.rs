@@ -13,6 +13,7 @@ use smart_controller_core::{
     mapping::advanced::{
         AdvancedControllerMapper, AdvancedMappingRegistry,
         grid::{GridBoundaryPolicy, GridMapping},
+        triangulated::{MeshBoundaryPolicy, Triangle, TriangulatedMapping, TriangulatedPose},
     },
     pose::Pose2D,
     CoreError, TypedValue, Vector2,
@@ -119,6 +120,41 @@ fn registered_grid_mapping_runs_through_controller_mapper_and_evaluator() {
 
     assert_eq!(result.contributions.len(), 1);
     assert_eq!(result.contributions[0].value.as_scalar(), Some(15.0));
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn registered_triangulated_mapping_runs_through_controller_mapper_and_evaluator() {
+    let mapping = TriangulatedMapping::new(
+        vec![
+            TriangulatedPose::new(Vector2::new(0.0, 0.0).unwrap(), pose(0.0)),
+            TriangulatedPose::new(Vector2::new(2.0, 0.0).unwrap(), pose(10.0)),
+            TriangulatedPose::new(Vector2::new(0.0, 2.0).unwrap(), pose(20.0)),
+        ],
+        vec![Triangle::new(0, 1, 2)],
+        MeshBoundaryPolicy::Reject,
+    ).unwrap();
+    let mut registry = AdvancedMappingRegistry::new();
+    registry.register_triangulated(
+        id_controller("controller"),
+        id_input("driver"),
+        mapping,
+    ).unwrap();
+
+    let fallback = |_: &Controller, _| -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
+        Err(CoreError::InvalidMapping("fallback must not run for a registered controller".into()))
+    };
+    let mapper = AdvancedControllerMapper::new(fallback, registry);
+
+    let result = run(
+        controller("driver"),
+        definition("driver", InputDimension::Vector2),
+        vector_sample("driver", 0.5, 0.5),
+        &mapper,
+    );
+
+    assert_eq!(result.contributions.len(), 1);
+    assert_eq!(result.contributions[0].value.as_scalar(), Some(7.5));
     assert!(result.diagnostics.is_empty());
 }
 
