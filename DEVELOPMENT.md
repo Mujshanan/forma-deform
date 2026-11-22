@@ -259,6 +259,7 @@ FD-M1 supplies a first-party implementation of the existing `ControllerMapper` c
 | `DirectedRange1D` | Scalar or Angle input normalized through directed start / end; reversed endpoints are supported | Unit domain [0, 1]; anchor targets use the equivalent signed domain |
 | `Discrete` | Scalar input clamped to [-1, 1] | Nearest equally spaced authored value; midpoint ties choose the higher index; exactly one output binding is required |
 | `PoseSet1D` | Scalar input clamped to [-1, 1] | Ordered pose IDs resolve through the runtime PoseLibrary; adjacent poses interpolate evenly by BindingId |
+| `PoseGrid` | Two or three ordered Scalar inputs; each axis uses its authored finite key domain and clamps at endpoints | Complete Cartesian grid, axis 0 fastest; multilinear typed blending with exact authored keyform reproduction |
 
 Angle input and Angle property output use radians and preserve wrapped/unwrapped semantics. Discrete and PoseSet1D require Scalar input.
 
@@ -272,9 +273,9 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 
 ### 10.3 Explicit limits and ownership
 
-- The initial mapper requires exactly one declared driver input. Multi-input controllers are rejected rather than choosing an implicit input.
-- `PoseLibrary` is runtime-only. It is not a persistence mechanism and does not extend CanonicalDocument schema v1.
-- `JoystickFivePose` is explicitly unsupported by this one-dimensional mapper. It must be implemented by a dedicated two-dimensional pose-field mapper, not approximated as a scalar range.
+- Scalar one-dimensional mappings require exactly one declared driver input; JoystickFivePose requires two, and PoseGrid requires two or three in axis order.
+- `PoseLibrary` is runtime-only. It is not a persistence mechanism. Canonical schema v2 adds the PoseGrid mapping contract; CanonicalDocument::from_json losslessly migrates v1 documents by advancing only the schema identity. The outer persistent-binding envelope remains v1 and migrates embedded canonical v1 on load.
+- `JoystickFivePose` and `PoseGrid` are explicit multi-input mappings; they are never coerced into a scalar range.
 - Mapper outputs remain uncomposed contributions. The mapper does not write host targets, mutate AniCraft documents, schedule playback evaluation, or combine with Form Deform pin evaluation.
 - Mapping-domain failures are converted by the existing evaluator into `SC_MAPPING_DOMAIN` diagnostics and unavailable controller outputs.
 
@@ -290,3 +291,12 @@ This milestone completes the initial pure one-dimensional mapping layer only. It
 The first M7 implementation enables the existing `JoystickFivePose` mapping in the canonical mapper. It accepts two ordered scalar inputs (X then Y), clamps each to [-1, 1], and interpolates the five authored runtime poses (center/up/right/down/left) using inverse squared Euclidean distance weighting. Exact anchor hits return the exact authored pose. Scalars and vectors use weighted arithmetic blending; wrapped angles use a circular mean and reject ambiguous blends.
 
 The detailed semantics, edge cases, and tests are specified in [FD-M7 multi-axis pose field](docs/FD-M7-MULTIAXIS-POSE-FIELD.md). This does not add durable pose persistence, host evaluation hooks, or host-side document changes. The next proposed M7 slice is evaluated in [FD-M7 multi-axis keyform interpolation](docs/FD-M7-MULTIAXIS-KEYFORM-EVALUATION.md); it is approved for design only and has not been implemented.
+
+
+## 12.1 M7 — Bounded multi-axis keyform grid
+
+Canonical schema v2 adds MappingConfig::PoseGrid. It supports two or three ordered scalar axes, each with at least two finite strictly increasing authored keys. The Cartesian product is complete and capped at 256 forms; axis 0 varies fastest in the flattened pose ID list. Inputs clamp to each axis endpoint (no extrapolation).
+
+The mapper performs piecewise multilinear interpolation over the active cell. Scalar and Vector2 values use weighted arithmetic sums, unwrapped angles use weighted radians, and wrapped angles use a circular mean with ambiguous resultants rejected. Exact authored keyforms resolve only their positive-weight corner, so unrelated zero-weight neighbors are not required at evaluation time. The active poses must agree exactly on BindingIds, value kinds, and angle wrapping semantics.
+
+CanonicalDocument::from_json losslessly upgrades canonical v1 documents to v2; v2 is the write format and future versions fail closed. PersistentBindingDocument keeps its outer v1 envelope and migrates the embedded canonical document on load. This remains pure core functionality: no AniCraft host changes, live scheduling, or durable pose-content storage.
