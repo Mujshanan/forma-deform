@@ -21,6 +21,7 @@ const MANIFEST: &str = r##"{
     "mode": {"type": "string", "default": "slider", "label": "Controller mode (V1: slider)"},
     "driver_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Driver armature/layer ID"},
     "driver_bone_name": {"type": "string", "default": "Head", "label": "Driver bone name"},
+    "driver_frame": {"type": "int", "min": 0, "max": 1000000000, "label": "Driver frame (leave empty to use the current playhead)"},
     "action_layer_id": {"type": "int", "min": 1, "max": 1000000000000, "default": 1, "label": "Action layer ID"},
     "min_rotation_deg": {"type": "number", "default": -45, "label": "Minimum driver angle (degrees)"},
     "max_rotation_deg": {"type": "number", "default": 45, "label": "Maximum driver angle (degrees)"},
@@ -39,10 +40,12 @@ fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
         .find(|bone| bone["name"].as_str() == Some(name))
         .and_then(|bone| bone["angle"].as_f64())
 }
-fn query_driver_bone(params: &Params) -> Result<f64, String> {
+fn query_driver_bone(params: &Params, raw: &Value) -> Result<f64, String> {
     let layer_id = params.driver_layer_id.ok_or("driver_layer_id is required for bone input")?;
     let name = params.driver_bone_name.as_deref().ok_or("driver_bone_name is required for bone input")?;
-    let response = ac::command("bone.info", json!({"layer": layer_id}))?;
+    let mut query = json!({"layer": layer_id});
+    if let Some(frame) = raw.get("driver_frame").and_then(Value::as_u64) { query["frame"] = Value::from(frame); }
+    let response = ac::command("bone.info", query)?;
     find_driver_bone(&response, name)
         .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
 }
@@ -55,12 +58,14 @@ fn run(p: &Value) -> Result<(), String> {
     }
     let driver_value = match params.manual_value {
         Some(value) => value,
-        None => query_driver_bone(&params)?,
+        None => query_driver_bone(&params, p)?,
     };
     let output = preview_slider(&params, driver_value)?;
     let serialized = serde_json::to_string(&output)
         .map_err(|error| format!("could not serialize preview: {error}"))?;
     ac::log(&format!("Smart Controller preview: {serialized}"));
+    if let Some(frame) = p.get("driver_frame").and_then(Value::as_u64) { ac::log(&format!("Driver input sampled at explicit frame {frame}.")); }
+    else { ac::log("Driver input sampled at the current AniCraft playhead."); }
     ac::log("V1 is preview-only: no timeline command or document mutation was issued.");
     Ok(())
 }
