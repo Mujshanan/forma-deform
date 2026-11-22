@@ -79,7 +79,12 @@ Additional technical references:
 - [Build and smoke-test guide](plugins/INSTALL.md)
 - [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md)
 - [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md)
+- [M4 persistent bindings](docs/FD-M4-PERSISTENT-BINDINGS.md)
 - [Capability limits](docs/CAPABILITIES.md)
+
+## Current milestone
+
+FD-M4 has started with a strict, versioned persistent-binding payload and atomic core collection operations. Actual persistence remains blocked on a reviewed AniCraft document-extension and command contract; the current WASM plug-in cannot write document metadata or files.
 
 ## Verification
 
