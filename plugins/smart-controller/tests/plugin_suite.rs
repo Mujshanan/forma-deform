@@ -1,4 +1,3 @@
-use form_deform_core::{DeformSpec, Vec2 as DeformVec2, evaluate_pin_position};
 use serde_json::json;
 use smart_controller_core::{
     ControllerBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange,
@@ -6,9 +5,9 @@ use smart_controller_core::{
 };
 
 #[test]
-fn bone_query_input_flows_through_controller_and_form_deform_math() {
-    // Same stable-ID / keyed-angle / spring-swing fields reported by AniCraft bone.info
-    // and inspected by the Bone Query adapter's response-fixture tests.
+fn bone_query_input_produces_independent_controller_geometry_preview() {
+    // Same stable-ID / keyed-angle / spring-swing fields reported by AniCraft bone.info.
+    // Smart Controller V1 evaluates this binding as preview data only.
     let bone_info = json!({
         "frame": 12,
         "armatures": [{
@@ -34,22 +33,10 @@ fn bone_query_input_flows_through_controller_and_form_deform_math() {
         },
         enabled: true,
     };
-    let Some(PreviewResult::GeometryDeform { offset, .. }) = binding.evaluate(input_angle).unwrap() else {
-        panic!("expected a geometry target");
-    };
 
-    // Form Deform takes the controller's neutral-relative result as the authored
-    // neutral pin base, then computes its own deterministic bone-driven displacement.
-    let base = DeformVec2 { x: 120.0 + offset.x, y: 80.0 + offset.y };
-    let deform = DeformSpec {
-        neutral_position: base,
-        neutral_angle_degrees: 0.0,
-        gain_per_degree: DeformVec2 { x: 0.5, y: -0.25 },
+    let Some(PreviewResult::GeometryDeform { offset, .. }) = binding.evaluate(input_angle).unwrap() else {
+        panic!("expected a geometry target preview");
     };
-    let first = evaluate_pin_position(deform, 10.0).unwrap();
-    let second = evaluate_pin_position(deform, 10.0).unwrap();
 
     assert_eq!(offset, ControllerVec2 { x: 6.0, y: -2.0 });
-    assert_eq!(first, DeformVec2 { x: 131.0, y: 75.5 });
-    assert_eq!(second, first);
 }
