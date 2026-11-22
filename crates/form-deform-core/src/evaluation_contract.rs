@@ -483,7 +483,7 @@ mod tests {
             namespace: HostNamespace::new("anicraft").unwrap(),
             document_id: HostDocumentId::new("doc-1").unwrap(),
             target_kind: HostTargetKind::new("shape").unwrap(),
-            target_id: HostTargetId::new("element-17").unwrap(),
+            target_id: HostTargetId::new(format!("element-{generation}")).unwrap(),
             generation,
         }
     }
