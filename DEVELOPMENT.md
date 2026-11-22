@@ -183,7 +183,7 @@ The module sketch is conceptual. Do not create empty crates or force the current
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0 — Contract audit | Confirm bone, warp, command, storage, undo, and evaluator APIs | Documented supported/unsupported capabilities with source references |
-| M1 — Pure controller core | Stable IDs, normalization, mapping, easing, validation, deterministic preview | Native tests; no DOM, host globals, or mutation |
+| M1 — Pure controller core | Stable IDs, normalization, validation, deterministic preview, and the initial built-in one-dimensional mapping subset (see section 10) | Core implementation and CI-tested; joystick and multi-input mapping remain deferred |
 | M2 — Plugin preview | Read verified AniCraft inputs and produce preview results | On-demand preview is repeatable and does not mutate document |
 | M3 — Native authoring UI | Tool context, binding editor, target inspector, diagnostics | Uses AniCraft panels/commands; keyboard and undo behavior verified |
 | M4 — Persistent bindings | Versioned binding model stored through host-owned document extension | Save/load, migration, undo and invalidation tests pass |
@@ -210,3 +210,46 @@ Do not skip M0 to claim capabilities that the host does not expose. M6 is not a 
 A feature is not complete because a UI control exists. It must have a defined model, deterministic semantics, validation, tests, and a verified host boundary where applicable.
 
 This document is an architecture and development plan. It does not authorize changes to AniCraft, external repositories, or PR merges.
+
+
+## 10. FD-M1 — Canonical one-dimensional Smart Controller mapper
+
+**Implementation area:** `crates/smart-controller-core/src/mapping/canonical.rs`  
+**Public API:** `smart_controller_core::mapping::CanonicalControllerMapper`  
+**Pose lookup:** `smart_controller_core::mapping::PoseLibrary`
+
+FD-M1 supplies a first-party implementation of the existing `ControllerMapper` contract. The evaluator continues to own input snapshot preflight, dependency order, unavailable-output propagation, and contribution collection. The mapper owns only the pure transformation from one resolved driver input to typed outputs keyed by canonical BindingIds.
+
+### 10.1 Supported mappings
+
+| Mapping | Input semantics | Output semantics |
+|---|---|---|
+| `Range1D` | Scalar or Angle input normalized through explicit minimum / neutral / maximum | Clamped signed domain [-1, 1], linear interpolation around neutral |
+| `ThreeAnchorRange` | Same explicit three-point range | Symmetric Linear or Smoothstep easing on either side of neutral |
+| `DirectedRange1D` | Scalar or Angle input normalized through directed start / end; reversed endpoints are supported | Unit domain [0, 1]; anchor targets use the equivalent signed domain |
+| `Discrete` | Scalar input clamped to [-1, 1] | Nearest equally spaced authored value; midpoint ties choose the higher index; exactly one output binding is required |
+| `PoseSet1D` | Scalar input clamped to [-1, 1] | Ordered pose IDs resolve through the runtime PoseLibrary; adjacent poses interpolate evenly by BindingId |
+
+Angle input and Angle property output use radians and preserve wrapped/unwrapped semantics. Discrete and PoseSet1D require Scalar input.
+
+### 10.2 Target mapping
+
+- **SymbolFrame:** interpolate negative, neutral and positive frame anchors, then round to the nearest integer frame.
+- **FrameRange:** map the unit input through the configured endpoint policy; the default remains Exclusive.
+- **GeometryDeform:** interpolate each vector component between the three anchors. RelativeDelta emits the difference from the neutral anchor; the existing contribution/composition stage applies the authored base.
+- **Property:** multiply the signed mapped value by the configured scale. Scalar input produces Scalar output; Angle input produces Angle output.
+- **PoseSet1D:** every referenced pose must be registered, all poses must have compatible typed values and angle semantics, and each pose must contain exactly the controller's declared binding IDs.
+
+### 10.3 Explicit limits and ownership
+
+- The initial mapper requires exactly one declared driver input. Multi-input controllers are rejected rather than choosing an implicit input.
+- `PoseLibrary` is runtime-only. It is not a persistence mechanism and does not extend CanonicalDocument schema v1.
+- `JoystickFivePose` is explicitly unsupported by this one-dimensional mapper. It must be implemented by a dedicated two-dimensional pose-field mapper, not approximated as a scalar range.
+- Mapper outputs remain uncomposed contributions. The mapper does not write host targets, mutate AniCraft documents, schedule playback evaluation, or combine with Form Deform pin evaluation.
+- Mapping-domain failures are converted by the existing evaluator into `SC_MAPPING_DOMAIN` diagnostics and unavailable controller outputs.
+
+### 10.4 Verification scope
+
+The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
+
+This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
