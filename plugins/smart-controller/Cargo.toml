@@ -13,6 +13,3 @@ crate-type = ["cdylib", "rlib"]
 anicraft-plugin-sdk = { path = "../../crates/anicraft-plugin-sdk" }
 smart-controller-core = { path = "../../crates/smart-controller-core" }
 serde_json = "1"
-
-[dev-dependencies]
-form-deform-core = { path = "../../crates/form-deform-core" }
