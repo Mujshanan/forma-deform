@@ -251,7 +251,7 @@ mod pose_grid_validation_tests {
         assert!(axis(&[0.0,0.0]).validate().is_err());
         assert!(axis(&[1.0,0.0]).validate().is_err());
         assert!(axis(&[0.0,f64::INFINITY]).validate().is_err());
-        let too_large = PoseGrid { axes: vec![axis(&[0.0,1.0,2.0,3.0,4.0]),axis(&[0.0,1.0,2.0,3.0,4.0]),axis(&[0.0,1.0,2.0,3.0,4.0])], pose_ids: vec![] };
+        let too_large = PoseGrid { axes: vec![axis(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0]),axis(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0]),axis(&[0.0,1.0,2.0,3.0,4.0,5.0,6.0])], pose_ids: vec![] };
         assert!(too_large.validate(3).is_err());
         assert!(PoseGrid { axes: vec![axis(&[0.0,1.0]),axis(&[0.0,1.0])], pose_ids: vec!["same".into(),"same".into(),"c".into(),"d".into()] }.validate(2).is_err());
     }
