@@ -179,19 +179,7 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
             ac::log("Preview only: no target setter, keyframe write, timeline command, or document mutation was issued.");
         }
         "apply_current_frame" => {
-            if !session.target_preview.unresolved_targets.is_empty() {
-                return Err("cannot apply while the preview contains unresolved output targets".into());
-            }
-            if session.target_preview.items.len() != 1 {
-                return Err(format!(
-                    "current-frame apply requires exactly one resolved target; found {}",
-                    session.target_preview.items.len()
-                ));
-            }
-            let item = &session.target_preview.items[0];
-            if item.host_verification != preview_plan::HostTargetVerification::Verified {
-                return Err("target identity was not verified by the host; refusing to apply".into());
-            }
+            let item = single_apply_candidate(&session.target_preview)?;
             let result = targets::apply_geometry_target(&item.target, item.value)?;
             ac::log(&format!(
                 "Applied {} at the current playhead via warp.pin_move. The host command owns the undo step; result: {}",
@@ -201,6 +189,28 @@ fn run_canonical_preview(p: &Value, source: &str) -> Result<(), String> {
         other => return Err(format!("unsupported target_action '{other}'")),
     }
     Ok(())
+}
+
+fn single_apply_candidate(
+    plan: &preview_plan::TargetPreviewPlan,
+) -> Result<&preview_plan::TargetPreviewItem, String> {
+    if !plan.unresolved_targets.is_empty() {
+        return Err("cannot apply while the preview contains unresolved output targets".into());
+    }
+    if plan.items.len() != 1 {
+        return Err(format!(
+            "current-frame apply requires exactly one resolved target; found {}",
+            plan.items.len()
+        ));
+    }
+    let item = &plan.items[0];
+    if item.host_verification != preview_plan::HostTargetVerification::Verified {
+        return Err("target identity was not verified by the host; refusing to apply".into());
+    }
+    if !matches!(item.target, TargetMapping::GeometryDeform { .. }) {
+        return Err("current-frame apply supports only verified GeometryDeform targets".into());
+    }
+    Ok(item)
 }
 
 fn number_param(p: &Value, key: &str) -> Result<f64, String> {
