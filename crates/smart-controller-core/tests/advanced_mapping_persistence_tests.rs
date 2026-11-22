@@ -6,7 +6,6 @@ use smart_controller_core::{
     mapping::advanced::{
         AdvancedMappingExtension, AdvancedMappingSpec, PersistedAdvancedMapping,
         PersistedGridBoundaryPolicy, PersistedMeshBoundaryPolicy, PersistedTriangulatedPose,
-        grid::GridBoundaryPolicy,
         triangulated::MeshBoundaryPolicy,
     },
     pose::Pose2D,
@@ -168,5 +167,4 @@ fn triangulated_mapping_configuration_round_trips_and_loads() {
         },
         MeshBoundaryPolicy::ClampToMesh,
     );
-    let _ = GridBoundaryPolicy::Clamp;
 }
