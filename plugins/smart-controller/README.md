@@ -6,12 +6,12 @@ The host-independent Rust core performs validation, normalization, endpoint-awar
 
 ## V1 workflow
 
-1. Select the driver layer/armature and driver bone name.
+1. Select the driver layer/armature and enter the driver bone name. Optionally set Driver frame; leave it empty to sample the current AniCraft playhead.
 2. Select the action layer and configure its start/end frame range.
 3. Set minimum and maximum driver rotation angles.
 4. Choose Exclusive (default) or Inclusive endpoint policy.
 5. Run using the host bone input, or provide manual_value for deterministic tests.
-6. Inspect normalized input and calculated output frame in the plugin log.
+6. Inspect normalized input and calculated output frame in the plugin log, including the sampled frame context.
 
 Manual input overrides the host query. A missing or malformed bone response is an error; it is never silently replaced with zero.
 
