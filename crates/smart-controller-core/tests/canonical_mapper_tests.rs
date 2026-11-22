@@ -181,17 +181,17 @@ fn directed_range_preserves_reversed_endpoints_and_frame_endpoint_policy() {
 
 #[test]
 fn discrete_mapping_selects_nearest_authored_value_and_preserves_type() {
-    let scalar_controller = Controller {
-        bindings: vec![property_binding("selected", 1.0)],
-        mapping: MappingConfig::Discrete {
+    let scalar_controller = controller(
+        MappingConfig::Discrete {
             values: vec![
                 TypedValue::scalar(2.0).unwrap(),
                 TypedValue::angle(0.5, true).unwrap(),
                 TypedValue::scalar(8.0).unwrap(),
             ],
         },
-        ..controller
-    };
+        vec![property_binding("selected", 1.0)],
+        vec!["driver"],
+    );
     let mapper = CanonicalControllerMapper::new();
 
     let first = run(
