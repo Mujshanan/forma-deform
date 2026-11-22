@@ -209,7 +209,7 @@ Diagnostics must identify the failing dependency and whether the operation is sa
 
 ## 9. Required contract test groups
 
-The M1 evaluation-contract module now tests explicit time-sample validation, source/target identity matching, duplicate source and dependency rejection, model/time/dependency binding, coordinate-space preservation, deterministic output fingerprints, and explicit composition-graph stamps. The request and result values expose read-only accessors and keep their internal state private.
+The M1 evaluation-contract module includes tests for explicit time-sample validation, source/target identity matching, duplicate source and dependency rejection, model/time/dependency binding, coordinate-space preservation, deterministic output fingerprints, and explicit composition-graph stamps. The request and result values expose read-only accessors and keep their internal state private. These new tests have not yet been CI-verified.
 
 Remaining FDM-side work includes the authored deformation persistence schema and named migration tests, plus a concrete composition-graph model with cycle validation. Host-side conformance tests are listed in `docs/M1_HOST_CONFORMANCE_TEST_MATRIX.md`; they remain blocked until a separately authorized AniCraft host extension implements the required capabilities.
 
