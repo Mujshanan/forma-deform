@@ -416,6 +416,7 @@ mod tests {
             bone_layers: std::collections::BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
+        frame: None,
         };
         let session = evaluate_host_document_preview_with_canonical_mapper(
             &document,
