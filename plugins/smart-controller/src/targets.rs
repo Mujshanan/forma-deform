@@ -68,7 +68,7 @@ pub fn verify_geometry_pin(
 
 /// Build the exact host command payload for applying one evaluated geometry pin.
 /// This is pure and can be tested without an AniCraft host.
-pub fn geometry_pin_move_params(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+pub fn geometry_pin_move_params_at_frame(target: &TargetMapping, value: TypedValue, frame: Option<u32>) -> Result<Value, String> {
     let (element_id, pin_id) = match target {
         TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
         _ => return Err("only GeometryDeform targets can be applied through warp.pin_move".into()),
@@ -81,19 +81,31 @@ pub fn geometry_pin_move_params(target: &TargetMapping, value: TypedValue) -> Re
         .ok_or_else(|| format!("pin ID '{pin_id}' is not a positive numeric host ID"))?;
     let vector = value.as_vector2()
         .ok_or_else(|| format!("geometry target requires Vector2 output, received {}", value.kind_name()))?;
-    Ok(json!({ "element": element, "pin": pin, "x": vector.x(), "y": vector.y() }))
+    let mut params = json!({ "element": element, "pin": pin, "x": vector.x(), "y": vector.y() });
+    if let Some(frame) = frame { params["frame"] = Value::from(frame); }
+    Ok(params)
+}
+
+/// Build a current-playhead payload (legacy convenience wrapper).
+pub fn geometry_pin_move_params(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+    geometry_pin_move_params_at_frame(target, value, None)
 }
 
 /// Prepare one geometry write by freshly verifying its host identity.
 /// This function is read-only: callers can prepare every write before committing any.
-pub fn prepare_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+pub fn prepare_geometry_target_at_frame(target: &TargetMapping, value: TypedValue, frame: Option<u32>) -> Result<Value, String> {
     let (element_id, pin_id) = match target {
         TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
         _ => return Err("only GeometryDeform targets can be prepared for apply".into()),
     };
-    let response = query_geometry_info(element_id, None)?;
+    let response = query_geometry_info(element_id, frame)?;
     verify_geometry_pin(&response, element_id, pin_id)?;
-    geometry_pin_move_params(target, value)
+    geometry_pin_move_params_at_frame(target, value, frame)
+}
+
+/// Prepare a current-playhead write (legacy convenience wrapper).
+pub fn prepare_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+    prepare_geometry_target_at_frame(target, value, None)
 }
 
 /// Execute one already-prepared pin write. The caller must run this inside the
