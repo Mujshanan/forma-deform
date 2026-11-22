@@ -35,11 +35,15 @@ pub struct PoseGrid {
 
 impl PoseGrid {
     pub fn validate(&self, input_count: usize) -> Result<(), CoreError> {
-        if !(2..=3).contains(&self.axes.len()) || self.axes.len() != input_count {
+        Self::validate_parts(&self.axes, &self.pose_ids, input_count)
+    }
+
+    pub(crate) fn validate_parts(axes: &[PoseAxis], pose_ids: &[String], input_count: usize) -> Result<(), CoreError> {
+        if !(2..=3).contains(&axes.len()) || axes.len() != input_count {
             return Err(CoreError::InvalidMapping("PoseGrid requires exactly 2 or 3 axes matching the controller input count".into()));
         }
         let mut count = 1usize;
-        for axis in &self.axes {
+        for axis in axes {
             axis.validate()?;
             count = count.checked_mul(axis.keys.len())
                 .ok_or_else(|| CoreError::InvalidMapping("PoseGrid form count overflow".into()))?;
@@ -47,11 +51,11 @@ impl PoseGrid {
                 return Err(CoreError::InvalidMapping("PoseGrid is limited to 256 authored forms".into()));
             }
         }
-        if self.pose_ids.len() != count {
+        if pose_ids.len() != count {
             return Err(CoreError::InvalidMapping(format!("PoseGrid requires exactly {count} pose IDs")));
         }
         let mut ids = std::collections::HashSet::with_capacity(count);
-        if self.pose_ids.iter().any(|id| id.trim().is_empty() || !ids.insert(id)) {
+        if pose_ids.iter().any(|id| id.trim().is_empty() || !ids.insert(id)) {
             return Err(CoreError::InvalidMapping("PoseGrid pose IDs must be non-empty and unique".into()));
         }
         Ok(())
@@ -220,7 +224,7 @@ impl Controller {
                     return Err(CoreError::InvalidMapping("five-pose joystick requires five distinct non-empty pose IDs".into()));
                 }
             }
-            MappingConfig::PoseGrid { axes, pose_ids } => PoseGrid { axes: axes.clone(), pose_ids: pose_ids.clone() }.validate(self.inputs.len())?,
+            MappingConfig::PoseGrid { axes, pose_ids } => PoseGrid::validate_parts(axes, pose_ids, self.inputs.len())?,
             MappingConfig::Discrete { values } => if values.is_empty() { return Err(CoreError::InvalidMapping("Discrete mapping requires at least one value".into())); },
             MappingConfig::ThreeAnchorRange { minimum, neutral, maximum, .. } => {
                 if !minimum.is_finite() || !neutral.is_finite() || !maximum.is_finite() || !(*neutral - *minimum).is_finite() || !(*maximum - *neutral).is_finite() || minimum >= neutral || neutral >= maximum {
