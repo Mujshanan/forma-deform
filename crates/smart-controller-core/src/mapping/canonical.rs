@@ -113,7 +113,11 @@ impl ControllerMapper for CanonicalControllerMapper {
         inputs: &ResolvedInputs,
     ) -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         controller.validate_local()?;
-        let required_inputs = if matches!(&controller.mapping, MappingConfig::JoystickFivePose { .. }) { 2 } else { 1 };
+        let required_inputs = match &controller.mapping {
+            MappingConfig::JoystickFivePose { .. } => 2,
+            MappingConfig::PoseGrid { axes, .. } => axes.len(),
+            _ => 1,
+        };
         if controller.inputs.len() != required_inputs {
             return Err(CoreError::InvalidMapping(format!(
                 "mapping requires exactly {required_inputs} declared driver input(s); controller {} declares {}",
@@ -205,6 +209,22 @@ impl ControllerMapper for CanonicalControllerMapper {
                     x,
                     y,
                 )?;
+                validate_pose_bindings(controller, &pose)?;
+                Ok(pose.iter().map(|(id, value)| (id.clone(), *value)).collect())
+            },
+            MappingConfig::PoseGrid { axes, pose_ids } => {
+                let mut driver_values = Vec::with_capacity(axes.len());
+                for input_id in &controller.inputs {
+                    let resolved = inputs.get(input_id).ok_or_else(|| {
+                        CoreError::InvalidMapping(format!("PoseGrid input {input_id} was not resolved"))
+                    })?;
+                    let value = resolved.value.ok_or_else(|| {
+                        CoreError::InvalidMapping(format!("PoseGrid input {input_id} is unavailable"))
+                    })?;
+                    driver_values.push(scalar_driver(value)?);
+                }
+                let key_axes: Vec<&[f64]> = axes.iter().map(|axis| axis.keys.as_slice()).collect();
+                let pose = interpolate_pose_grid(&key_axes, pose_ids, &self.poses, &driver_values)?;
                 validate_pose_bindings(controller, &pose)?;
                 Ok(pose.iter().map(|(id, value)| (id.clone(), *value)).collect())
             },
@@ -393,6 +413,107 @@ fn validate_pose_bindings(controller: &Controller, pose: &Pose2D) -> Result<(), 
     Ok(())
 }
 
+
+
+/// Interpolate a complete 2D/3D Cartesian pose grid. Axis zero is the
+/// fastest-varying dimension in pose_ids. Only positive-weight cell corners
+/// are resolved, so exact keyforms do not depend on neighboring poses.
+fn interpolate_pose_grid(
+    axes: &[&[f64]],
+    pose_ids: &[String],
+    library: &PoseLibrary,
+    inputs: &[f64],
+) -> Result<Pose2D, CoreError> {
+    if !(2..=3).contains(&axes.len()) || axes.len() != inputs.len() {
+        return Err(CoreError::InvalidMapping("PoseGrid requires two or three scalar inputs".into()));
+    }
+    let mut segments = Vec::with_capacity(axes.len());
+    for (keys, input) in axes.iter().zip(inputs) {
+        if !input.is_finite() {
+            return Err(CoreError::NonFiniteValue { context: "PoseGrid driver input" });
+        }
+        let value = input.clamp(keys[0], keys[keys.len() - 1]);
+        let mut lower = keys.len() - 2;
+        for index in 0..keys.len() - 1 {
+            if value <= keys[index + 1] {
+                lower = index;
+                break;
+            }
+        }
+        let amount = ((value - keys[lower]) / (keys[lower + 1] - keys[lower])).clamp(0.0, 1.0);
+        segments.push((lower, amount));
+    }
+
+    let mut corners: Vec<(&Pose2D, f64)> = Vec::with_capacity(1 << axes.len());
+    for mask in 0..(1usize << axes.len()) {
+        let mut flat_index = 0usize;
+        let mut stride = 1usize;
+        let mut weight = 1.0;
+        for (axis_index, (keys, (lower, amount))) in axes.iter().zip(&segments).enumerate() {
+            let upper = (mask & (1 << axis_index)) != 0;
+            let index = lower + usize::from(upper);
+            weight *= if upper { *amount } else { 1.0 - *amount };
+            flat_index += index * stride;
+            stride *= keys.len();
+        }
+        if weight <= 0.0 { continue; }
+        let pose_id = pose_ids.get(flat_index).ok_or_else(|| {
+            CoreError::InvalidMapping("PoseGrid flattened index is out of range".into())
+        })?;
+        let pose = library.get(pose_id).ok_or_else(|| {
+            CoreError::InvalidMapping(format!("PoseGrid references unregistered pose {pose_id}"))
+        })?;
+        if let Some((first, _)) = corners.first() {
+            first.validate_compatible(pose)?;
+        }
+        corners.push((pose, weight));
+    }
+    blend_weighted_poses(&corners)
+}
+
+/// Blend typed values from a single cell using nonnegative tensor-product
+/// weights. Wrapped angles use a circular mean; an undefined resultant fails.
+fn blend_weighted_poses(corners: &[(&Pose2D, f64)]) -> Result<Pose2D, CoreError> {
+    let (first, _) = corners.first().ok_or_else(|| {
+        CoreError::InvalidMapping("PoseGrid produced no active interpolation corners".into())
+    })?;
+    let mut values = Vec::with_capacity(first.values().len());
+    for (binding_id, first_value) in first.iter() {
+        let samples: Vec<(TypedValue, f64)> = corners.iter().map(|(pose, weight)| {
+            let value = pose.get(binding_id).copied().ok_or_else(|| {
+                CoreError::PoseBindingMissing { binding_id: binding_id.to_string() }
+            })?;
+            Ok((value, *weight))
+        }).collect::<Result<_, CoreError>>()?;
+        let value = match first_value {
+            TypedValue::Scalar(_) => {
+                let result = samples.iter().map(|(value, weight)| {
+                    value.as_scalar().expect("compatible pose type") * weight
+                }).sum();
+                TypedValue::scalar(result)?
+            }
+            TypedValue::Vector2(_) => {
+                let x = samples.iter().map(|(value, weight)| value.as_vector2().expect("compatible pose type").x() * weight).sum();
+                let y = samples.iter().map(|(value, weight)| value.as_vector2().expect("compatible pose type").y() * weight).sum();
+                TypedValue::vector2(x, y)?
+            }
+            TypedValue::Angle(angle) if angle.is_wrapped() => {
+                let sin_sum: f64 = samples.iter().map(|(value, weight)| value.as_angle().expect("compatible pose type").radians().sin() * weight).sum();
+                let cos_sum: f64 = samples.iter().map(|(value, weight)| value.as_angle().expect("compatible pose type").radians().cos() * weight).sum();
+                if sin_sum.hypot(cos_sum) <= 1e-12 {
+                    return Err(CoreError::InvalidMapping(format!("PoseGrid has an ambiguous wrapped-angle blend for binding {binding_id}")));
+                }
+                TypedValue::angle(sin_sum.atan2(cos_sum), true)?
+            }
+            TypedValue::Angle(_) => {
+                let result = samples.iter().map(|(value, weight)| value.as_angle().expect("compatible pose type").radians() * weight).sum();
+                TypedValue::angle(result, false)?
+            }
+        };
+        values.push((binding_id.clone(), value));
+    }
+    Pose2D::new(values)
+}
 
 /// Interpolate a five-pose joystick field using inverse-distance weighting.
 ///
