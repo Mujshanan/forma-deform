@@ -18,7 +18,7 @@ This matrix is the release gate for the FDM v2 host boundary. A passing Forma De
 | FDM-M1-007 | Snapshot verifies supplied fingerprint | Payload/fingerprint mismatch is rejected | Implemented in PR #20 |
 | FDM-M1-008 | Freshness detects target mismatch, revision change/regression and fingerprint mismatch | Each condition has a distinct outcome | Implemented in PR #20 |
 | FDM-M1-009 | Evaluation request validates source snapshots, model/time stamps and external dependencies | Missing, duplicate or invalid dependency prevents request construction | Added in PR #30; CI pending |
-| FDM-M1-010 | Evaluated result binds to the exact request | Target, source stamp, model, time, dependencies and graph stamp must match | Added in PR #30; CI pending |
+| FDM-M1-010 | Evaluated result binds to the exact request | Target, every source stamp, model, time, dependencies and graph stamp must match | Added in PR #30; CI pending |
 | FDM-M1-011 | Evaluated result preserves source coordinate semantics | Output coordinate descriptor must exactly match the source descriptor in v1 | Added in PR #30; CI pending |
 | FDM-M1-012 | Composition graph identity is explicit and versioned | Result records the exact graph stamp; graph structure/cycle validation remains a separate core task | Graph-stamp binding added in PR #30; CI pending |
 | FDM-M1-013 | Persistence round-trip and named migrations | Authored IDs/settings survive; unknown versions fail closed | Not implemented; contract specified |
