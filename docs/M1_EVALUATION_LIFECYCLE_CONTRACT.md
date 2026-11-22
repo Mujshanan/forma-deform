@@ -56,7 +56,7 @@ A transform-only edit must not advance source geometry revision. It must advance
 
 An evaluation request is a value containing:
 
-- contract version;
+- versioned evaluation-request schema name and version;
 - one or more validated source snapshots;
 - the FDM authored-model identity and revision;
 - an explicit time-sample descriptor;
@@ -79,10 +79,9 @@ Every prepared result must contain:
 - FDM model identity, model revision and algorithm identifier/version;
 - explicit time-sample identity;
 - declared output payload kind/schema and coordinate-space descriptor;
-- deterministic result fingerprint;
-- diagnostic collection and a success/failure status.
+- deterministic canonical payload fingerprint.
 
-The result is a prepared value, not a host mutation command. It is invalid if any required dependency is absent, malformed, unsupported or stale.
+The result DTO represents a successful prepared geometry output only; failed request validation or evaluation is returned through stable contract errors/diagnostics outside this success-result envelope. The result is a prepared value, not a host mutation command. It is invalid if any required dependency is absent, malformed, unsupported or stale.
 
 ### 3.2 Coordinate and operation semantics
 
@@ -91,7 +90,7 @@ The initial source geometry is `TargetLocalRest`. An output must declare its coo
 An output must also declare its operation semantics. At minimum, distinguish:
 
 - an evaluated replacement geometry value;
-- a deformation contribution/delta that requires a separately defined composition operation.
+- an independent deformation contribution that is not composed unless an explicit, validated composition graph is supplied.
 
 No implicit additive, sequential, weighted or precedence-based composition is allowed. A result must never be applied twice. If multiple sources affect a target, their order and blend semantics must be represented by a validated, versioned FDM composition graph. Until then, ambiguous multi-source results are rejected.
 
