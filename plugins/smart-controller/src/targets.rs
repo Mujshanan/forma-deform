@@ -84,18 +84,28 @@ pub fn geometry_pin_move_params(target: &TargetMapping, value: TypedValue) -> Re
     Ok(json!({ "element": element, "pin": pin, "x": vector.x(), "y": vector.y() }))
 }
 
-/// Apply one verified geometry output at AniCraft's current playhead.
-/// The fresh identity read protects against a stale preview; exactly one
-/// mutating host command is issued, so the host owns the corresponding undo step.
-pub fn apply_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+/// Prepare one geometry write by freshly verifying its host identity.
+/// This function is read-only: callers can prepare every write before committing any.
+pub fn prepare_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
     let (element_id, pin_id) = match target {
         TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
-        _ => return Err("only GeometryDeform targets can be applied".into()),
+        _ => return Err("only GeometryDeform targets can be prepared for apply".into()),
     };
     let response = query_geometry_info(element_id, None)?;
     verify_geometry_pin(&response, element_id, pin_id)?;
-    let params = geometry_pin_move_params(target, value)?;
+    geometry_pin_move_params(target, value)
+}
+
+/// Execute one already-prepared pin write. The caller must run this inside the
+/// enclosing AniCraft plugin.run transaction and must prepare the full batch first.
+pub fn apply_prepared_geometry_target(params: Value) -> Result<Value, String> {
     ac::command("warp.pin_move", params)
+}
+
+/// Apply one verified geometry output at AniCraft's current playhead.
+pub fn apply_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+    let params = prepare_geometry_target(target, value)?;
+    apply_prepared_geometry_target(params)
 }
 
 /// Resolve target identity and its verified capability boundary without
