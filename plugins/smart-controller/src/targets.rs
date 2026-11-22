@@ -7,7 +7,8 @@
 
 use anicraft_plugin_sdk as ac;
 use serde_json::Value;
-use smart_controller_core::canonical::TargetMapping;
+use smart_controller_core::{canonical::TargetMapping, value::TypedValue};
+use serde_json::json;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetCapabilityStatus {
@@ -63,6 +64,39 @@ pub fn verify_geometry_pin(
         return Err(format!("pin ID {expected_pin} was not found on element {expected_element}"));
     }
     Ok(())
+}
+
+
+/// Build the exact host command payload for applying one evaluated geometry pin.
+/// This is pure and can be tested without an AniCraft host.
+pub fn geometry_pin_move_params(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+    let (element_id, pin_id) = match target {
+        TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
+        _ => return Err("only GeometryDeform targets can be applied through warp.pin_move".into()),
+    };
+    let element = element_id.parse::<u64>()
+        .ok().filter(|id| *id > 0)
+        .ok_or_else(|| format!("element ID '{element_id}' is not a positive numeric host ID"))?;
+    let pin = pin_id.parse::<u64>()
+        .ok().filter(|id| *id > 0)
+        .ok_or_else(|| format!("pin ID '{pin_id}' is not a positive numeric host ID"))?;
+    let vector = value.as_vector2()
+        .ok_or_else(|| format!("geometry target requires Vector2 output, received {}", value.kind_name()))?;
+    Ok(json!({ "element": element, "pin": pin, "x": vector.x(), "y": vector.y() }))
+}
+
+/// Apply one verified geometry output at AniCraft's current playhead.
+/// The fresh identity read protects against a stale preview; exactly one
+/// mutating host command is issued, so the host owns the corresponding undo step.
+pub fn apply_geometry_target(target: &TargetMapping, value: TypedValue) -> Result<Value, String> {
+    let (element_id, pin_id) = match target {
+        TargetMapping::GeometryDeform { element_id, pin_id, .. } => (element_id, pin_id),
+        _ => return Err("only GeometryDeform targets can be applied".into()),
+    };
+    let response = query_geometry_info(element_id, None)?;
+    verify_geometry_pin(&response, element_id, pin_id)?;
+    let params = geometry_pin_move_params(target, value)?;
+    ac::command("warp.pin_move", params)
 }
 
 /// Resolve target identity and its verified capability boundary without
