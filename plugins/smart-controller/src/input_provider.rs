@@ -22,6 +22,8 @@ pub struct HostInputContext {
     pub bone_angle_policy: BoneAnglePolicy,
     /// Angle wrapping is authored semantic metadata, never inferred from a host angle.
     pub wrapped_angles: bool,
+    /// Optional explicit frame for deterministic range-bake input sampling.
+    pub frame: Option<u32>,
 }
 
 /// Collect only external inputs referenced by enabled controllers in a
@@ -77,7 +79,7 @@ pub fn collect_host_input_snapshot(
                 let response = if let Some(response) = responses.get(&layer_id) {
                     response.clone()
                 } else {
-                    let response = query_bone_info(layer_id, None);
+                    let response = query_bone_info(layer_id, context.frame);
                     responses.insert(layer_id, response.clone());
                     response
                 };
@@ -142,6 +144,7 @@ mod tests {
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
+            frame: None,
         };
         let snapshot = collect_host_input_snapshot(&definitions, &context).unwrap();
         assert_eq!(snapshot.samples.len(), 1);
