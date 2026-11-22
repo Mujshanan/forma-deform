@@ -261,15 +261,13 @@ These items must not be treated as already decided.
 
 ## 9. Implementation readiness and next phase
 
-The next phase is **M0 — AniCraft host capability and integration audit**.
+M0 — AniCraft host capability and integration audit — is complete. Its evidence-linked capability matrix, integration gap/ownership matrix, required host-extension list, and CCC-01.5 reconciliation are recorded in [FDM_V2_HOST_CAPABILITY_AUDIT.md](FDM_V2_HOST_CAPABILITY_AUDIT.md). The Smart Controller correction passed `cargo test --workspace` and all three release WASM plugin builds in GitHub Actions.
 
-The audit must establish actual support for document/geometry ownership, native deformation, identity/revisions, hierarchy/transforms, timeline/animation, plugin persistence, transactions/undo, rendering/result application, cache/evaluation scheduling, and Smart Controller/pin integration.
+The next phase is **M1 — host-integration contract design**. Its first proposed artifact is [M1 — Stable Target Identity and Revisioned Geometry Snapshots](M1_TARGET_GEOMETRY_CONTRACT.md). That proposal is not yet an accepted architecture decision. It must be reviewed against AniCraft's actual persistent document identity, target-ID lifecycle, geometry mutation paths, topology model, coordinate conventions, native Asset Warp stage, and plugin transport before implementation.
 
-Each finding is classified as Existing capability, Reusable capability, Missing capability, FDM responsibility, or Open decision.
+Subsequent M1 contracts will address evaluated-geometry inputs/outputs, persistent FDM extension data, timeline sampling, scheduling/freshness/cache invalidation, and host transaction/baking boundaries. These remain separate design tasks.
 
-M0 outputs an evidence-linked capability matrix, integration gap list, host-extension candidates, responsibility map, and recommended implementation sequence.
-
-Feature implementation follows the audit and definition of concrete contracts. A host extension, AniCraft change, or PR merge requires separate explicit authorization.
+Feature implementation follows acceptance of concrete contracts. A host extension, AniCraft change, or PR merge requires separate explicit authorization.
 
 ## 10. Governance and change control
 
