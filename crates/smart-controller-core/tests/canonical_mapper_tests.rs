@@ -309,8 +309,9 @@ fn mapper_rejects_missing_pose_references_and_unsupported_joystick_explicitly() 
         TypedValue::scalar(0.0).unwrap(),
         InputDimension::Scalar,
         &mapper,
-    );
-    assert!(matches!(missing, Err(CoreError::InvalidMapping(_))));
+    ).unwrap();
+    assert!(missing.contributions.is_empty());
+    assert!(missing.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 
     let joystick = controller(
         MappingConfig::JoystickFivePose {
@@ -328,8 +329,9 @@ fn mapper_rejects_missing_pose_references_and_unsupported_joystick_explicitly() 
         TypedValue::vector2(0.0, 0.0).unwrap(),
         InputDimension::Vector2,
         &mapper,
-    );
-    assert!(matches!(result, Err(CoreError::InvalidMapping(_))));
+    ).unwrap();
+    assert!(result.contributions.is_empty());
+    assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 }
 
 #[test]
@@ -344,8 +346,9 @@ fn mapper_rejects_ambiguous_multi_input_controller() {
         TypedValue::scalar(0.5).unwrap(),
         InputDimension::Scalar,
         &CanonicalControllerMapper::new(),
-    );
-    assert!(matches!(result, Err(CoreError::InvalidMapping(_))));
+    ).unwrap();
+    assert!(result.contributions.is_empty());
+    assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 }
 
 #[test]
@@ -363,6 +366,7 @@ fn pose_set_requires_exact_controller_binding_set() {
         TypedValue::scalar(0.0).unwrap(),
         InputDimension::Scalar,
         &mapper,
-    );
-    assert!(matches!(result, Err(CoreError::InvalidMapping(_))));
+    ).unwrap();
+    assert!(result.contributions.is_empty());
+    assert!(result.diagnostics.iter().any(|item| item.code == "SC_MAPPING_DOMAIN"));
 }
