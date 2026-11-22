@@ -64,8 +64,13 @@ fn run(p: &Value) -> Result<(), String> {
     let serialized = serde_json::to_string(&output)
         .map_err(|error| format!("could not serialize preview: {error}"))?;
     ac::log(&format!("Smart Controller preview: {serialized}"));
-    if let Some(frame) = p.get("driver_frame").and_then(Value::as_u64) { ac::log(&format!("Driver input sampled at explicit frame {frame}.")); }
-    else { ac::log("Driver input sampled at the current AniCraft playhead."); }
+    if params.manual_value.is_some() {
+        ac::log("Manual driver angle supplied; no host bone query was issued.");
+    } else if let Some(frame) = p.get("driver_frame").and_then(Value::as_u64) {
+        ac::log(&format!("Driver bone sampled at explicit frame {frame}."));
+    } else {
+        ac::log("Driver bone sampled at the current AniCraft playhead.");
+    }
     ac::log("V1 is preview-only: no timeline command or document mutation was issued.");
     Ok(())
 }
