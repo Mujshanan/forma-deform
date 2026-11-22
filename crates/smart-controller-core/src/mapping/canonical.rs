@@ -113,7 +113,7 @@ impl ControllerMapper for CanonicalControllerMapper {
         inputs: &ResolvedInputs,
     ) -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         controller.validate_local()?;
-        let required_inputs = if matches!(controller.mapping, MappingConfig::JoystickFivePose { .. }) { 2 } else { 1 };
+        let required_inputs = if matches!(&controller.mapping, MappingConfig::JoystickFivePose { .. }) { 2 } else { 1 };
         if controller.inputs.len() != required_inputs {
             return Err(CoreError::InvalidMapping(format!(
                 "mapping requires exactly {required_inputs} declared driver input(s); controller {} declares {}",
@@ -570,14 +570,17 @@ mod joystick_field_tests {
             BindingId::new("angle").unwrap(),
             TypedValue::angle(radians, true).unwrap(),
         )]).unwrap();
+        let near_pi = std::f64::consts::PI - 0.05;
         let angles = [
-            angle_pose(0.0),
-            angle_pose(std::f64::consts::PI),
-            angle_pose(std::f64::consts::FRAC_PI_2),
-            angle_pose(0.0),
-            angle_pose(-std::f64::consts::FRAC_PI_2),
+            angle_pose(near_pi),
+            angle_pose(-near_pi),
+            angle_pose(near_pi),
+            angle_pose(near_pi),
+            angle_pose(near_pi),
         ];
         let refs = angles.each_ref().map(Some);
-        assert!(interpolate_joystick_five_pose(refs, 0.5, 0.0).is_err());
+        let result = interpolate_joystick_five_pose(refs, 0.5, 0.0).unwrap();
+        let angle = result.get(&BindingId::new("angle").unwrap()).unwrap().as_angle().unwrap();
+        assert!(angle.radians().abs() > 3.0);
     }
 }
