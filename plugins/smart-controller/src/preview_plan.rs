@@ -86,9 +86,10 @@ pub fn build_target_preview_plan(
 /// Build the preview plan and verify every GeometryDeform target against
 /// the host's read-only warp.info response. The exact element/pin IDs are
 /// checked; array order is never treated as identity. No mutation is issued.
-pub fn build_host_target_preview_plan(
+pub fn build_host_target_preview_plan_at_frame(
     document: &CanonicalDocument,
     result: &ComposedEvaluationResult,
+    frame: Option<u32>,
 ) -> Result<TargetPreviewPlan, String> {
     let mut plan = build_target_preview_plan(document, result)?;
     let mut element_responses: std::collections::BTreeMap<u64, serde_json::Value> = std::collections::BTreeMap::new();
@@ -100,7 +101,7 @@ pub fn build_host_target_preview_plan(
             let response = if let Some(response) = element_responses.get(&element_numeric) {
                 response.clone()
             } else {
-                let response = query_geometry_info(element_id, None)?;
+                let response = query_geometry_info(element_id, frame)?;
                 element_responses.insert(element_numeric, response.clone());
                 response
             };
@@ -109,6 +110,13 @@ pub fn build_host_target_preview_plan(
         }
     }
     Ok(plan)
+}
+
+pub fn build_host_target_preview_plan(
+    document: &CanonicalDocument,
+    result: &ComposedEvaluationResult,
+) -> Result<TargetPreviewPlan, String> {
+    build_host_target_preview_plan_at_frame(document, result, None)
 }
 
 fn validate_target_value(target: &TargetMapping, value: TypedValue) -> Result<(), String> {
