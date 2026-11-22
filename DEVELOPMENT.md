@@ -275,13 +275,13 @@ Smart Controller binding evaluation and Form Deform pin-deformation evaluation r
 ### 11.2 Authoritative architecture and M0 audit
 
 - [FDM v2 Architecture and Integration Specification](docs/FDM_V2_ARCHITECTURE.md) — consolidated accepted decisions, responsibilities, invariants, lifecycle, and open implementation questions.
-- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Current status: in progress.
+- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Current status: in progress; the evaluation/rendering pipeline audit is complete, while CCC-01.5 verification and final gap/ownership classification remain.
 
 The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior.
 
 ### 11.3 Development sequence
 
-1. Complete M0 by inspecting document identity/geometry revisions, hierarchy/transforms, timeline sampling, persistence/extension APIs, evaluation/render/cache lifecycle, transactions/undo, baking, and CCC-01.5 implementation/tests.
+1. Complete the remaining M0 work: verify CCC-01.5 against current source/tests, finish the integration gap and ownership matrix, and list required AniCraft host extensions. The document, hierarchy, timeline, persistence, transaction, and evaluation/render/cache source audits are recorded.
 2. Define versioned host and FDM contracts from the verified capability matrix.
 3. Specify initial topology and algorithm mathematical contracts, schema/migration, composition, animation, and bake contracts.
 4. Approve a crate-level implementation plan and acceptance tests.
