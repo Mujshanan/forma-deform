@@ -116,20 +116,50 @@ impl CoordinateSpaceDescriptor {
 /// this identity/revision layer depend on a particular path or mesh encoding.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeometrySnapshot<P> {
-    pub target: HostTargetRef,
-    pub geometry_revision: GeometryRevision,
-    pub topology_revision: TopologyRevision,
-    pub fingerprint: GeometryFingerprint,
-    pub coordinate_space: CoordinateSpaceDescriptor,
-    pub payload_kind: String,
-    pub payload_schema_version: u32,
-    pub payload: P,
+    target: HostTargetRef,
+    geometry_revision: GeometryRevision,
+    topology_revision: TopologyRevision,
+    fingerprint: GeometryFingerprint,
+    coordinate_space: CoordinateSpaceDescriptor,
+    payload_kind: String,
+    payload_schema_version: u32,
+    payload: P,
 }
 
 impl<P> GeometrySnapshot<P> {
+    /// Construct a validated snapshot. Fields remain private so consumers can
+    /// only inspect payload through shared references, preserving the
+    /// immutable-by-contract evaluation boundary.
+    pub fn new(
+        target: HostTargetRef,
+        geometry_revision: GeometryRevision,
+        topology_revision: TopologyRevision,
+        fingerprint: GeometryFingerprint,
+        coordinate_space: CoordinateSpaceDescriptor,
+        payload_kind: impl Into<String>,
+        payload_schema_version: u32,
+        payload: P,
+    ) -> Result<Self, ContractError> {
+        let snapshot = Self {
+            target,
+            geometry_revision,
+            topology_revision,
+            fingerprint,
+            coordinate_space,
+            payload_kind: payload_kind.into(),
+            payload_schema_version,
+            payload,
+        };
+        snapshot.validate_envelope()?;
+        Ok(snapshot)
+    }
+
     pub fn validate_envelope(&self) -> Result<(), ContractError> {
         self.fingerprint.validate()?;
         self.coordinate_space.validate()?;
+        if self.geometry_revision.0 == 0 || self.topology_revision.0 == 0 {
+            return Err(ContractError::InvalidRevision);
+        }
         if self.payload_kind.trim().is_empty() {
             return Err(ContractError::MissingPayloadKind);
         }
@@ -138,6 +168,15 @@ impl<P> GeometrySnapshot<P> {
         }
         Ok(())
     }
+
+    pub fn target(&self) -> &HostTargetRef { &self.target }
+    pub fn geometry_revision(&self) -> GeometryRevision { self.geometry_revision }
+    pub fn topology_revision(&self) -> TopologyRevision { self.topology_revision }
+    pub fn fingerprint(&self) -> &GeometryFingerprint { &self.fingerprint }
+    pub fn coordinate_space(&self) -> &CoordinateSpaceDescriptor { &self.coordinate_space }
+    pub fn payload_kind(&self) -> &str { &self.payload_kind }
+    pub fn payload_schema_version(&self) -> u32 { self.payload_schema_version }
+    pub fn payload(&self) -> &P { &self.payload }
 
     pub fn stamp(&self) -> GeometrySnapshotStamp {
         GeometrySnapshotStamp {
@@ -197,6 +236,7 @@ pub enum ContractError {
     InvalidUnitScale,
     MissingPayloadKind,
     InvalidPayloadSchemaVersion,
+    InvalidRevision,
     TargetIdentityMismatch,
 }
 
@@ -210,6 +250,7 @@ impl std::fmt::Display for ContractError {
             Self::InvalidUnitScale => write!(f, "coordinate unit scale must be finite and positive"),
             Self::MissingPayloadKind => write!(f, "geometry payload kind must not be empty"),
             Self::InvalidPayloadSchemaVersion => write!(f, "payload schema version must be non-zero"),
+            Self::InvalidRevision => write!(f, "geometry and topology revisions must start at one"),
             Self::TargetIdentityMismatch => write!(f, "snapshot target identities do not match"),
         }
     }
