@@ -175,7 +175,7 @@ mod tests {
         let document = CanonicalDocument {
             schema: smart_controller_core::schema::SchemaIdentity {
                 name: "smart-controller".into(),
-                version: 1,
+                version: smart_controller_core::schema::CURRENT_SCHEMA_VERSION,
             },
             inputs: vec![InputDefinition {
                 id: input_id.clone(),
