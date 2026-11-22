@@ -1,6 +1,6 @@
 # M1 Proposal — Stable Target Identity and Revisioned Geometry Snapshots
 
-**Status:** M1 contract semantics drafted and FDM-side primitives implemented; host conformance and architecture acceptance remain pending
+**Status:** FDM-side M1 contract and executable primitives implemented; AniCraft host conformance and architecture acceptance remain pending
 
 ## Implementation progress — M1 FDM-side contract
 
@@ -32,7 +32,7 @@ The contract must prevent four classes of error:
 3. FDM evaluating geometry in an assumed or ambiguous coordinate space.
 4. A result calculated from an obsolete geometry snapshot being accepted after the target changes.
 
-This is a design proposal. It does not authorize an AniCraft code change or imply that AniCraft currently exposes these APIs.
+This is the FDM-side M1 contract proposal and reference implementation. It does not authorize an AniCraft code change or imply that AniCraft currently exposes these APIs.
 
 ## 2. Ownership rules
 
@@ -78,6 +78,7 @@ struct HostTargetRef {
     document_id: HostDocumentId,
     target_kind: HostTargetKind,
     target_id: HostTargetId,
+    generation: NonZeroU64,
 }
 ```
 
