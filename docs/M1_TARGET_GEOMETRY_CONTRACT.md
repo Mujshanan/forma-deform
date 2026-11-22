@@ -361,7 +361,7 @@ A revision is a change epoch, not a content hash and not an undo-history index. 
 
 ### 11.6 Fingerprint canonicalization proposal
 
-The initial fingerprint identifier is `anicraft-path2d-sha256-v1`. Its canonical byte stream is defined over:
+The implemented fingerprint identifier is `fdm-path2d-sha256-v1`. It hashes the FDM-owned canonical Path2D payload, not AniCraft's native object layout. AniCraft adapters must map the host path into this schema before snapshot creation. Its canonical byte stream is defined exactly as follows:
 
 1. A fixed domain-separation prefix and payload kind/schema version.
 2. The complete coordinate-space descriptor (space kind, stable space ID, dimensionality, source unit, canonical unit, scale, axis orientation, and origin).
@@ -375,7 +375,7 @@ Numeric rules:
 - Preserve segment ordering and every schema-defined structural distinction. Do not hash object memory, map iteration order, runtime IDs, pointers, or display metadata.
 - Hash the canonical byte stream with SHA-256. The algorithm identifier includes the canonicalization version; any change to the byte stream requires a new identifier.
 
-The precise Path2D field sequence must be pinned to the selected payload schema before the host implementation begins. The fingerprint is a snapshot-content verification token; revisions remain the efficient change epochs. The target identity and revision numbers themselves are not included in the content digest.
+Path2D v1 requires a non-empty command list beginning with MoveTo. Drawing commands require an active subpath; Close requires an open subpath. Point construction rejects non-finite coordinates. The FDM-owned `Path2D` stores its command vector privately and exposes only shared access. The fingerprint is a snapshot-content verification token; revisions remain the efficient change epochs. The target identity and revision numbers themselves are not included in the content digest. The SHA-256 digest is exactly 32 bytes; the validator rejects a digest of any other length for this algorithm ID.
 
 ### 11.7 Coordinate-space semantics
 
@@ -398,12 +398,12 @@ The actual AniCraft axis/origin/unit values must be confirmed against source-lev
 
 ### 11.9 Remaining host conformance blockers
 
-The FDM-side semantics above are now specified as the M1 proposal. Before implementation against AniCraft, the host must provide evidence for:
+The FDM-side semantics and canonical Path2D v1 encoding above are specified and implemented as the M1 proposal. Before implementation against AniCraft, the host must provide evidence for:
 
 1. Persistent document UUID storage and duplicate/Save As/import semantics.
 2. Target incarnation guarantees across deletion, reuse, import, undo/redo, and migration.
 3. A stable shape target-kind/capability contract.
-4. Exact Path2D payload schema and canonical field ordering.
+4. A deterministic adapter mapping from AniCraft's authored path model into the FDM-owned Path2D v1 schema.
 5. Per-target monotonic revision updates on every mutation path, including undo/redo.
 6. Atomic snapshot acquisition from `Warp.rest` when native Asset Warp exists, otherwise `Shape.path`.
 7. Verified source units, axis orientation, origin, and coordinate-space ID.
