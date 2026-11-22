@@ -22,7 +22,7 @@ use crate::{
     ids::BindingId,
     mapping::{easing::Easing, frame, range::{normalize_directed, ThreePointRange}},
     pose::Pose2D,
-    value::TypedValue,
+    value::{Angle, TypedValue},
 };
 
 /// Runtime lookup table for authored poses referenced by canonical pose IDs.
@@ -113,9 +113,10 @@ impl ControllerMapper for CanonicalControllerMapper {
         inputs: &ResolvedInputs,
     ) -> Result<BTreeMap<BindingId, TypedValue>, CoreError> {
         controller.validate_local()?;
-        if controller.inputs.len() != 1 {
+        let required_inputs = if matches!(controller.mapping, MappingConfig::JoystickFivePose { .. }) { 2 } else { 1 };
+        if controller.inputs.len() != required_inputs {
             return Err(CoreError::InvalidMapping(format!(
-                "canonical mapping currently requires exactly one declared driver input; controller {} declares {}",
+                "mapping requires exactly {required_inputs} declared driver input(s); controller {} declares {}",
                 controller.id,
                 controller.inputs.len()
             )));
@@ -183,9 +184,30 @@ impl ControllerMapper for CanonicalControllerMapper {
                 validate_pose_bindings(controller, &pose)?;
                 Ok(pose.iter().map(|(id, value)| (id.clone(), *value)).collect())
             }
-            MappingConfig::JoystickFivePose { .. } => Err(CoreError::InvalidMapping(
-                "JoystickFivePose requires the dedicated two-dimensional pose mapper; scalar canonical mapping does not approximate it".into(),
-            )),
+            MappingConfig::JoystickFivePose { center, up, right, down, left } => {
+                let y_input_id = &controller.inputs[1];
+                let y_input = inputs.get(y_input_id).ok_or_else(|| {
+                    CoreError::InvalidMapping(format!("joystick Y input {y_input_id} was not resolved"))
+                })?;
+                let y_value = y_input.value.ok_or_else(|| {
+                    CoreError::InvalidMapping(format!("joystick Y input {y_input_id} is unavailable"))
+                })?;
+                let x = scalar_driver(value)?;
+                let y = scalar_driver(y_value)?;
+                let pose = interpolate_joystick_five_pose(
+                    [
+                        self.poses.get(center),
+                        self.poses.get(up),
+                        self.poses.get(right),
+                        self.poses.get(down),
+                        self.poses.get(left),
+                    ],
+                    x,
+                    y,
+                )?;
+                validate_pose_bindings(controller, &pose)?;
+                Ok(pose.iter().map(|(id, value)| (id.clone(), *value)).collect())
+            },
         }
     }
 }
@@ -369,4 +391,193 @@ fn validate_pose_bindings(controller: &Controller, pose: &Pose2D) -> Result<(), 
         )));
     }
     Ok(())
+}
+
+
+/// Interpolate a five-pose joystick field using inverse-distance weighting.
+///
+/// Anchor order is center, up, right, down, left. Each axis is clamped to
+/// [-1, 1]. Exact anchor hits return the authored pose without numerical
+/// blending; elsewhere all five poses contribute with inverse squared
+/// Euclidean distance. This gives deterministic, continuous interpolation
+/// without inventing diagonal corner poses.
+fn interpolate_joystick_five_pose(
+    poses: [Option<&Pose2D>; 5],
+    x: f64,
+    y: f64,
+) -> Result<Pose2D, CoreError> {
+    if !x.is_finite() || !y.is_finite() {
+        return Err(CoreError::NonFiniteValue { context: "joystick input" });
+    }
+    let poses = poses.map(|pose| {
+        pose.ok_or_else(|| CoreError::InvalidMapping("JoystickFivePose references an unregistered pose".into()))
+    });
+    let [center, up, right, down, left] = poses;
+    let poses = [center?, up?, right?, down?, left?];
+    for pose in poses.iter().skip(1) {
+        poses[0].validate_compatible(pose)?;
+    }
+
+    let point = [x.clamp(-1.0, 1.0), y.clamp(-1.0, 1.0)];
+    let anchors = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, -1.0], [-1.0, 0.0]];
+    let mut weights = [0.0; 5];
+    for (index, anchor) in anchors.iter().enumerate() {
+        let dx = point[0] - anchor[0];
+        let dy = point[1] - anchor[1];
+        let distance_squared = dx * dx + dy * dy;
+        if distance_squared <= f64::EPSILON {
+            return Ok(poses[index].clone());
+        }
+        weights[index] = 1.0 / distance_squared;
+    }
+    let total: f64 = weights.iter().sum();
+    if !total.is_finite() || total <= 0.0 {
+        return Err(CoreError::InvalidMapping("joystick pose weights are not finite".into()));
+    }
+    for weight in &mut weights {
+        *weight /= total;
+    }
+
+    let mut values = Vec::with_capacity(poses[0].values().len());
+    for (binding_id, first_value) in poses[0].iter() {
+        let mut samples = Vec::with_capacity(5);
+        samples.push(*first_value);
+        for pose in poses.iter().skip(1) {
+            samples.push(*pose.get(binding_id).ok_or_else(|| {
+                CoreError::PoseBindingMissing { binding_id: binding_id.to_string() }
+            })?);
+        }
+        let value = match samples.as_slice() {
+            [TypedValue::Scalar(_), ..] => {
+                let mut result = 0.0;
+                for (sample, weight) in samples.iter().zip(weights) {
+                    let TypedValue::Scalar(scalar) = sample else { unreachable!() };
+                    result += scalar.get() * weight;
+                }
+                TypedValue::scalar(result)?
+            }
+            [TypedValue::Vector2(_), ..] => {
+                let (mut x, mut y) = (0.0, 0.0);
+                for (sample, weight) in samples.iter().zip(weights) {
+                    let TypedValue::Vector2(vector) = sample else { unreachable!() };
+                    x += vector.x() * weight;
+                    y += vector.y() * weight;
+                }
+                TypedValue::vector2(x, y)?
+            }
+            [TypedValue::Angle(first), ..] if first.is_wrapped() => {
+                let (mut sin_sum, mut cos_sum) = (0.0, 0.0);
+                for (sample, weight) in samples.iter().zip(weights) {
+                    let TypedValue::Angle(angle) = sample else { unreachable!() };
+                    sin_sum += angle.radians().sin() * weight;
+                    cos_sum += angle.radians().cos() * weight;
+                }
+                if sin_sum.hypot(cos_sum) <= 1e-12 {
+                    return Err(CoreError::InvalidMapping(format!(
+                        "joystick field has an ambiguous wrapped-angle blend for binding {binding_id}"
+                    )));
+                }
+                TypedValue::Angle(Angle::new(sin_sum.atan2(cos_sum), true)?)
+            }
+            [TypedValue::Angle(_), ..] => {
+                let mut result = 0.0;
+                for (sample, weight) in samples.iter().zip(weights) {
+                    let TypedValue::Angle(angle) = sample else { unreachable!() };
+                    result += angle.radians() * weight;
+                }
+                TypedValue::angle(result, false)?
+            }
+            _ => return Err(CoreError::InvalidMapping("joystick poses contain incompatible value types".into())),
+        };
+        values.push((binding_id.clone(), value));
+    }
+    Pose2D::new(values)
+}
+
+#[cfg(test)]
+mod joystick_field_tests {
+    use super::*;
+    use crate::ids::BindingId;
+
+    fn scalar_pose(value: f64) -> Pose2D {
+        Pose2D::new(vec![(
+            BindingId::new("output").unwrap(),
+            TypedValue::scalar(value).unwrap(),
+        )]).unwrap()
+    }
+
+    #[test]
+    fn joystick_returns_exact_authored_cardinal_poses() {
+        let poses = [
+            scalar_pose(0.0),
+            scalar_pose(10.0),
+            scalar_pose(20.0),
+            scalar_pose(-10.0),
+            scalar_pose(-20.0),
+        ];
+        for (x, y, expected) in [
+            (0.0, 0.0, 0.0),
+            (0.0, 1.0, 10.0),
+            (1.0, 0.0, 20.0),
+            (0.0, -1.0, -10.0),
+            (-1.0, 0.0, -20.0),
+        ] {
+            let refs = poses.each_ref().map(Some);
+            let result = interpolate_joystick_five_pose(refs, x, y).unwrap();
+            assert_eq!(result.get(&BindingId::new("output").unwrap()).unwrap().as_scalar(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn joystick_clamps_axes_and_interpolates_diagonal_values() {
+        let poses = [
+            scalar_pose(0.0),
+            scalar_pose(10.0),
+            scalar_pose(20.0),
+            scalar_pose(-10.0),
+            scalar_pose(-20.0),
+        ];
+        let refs = poses.each_ref().map(Some);
+        let clamped = interpolate_joystick_five_pose(refs, 2.0, 0.0).unwrap();
+        assert_eq!(clamped.get(&BindingId::new("output").unwrap()).unwrap().as_scalar(), Some(20.0));
+
+        let refs = poses.each_ref().map(Some);
+        let diagonal = interpolate_joystick_five_pose(refs, 0.5, 0.5).unwrap();
+        let value = diagonal.get(&BindingId::new("output").unwrap()).unwrap().as_scalar().unwrap();
+        assert!(value.is_finite());
+        assert!(value > 0.0 && value < 20.0);
+    }
+
+    #[test]
+    fn joystick_interpolates_vector_outputs_and_rejects_ambiguous_wrapped_angles() {
+        let vector_pose = |x, y| Pose2D::new(vec![(
+            BindingId::new("vector").unwrap(),
+            TypedValue::vector2(x, y).unwrap(),
+        )]).unwrap();
+        let poses = [
+            vector_pose(0.0, 0.0),
+            vector_pose(0.0, 10.0),
+            vector_pose(10.0, 0.0),
+            vector_pose(0.0, -10.0),
+            vector_pose(-10.0, 0.0),
+        ];
+        let refs = poses.each_ref().map(Some);
+        let result = interpolate_joystick_five_pose(refs, 0.5, 0.5).unwrap();
+        let value = result.get(&BindingId::new("vector").unwrap()).unwrap().as_vector2().unwrap();
+        assert!(value.x().is_finite() && value.y().is_finite());
+
+        let angle_pose = |radians| Pose2D::new(vec![(
+            BindingId::new("angle").unwrap(),
+            TypedValue::angle(radians, true).unwrap(),
+        )]).unwrap();
+        let angles = [
+            angle_pose(0.0),
+            angle_pose(std::f64::consts::PI),
+            angle_pose(std::f64::consts::FRAC_PI_2),
+            angle_pose(0.0),
+            angle_pose(-std::f64::consts::FRAC_PI_2),
+        ];
+        let refs = angles.each_ref().map(Some);
+        assert!(interpolate_joystick_five_pose(refs, 0.5, 0.0).is_err());
+    }
 }
