@@ -490,6 +490,19 @@ mod tests {
             unresolved_targets: vec![TargetId::new("missing").unwrap()],
         };
         assert!(multi_apply_candidates(&unresolved).unwrap_err().contains("unresolved"));
+
+        let mut unsupported_item = batch_item("17", "12", true);
+        unsupported_item.target = TargetMapping::Property {
+            target_id: "shape-1".into(),
+            property: "opacity".into(),
+            scale: 1.0,
+            additive: false,
+        };
+        let unsupported = preview_plan::TargetPreviewPlan {
+            items: vec![unsupported_item],
+            unresolved_targets: vec![],
+        };
+        assert!(multi_apply_candidates(&unsupported).unwrap_err().contains("not a GeometryDeform"));
     }
 
     #[test]
