@@ -25,7 +25,7 @@ for crate in "${CORE_CRATES[@]}"; do
     fail "$crate must not depend on the AniCraft plugin SDK"
   fi
 
-  if grep -RInE 'anicraft_plugin_sdk|plugin![[:space:]]*\\(|exporter![[:space:]]*\\(|ease![[:space:]]*\\(' "$source_dir"; then
+  if grep -RInE 'anicraft_plugin_sdk|plugin![[:space:]]*\(|exporter![[:space:]]*\(|ease![[:space:]]*\(' "$source_dir"; then
     fail "$crate source must not import or invoke the plugin ABI"
   fi
 
