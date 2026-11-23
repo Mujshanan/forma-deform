@@ -1,0 +1,47 @@
+name: CQ2 Tool Pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to audit
+        required: true
+        default: quality/cq2-tool-pilot
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rustqual:
+    name: rustqual report-only analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install pinned rustqual
+        run: cargo install rustqual --version 1.8.3 --locked
+
+      - name: Run report-only analysis
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p quality-reports
+          rustqual --version | tee quality-reports/rustqual-version.txt
+          rustqual . --no-fail --verbose 2>&1 | tee quality-reports/rustqual-report.txt
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq2-rustqual-report
+          path: quality-reports/
+          if-no-files-found: warn
+          retention-days: 30
