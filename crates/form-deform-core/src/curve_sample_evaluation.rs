@@ -424,6 +424,15 @@ mod tests {
         GeometrySnapshot, DeformationTopology, DeformationControlState,
         ValidatedCageGeometry, ValidatedBindingRecord,
     ) {
+        validated_fixture_with_policy(OutsideCagePolicy::UnboundZeroInfluence)
+    }
+
+    fn validated_fixture_with_policy(
+        outside_policy: OutsideCagePolicy,
+    ) -> (
+        GeometrySnapshot, DeformationTopology, DeformationControlState,
+        ValidatedCageGeometry, ValidatedBindingRecord,
+    ) {
         let source = snapshot(source_path(), 1);
         let (topology, rest_state) = cage();
         let certificate = validate_cage_embedding(&topology, &rest_state).unwrap();
@@ -431,7 +440,7 @@ mod tests {
         let stamp = BindingStamp::from_snapshot(
             &source, &topology,
             MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
-            OutsideCagePolicy::UnboundZeroInfluence,
+            outside_policy,
         ).unwrap();
         let entries = enumerate_source_features(source.payload()).unwrap().into_iter().map(|feature| {
             let status = match locate_point(feature.point, &rest_geometry).unwrap() {
@@ -581,6 +590,78 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn output_refinement_detects_a_curve_crossing_the_shared_triangle_edge() {
+        use crate::output_space_refinement::{refine_path_curves, OutputRefinementPolicy};
+        let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
+        let mut warped = rest_state.clone();
+        warped.revision = ControlStateRevision::new(rest_state.revision.get() + 1).unwrap();
+        let corner = ControlPointId::new(4).unwrap();
+        let point_state = warped.points.iter_mut().find(|point_state| point_state.id == corner).unwrap();
+        point_state.position = ControlPointPosition::new(4.0, 3.0).unwrap();
+        warped.validate_against(&topology).unwrap();
+        let certificate = validate_cage_embedding(&topology, &warped).unwrap();
+        let current = ValidatedCageGeometry::new(&topology, &warped, &certificate).unwrap();
+        let policy = OutputRefinementPolicy {
+            max_deviation: 0.001, max_subdivision_depth: 20,
+            max_samples_per_curve: 8192, max_total_samples: 16_384,
+            max_total_evaluations: 100_000,
+        };
+        let refined = refine_path_curves(&validated, &source, &topology, &rest_geometry, &current,
+            OutsideCagePolicy::UnboundZeroInfluence, policy).unwrap();
+        let samples = &refined.segments[0].samples;
+        let side = |sample: &crate::output_space_refinement::RefinedCurveSample| {
+            sample.source_point.x() + sample.source_point.y() - 2.0
+        };
+        assert!(samples.iter().any(|sample| side(sample) < -1.0e-6));
+        assert!(samples.iter().any(|sample| side(sample) > 1.0e-6));
+        assert!(samples.windows(2).any(|pair| side(&pair[0]) * side(&pair[1]) <= 0.0));
+        assert!(samples.iter().any(|sample| side(sample) > 1.0e-6
+            && (sample.output_point.x() - sample.source_point.x()).abs() > 0.1));
+        assert!(refined.total_evaluations > samples.len());
+    }
+
+    #[test]
+    fn arbitrary_source_point_obeys_each_outside_cage_policy() {
+        let query = point(2.5, 1.0);
+        let (source, topology, _rest, rest_geometry, unbound) =
+            validated_fixture_with_policy(OutsideCagePolicy::UnboundZeroInfluence);
+        assert_eq!(evaluate_source_point(&unbound, &source, &topology, &rest_geometry, &rest_geometry,
+            OutsideCagePolicy::UnboundZeroInfluence, query).unwrap(), query);
+
+        let (source, topology, rest, rest_geometry, clamped) =
+            validated_fixture_with_policy(OutsideCagePolicy::ClampToBoundary);
+        let moved = translated_state(&topology, &rest, 5.0, -2.0);
+        let certificate = validate_cage_embedding(&topology, &moved).unwrap();
+        let current = ValidatedCageGeometry::new(&topology, &moved, &certificate).unwrap();
+        let clamped_point = evaluate_source_point(&clamped, &source, &topology, &rest_geometry, &current,
+            OutsideCagePolicy::ClampToBoundary, query).unwrap();
+        assert!((clamped_point.x() - 7.0).abs() < 1.0e-8);
+        assert!((clamped_point.y() + 1.0).abs() < 1.0e-8);
+
+        let extrapolation = OutsideCagePolicy::BoundedExtrapolation { max_distance: 1.0 };
+        let (source, topology, rest, rest_geometry, extrapolated) =
+            validated_fixture_with_policy(extrapolation);
+        let moved = translated_state(&topology, &rest, 5.0, -2.0);
+        let certificate = validate_cage_embedding(&topology, &moved).unwrap();
+        let current = ValidatedCageGeometry::new(&topology, &moved, &certificate).unwrap();
+        let extrapolated_point = evaluate_source_point(&extrapolated, &source, &topology, &rest_geometry,
+            &current, extrapolation, query).unwrap();
+        assert!((extrapolated_point.x() - 7.5).abs() < 1.0e-8);
+        assert!((extrapolated_point.y() + 1.0).abs() < 1.0e-8);
+
+        let limited = OutsideCagePolicy::BoundedExtrapolation { max_distance: 0.1 };
+        let (source, topology, _rest, rest_geometry, too_limited) =
+            validated_fixture_with_policy(limited);
+        assert!(matches!(evaluate_source_point(&too_limited, &source, &topology, &rest_geometry,
+            &rest_geometry, limited, query),
+            Err(CurveSampleEvaluationError::Mapping(CurveMappingError::OutsideCage(
+                crate::outside_policy::OutsideCageError::DistanceLimitExceeded { .. }
+            )))
+        ));
+    }
+
     fn output_space_refinement_is_deterministic_and_uses_current_pose() {
         use crate::output_space_refinement::{refine_path_curves, OutputRefinementPolicy};
         let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
