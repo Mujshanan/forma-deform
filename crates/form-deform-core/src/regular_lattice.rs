@@ -8,6 +8,7 @@ use crate::topology::{
 use std::collections::HashMap;
 
 pub const MAX_LATTICE_CONTROL_POINTS: usize = 1_000_000;
+pub const MAX_LATTICE_BOUNDARY_POINTS: usize = 4_096;
 const MIN_TOLERANCE: f64 = 1.0e-12;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -106,9 +107,12 @@ impl RegularLattice {
                 Some(TopologyFace::Triangle(_)) => return Err(RegularLatticeError::UnexpectedTriangle),
                 None => return Err(RegularLatticeError::InvalidFace),
             };
-            let p = ids.map(|id| lookup.get(&id).copied()
-                .ok_or(RegularLatticeError::MissingPoint(id.get())));
-            let q = [p[0]?, p[1]?, p[2]?, p[3]?];
+            let q = [
+                lookup.get(&ids[0]).copied().ok_or(RegularLatticeError::MissingPoint(ids[0].get()))?,
+                lookup.get(&ids[1]).copied().ok_or(RegularLatticeError::MissingPoint(ids[1].get()))?,
+                lookup.get(&ids[2]).copied().ok_or(RegularLatticeError::MissingPoint(ids[2].get()))?,
+                lookup.get(&ids[3]).copied().ok_or(RegularLatticeError::MissingPoint(ids[3].get()))?,
+            ];
             for edge in 0..4 {
                 if distance(q[edge], q[(edge + 1) % 4]) <= tol {
                     return Err(RegularLatticeError::ZeroLengthCellEdge(index));
@@ -133,7 +137,7 @@ impl RegularLattice {
                 }
             }
         }
-        let boundary = self.boundary_positions(&lookup)?;
+        let boundary = self.boundary_positions_from_lookup(&lookup)?;
         validate_boundary(&boundary, tol)?;
         Ok(())
     }
@@ -141,10 +145,10 @@ impl RegularLattice {
     pub fn boundary_positions(&self) -> Result<Vec<ControlPointPosition>, RegularLatticeError> {
         let lookup: HashMap<_, _> = self.control_state.points.iter()
             .map(|p| (p.id, p.position)).collect();
-        self.boundary_positions(&lookup)
+        self.boundary_positions_from_lookup(&lookup)
     }
 
-    fn boundary_positions(
+    fn boundary_positions_from_lookup(
         &self, lookup: &HashMap<ControlPointId, ControlPointPosition>,
     ) -> Result<Vec<ControlPointPosition>, RegularLatticeError> {
         let rows = self.topology.rows as usize;
@@ -154,7 +158,11 @@ impl RegularLattice {
                 .ok_or(RegularLatticeError::InvalidBoundary)?;
             lookup.get(id).copied().ok_or(RegularLatticeError::MissingPoint(id.get()))
         };
-        let mut out = Vec::with_capacity(2 * rows + 2 * cols - 4);
+        let boundary_count = 2 * rows + 2 * cols - 4;
+        if boundary_count > MAX_LATTICE_BOUNDARY_POINTS {
+            return Err(RegularLatticeError::BoundaryTooLarge(boundary_count));
+        }
+        let mut out = Vec::with_capacity(boundary_count);
         for c in 0..cols { out.push(at(0, c)?); }
         for r in 1..rows { out.push(at(r, cols - 1)?); }
         for c in (0..cols - 1).rev() { out.push(at(rows - 1, c)?); }
@@ -224,7 +232,7 @@ fn on_segment(p: ControlPointPosition, a: ControlPointPosition, b: ControlPointP
 #[derive(Clone, Debug, PartialEq)]
 pub enum RegularLatticeError {
     Topology(TopologyContractError), DegenerateBounds, InvalidFirstId, IdOverflow,
-    TooManyPoints(usize), Empty, MissingPoint(u64), InvalidFace, UnexpectedTriangle,
+    TooManyPoints(usize), BoundaryTooLarge(usize), Empty, MissingPoint(u64), InvalidFace, UnexpectedTriangle,
     InvalidBoundary, CoincidentPoints(usize,usize), ZeroLengthCellEdge(usize),
     DegenerateCell(usize), InvertedCell(usize), NonConvexCell(usize),
     ZeroLengthBoundaryEdge(usize), SelfIntersectingBoundary(usize,usize), DegenerateBoundary,
@@ -237,6 +245,7 @@ impl std::fmt::Display for RegularLatticeError {
             Self::InvalidFirstId => write!(f,"first control-point ID must be non-zero"),
             Self::IdOverflow => write!(f,"control-point ID range overflows u64"),
             Self::TooManyPoints(n) => write!(f,"lattice requests {n} points; maximum is {MAX_LATTICE_CONTROL_POINTS}"),
+            Self::BoundaryTooLarge(n) => write!(f,"lattice boundary has {n} points; maximum for bounded intersection validation is {MAX_LATTICE_BOUNDARY_POINTS}"),
             Self::Empty => write!(f,"lattice has no geometry"),
             Self::MissingPoint(id) => write!(f,"control point {id} is missing"),
             Self::InvalidFace => write!(f,"lattice face index is invalid"),
