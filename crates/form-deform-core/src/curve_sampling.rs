@@ -404,7 +404,7 @@ pub fn map_curve_samples(
     sample_set: &CurveSampleSet,
     geometry: &crate::binding::ValidatedCageGeometry,
     outside_policy: crate::binding::OutsideCagePolicy,
- -> Result<MappedCurveSampleSet, CurveMappingError> {
+) -> Result<MappedCurveSampleSet, CurveMappingError> {
     use crate::outside_policy::{resolve_outside_point, OutsideCageResolution};
     use crate::point_location::{locate_point, PointLocationOutcome};
 
@@ -437,7 +437,8 @@ pub fn map_curve_samples(
         }
         actual_total = actual_total.checked_add(segment.samples.len())
             .ok_or(CurveMappingError::InvalidSampleSet)?;
-        if actual_total > MAX_TOTAL_SAMPLES
+        if actual_total > sample_set.policy.max_total_samples
+            || actual_total > MAX_TOTAL_SAMPLES
             || segment.samples.len() > sample_set.policy.max_samples_per_curve
         {
             return Err(CurveMappingError::InvalidSampleSet);
