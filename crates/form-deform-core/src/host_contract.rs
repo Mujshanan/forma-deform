@@ -160,6 +160,10 @@ impl GeometrySnapshot {
     /// Construct a validated snapshot. Fields remain private so consumers can
     /// only inspect payload through shared references, preserving the
     /// immutable-by-contract evaluation boundary.
+    ///
+    /// This constructor intentionally mirrors the complete immutable snapshot
+    /// envelope. Keep the lint exception local rather than suppressing it crate-wide.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         target: HostTargetRef,
         geometry_revision: GeometryRevision,
