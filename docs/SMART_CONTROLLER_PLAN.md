@@ -63,3 +63,21 @@ Native tests cover endpoint policy, reversed angle ranges, mode-aware validation
 ## 6. Non-goals
 
 Do not invent timeline or bone-write commands. Do not interpret guessed JSON document paths as an API. Do not silently substitute zero for a failed bone query. Do not claim live playback, durable binding storage, or in-app success before those capabilities are verified.
+
+
+## 7. Native M2 host contracts — 2026-11-23
+
+The read-only host/core contracts are specified in [SMART_CONTROLLER_HOST_CONTRACTS.md](contracts/SMART_CONTROLLER_HOST_CONTRACTS.md), with the corresponding AniCraft API contract in [AniCraft's host contract](https://github.com/Mujshanan/anicraft/blob/main/docs/SMART_CONTROLLER_HOST_CONTRACT.md).
+
+### Contract A — target identity and capability
+- Geometry targets are addressed by document-scoped numeric `ElementId` + `PinId`; the adapter verifies the exact `warp.info` response.
+- AniCraft's actual pin response key is `pins[].pin` (not `id`). The adapter validates the actual schema and distinguishes Supported, Unsupported, and Unavailable.
+- Supported geometry pins remain preview/undo-only; no `warp.pin_move` command is issued.
+- AniCraft currently has no stable document UUID. Durable target bindings remain blocked until a collision-safe document scope is host-owned.
+
+### Contract B — deterministic input snapshots
+- Bone inputs are sampled at an explicit zero-based frame, and the adapter rejects a `bone.info` response for a different frame.
+- Keyed constrained angle and spring swing remain separate; inclusion of spring swing and wrapped-angle semantics are explicit policies.
+- Snapshot values remain invocation-scoped; failures do not become zero values, and the core applies authored fallback policy.
+
+The adapter implementation adds explicit frame pinning and host-schema conformance tests. Neutral capture, binding controls, persistence, target mutation, playback, and CCC-01.5 composition changes remain out of scope. The contract suite must pass CI and an AniCraft in-app smoke test before host conformance is claimed.

@@ -15,6 +15,8 @@ use crate::adapter::{query_bone_info, sample_bone_rotation, BoneAnglePolicy};
 /// Explicit host-side values and identity resolution for one preview invocation.
 #[derive(Clone, Debug)]
 pub struct HostInputContext {
+    /// Explicit zero-based AniCraft frame sampled by every host bone query.
+    pub frame: u32,
     /// Values supplied by the user/UI for Manual inputs.
     pub manual_values: BTreeMap<InputId, TypedValue>,
     /// Canonical bone ID -> AniCraft layer ID. Required for BoneTransform inputs.
@@ -50,6 +52,7 @@ pub fn collect_host_input_snapshot(
     context: &HostInputContext,
 ) -> Result<InputSnapshot, String> {
     let mut responses: BTreeMap<u64, serde_json::Value> = BTreeMap::new();
+    let mut unavailable_layers = std::collections::BTreeSet::new();
     let mut samples = Vec::new();
 
     for definition in definitions {
@@ -72,14 +75,27 @@ pub fn collect_host_input_snapshot(
                 }
                 let layer_id = *context.bone_layers.get(bone_id)
                     .ok_or_else(|| format!("bone input {} has no explicit layer mapping for bone {}", definition.id, bone_id))?;
+                if unavailable_layers.contains(&layer_id) {
+                    samples.push(InputSample::unavailable(definition.id.clone()));
+                    continue;
+                }
                 if !responses.contains_key(&layer_id) {
-                    if let Ok(response) = query_bone_info(layer_id, None) {
-                        responses.insert(layer_id, response);
-                    } else {
-                        // A failed host read is explicitly unavailable; the
-                        // core applies the authored fallback policy.
-                        samples.push(InputSample::unavailable(definition.id.clone()));
-                        continue;
+                    let response = query_bone_info(layer_id, Some(context.frame))
+                        .and_then(|response| {
+                            crate::adapter::verify_bone_info_frame(&response, context.frame)?;
+                            crate::adapter::verify_bone_info_layer(&response, layer_id)?;
+                            Ok(response)
+                        });
+                    match response {
+                        Ok(response) => { responses.insert(layer_id, response); }
+                        Err(_) => {
+                            // Cache a failed layer read for this invocation:
+                            // every dependent input is unavailable, and the
+                            // core applies its authored fallback policy.
+                            unavailable_layers.insert(layer_id);
+                            samples.push(InputSample::unavailable(definition.id.clone()));
+                            continue;
+                        }
                     }
                 }
                 match sample_bone_rotation(
@@ -136,6 +152,7 @@ mod tests {
             },
         ];
         let context = HostInputContext {
+            frame: 0,
             manual_values: BTreeMap::from([(manual_id.clone(), TypedValue::scalar(2.5).unwrap())]),
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
@@ -156,6 +173,7 @@ mod tests {
             fallback: FallbackPolicy::UseValue(TypedValue::scalar(3.0).unwrap()),
         };
         let context = HostInputContext {
+            frame: 0,
             manual_values: BTreeMap::new(),
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
@@ -196,6 +214,7 @@ mod tests {
             }],
         };
         let context = HostInputContext {
+            frame: 0,
             manual_values: BTreeMap::new(),
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
@@ -217,6 +236,7 @@ mod tests {
         let snapshot = collect_host_input_snapshot(
             &[definition.clone()],
             &HostInputContext {
+                frame: 0,
                 manual_values: BTreeMap::new(),
                 bone_layers: BTreeMap::new(),
                 bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,

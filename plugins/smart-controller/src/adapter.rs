@@ -131,7 +131,34 @@ pub enum BoneAnglePolicy {
     KeyedPosePlusSpringSwing,
 }
 
-/// Execute the verified, read-only bone query for a layer.
+/// Verify that a bone.info payload is for the exact requested zero-based frame.
+pub fn verify_bone_info_frame(response: &Value, expected_frame: u32) -> Result<(), String> {
+    let actual = response.get("frame").and_then(Value::as_u64)
+        .ok_or("bone.info response is missing its numeric frame")?;
+    if actual != u64::from(expected_frame) {
+        return Err(format!("bone.info returned frame {actual}, expected {expected_frame}"));
+    }
+    Ok(())
+}
+
+/// Verify that bone.info returned the exact armature layer explicitly mapped
+/// to the canonical bone input.
+pub fn verify_bone_info_layer(response: &Value, expected_layer: u64) -> Result<(), String> {
+    let armatures = response.get("armatures").and_then(Value::as_array)
+        .ok_or("bone.info response is missing armatures")?;
+    if armatures.len() != 1 {
+        return Err(format!("bone.info layer-scoped response must contain exactly one armature; found {}", armatures.len()));
+    }
+    if armatures[0].get("layer").and_then(Value::as_u64) == Some(expected_layer) {
+        Ok(())
+    } else {
+        Err(format!("bone.info response does not match expected armature layer {expected_layer}"))
+    }
+}
+
+/// Execute the verified read-only bone query. Input collection must pass an
+/// explicit frame; None is retained only for callers intentionally sampling
+/// the host playhead outside a deterministic snapshot.
 pub fn query_bone_info(layer_id: u64, frame: Option<u32>) -> Result<Value, String> {
     let mut params = serde_json::Map::new();
     params.insert("layer".into(), Value::from(layer_id));
@@ -280,6 +307,7 @@ mod tests {
             r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
         ).unwrap();
         let context = crate::input_provider::HostInputContext {
+            frame: 0,
             manual_values: std::collections::BTreeMap::new(),
             bone_layers: std::collections::BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
@@ -298,6 +326,21 @@ mod tests {
         ).unwrap();
         assert!(session.evaluation.composition.outputs.is_empty());
         assert!(session.target_preview.items.is_empty());
+    }
+
+    #[test]
+    fn bone_info_layer_must_match_the_explicit_source_mapping() {
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":4,"bones":[]}]}), 4).is_ok());
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":5,"bones":[]}]}), 4).is_err());
+        assert!(verify_bone_info_layer(&json!({"armatures":[]}), 4).is_err());
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":4},{"layer":5}]}), 4).is_err());
+    }
+
+    #[test]
+    fn bone_info_frame_must_match_the_requested_snapshot_frame() {
+        assert!(verify_bone_info_frame(&json!({"frame": 12, "armatures": []}), 12).is_ok());
+        assert!(verify_bone_info_frame(&json!({"frame": 11, "armatures": []}), 12).is_err());
+        assert!(verify_bone_info_frame(&json!({"armatures": []}), 12).is_err());
     }
 
     #[test]
@@ -408,6 +451,7 @@ mod tests {
         assert_eq!(plan.evaluation.composition.outputs.get(&target_id), Some(&expected));
 
         let host_context = crate::input_provider::HostInputContext {
+            frame: 0,
             manual_values: std::collections::BTreeMap::from([
                 (input_id, TypedValue::scalar(0.5).unwrap()),
             ]),
