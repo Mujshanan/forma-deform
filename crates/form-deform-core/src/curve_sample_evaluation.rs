@@ -78,6 +78,9 @@ pub fn evaluate_curve_samples(
 
     validate_cage_topology(rest_cage, topology)?;
     validate_cage_topology(current_cage, topology)?;
+    if validated.rest_cage_fingerprint() != rest_cage.geometry_fingerprint() {
+        return Err(CurveSampleEvaluationError::StaleRestCageGeometry);
+    }
 
     let regenerated = sample_path_curves(source.payload(), mapped_samples.policy)
         .map_err(CurveSampleEvaluationError::Sampling)?;
@@ -234,6 +237,7 @@ pub enum CurveSampleEvaluationError {
     Mapping(CurveMappingError),
     InvalidMappedSampleSet,
     StaleCageTopology,
+    StaleRestCageGeometry,
     UnsupportedSubface(u8),
     FaceIndexOutOfRange(usize),
     ControlPointIdOrderMismatch { face_index: usize },
@@ -253,6 +257,7 @@ impl std::fmt::Display for CurveSampleEvaluationError {
             Self::Mapping(error) => write!(f, "rest-pose curve mapping failed: {error:?}"),
             Self::InvalidMappedSampleSet => write!(f, "mapped curve samples do not match the stamped source and rest cage"),
             Self::StaleCageTopology => write!(f, "rest or current cage topology identity/revision is stale"),
+            Self::StaleRestCageGeometry => write!(f, "rest cage geometry differs from the geometry used to validate the binding"),
             Self::UnsupportedSubface(index) => write!(f, "unsupported curve-sample subface index {index}"),
             Self::FaceIndexOutOfRange(index) => write!(f, "curve sample face index {index} is out of range"),
             Self::ControlPointIdOrderMismatch { face_index } => write!(f, "curve sample control-point order does not match face {face_index}"),
@@ -466,6 +471,34 @@ mod tests {
         assert_eq!(
             evaluate_curve_samples(&validated, &source, &topology, &rest_geometry, &rest_geometry, &tampered),
             Err(CurveSampleEvaluationError::InvalidMappedSampleSet)
+        );
+    }
+
+
+    #[test]
+    fn same_topology_with_different_rest_geometry_is_rejected() {
+        let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
+        let sample_set = sample_path_curves(
+            source.payload(),
+            crate::curve_sampling::CurveSamplingPolicy::default(),
+        ).unwrap();
+        let mapped = map_curve_samples(
+            &sample_set, &rest_geometry, validated.binding().stamp().outside_policy,
+        ).unwrap();
+
+        let different_rest_state = translated_state(&topology, &rest_state, 0.5, 0.0);
+        let certificate = validate_cage_embedding(&topology, &different_rest_state).unwrap();
+        let different_rest_geometry =
+            ValidatedCageGeometry::new(&topology, &different_rest_state, &certificate).unwrap();
+
+        assert_eq!(different_rest_geometry.topology_id(), rest_geometry.topology_id());
+        assert_eq!(different_rest_geometry.topology_revision(), rest_geometry.topology_revision());
+        assert_ne!(different_rest_geometry.geometry_fingerprint(), rest_geometry.geometry_fingerprint());
+        assert_eq!(
+            evaluate_curve_samples(
+                &validated, &source, &topology, &different_rest_geometry, &rest_geometry, &mapped,
+            ),
+            Err(CurveSampleEvaluationError::StaleRestCageGeometry)
         );
     }
 
