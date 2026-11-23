@@ -216,7 +216,7 @@ The following external tools were evaluated as possible instruments for CQ2 and 
 
 ## CQ2 tool pilot — CI wiring
 
-**Status:** Workflow added; execution pending a GitHub Actions dispatch.
+**Status:** Workflow added; automatic audit-branch execution configured, run result not yet verified.
 
 - Workflow: `.github/workflows/cq2-tool-pilot.yml`
 - Branch: `quality/cq2-tool-pilot`
