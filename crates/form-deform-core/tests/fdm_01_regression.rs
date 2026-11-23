@@ -189,6 +189,7 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
     );
 
     for result in [&replacement, &contribution] {
+        assert_ne!(result.payload(), &original_path);
         result.validate_against(&captured).unwrap();
         assert_eq!(
             result
