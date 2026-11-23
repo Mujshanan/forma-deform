@@ -150,8 +150,8 @@ pub fn evaluate_curve_samples(
 /// point-location and outside-cage semantics used by adaptive curve samples.
 pub(crate) fn evaluate_source_point(
     validated: &ValidatedBindingRecord,
-    source: &GeometrySnapshot,
-    topology: &DeformationTopology,
+    _source: &GeometrySnapshot,
+    _topology: &DeformationTopology,
     rest_cage: &ValidatedCageGeometry,
     current_cage: &ValidatedCageGeometry,
     outside_policy: crate::binding::OutsideCagePolicy,
@@ -161,11 +161,6 @@ pub(crate) fn evaluate_source_point(
     use crate::point_location::{locate_point, PointLocationOutcome};
     use crate::curve_sampling::{CurveSampleMapping, MappedCurveSample};
 
-    source.validate_envelope().map_err(CurveSampleEvaluationError::InvalidSourceSnapshot)?;
-    validated.binding().stamp().validate_freshness(source, topology)
-        .map_err(CurveSampleEvaluationError::Binding)?;
-    validate_cage_topology(rest_cage, topology)?;
-    validate_cage_topology(current_cage, topology)?;
     if outside_policy != validated.binding().stamp().outside_policy
         || validated.rest_cage_fingerprint() != rest_cage.geometry_fingerprint()
     { return Err(CurveSampleEvaluationError::StaleRestCageGeometry); }
