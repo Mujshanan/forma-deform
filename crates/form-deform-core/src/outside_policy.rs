@@ -299,11 +299,21 @@ fn inverse_bilinear_extrapolated(
         let axis=[c[0]+d[0]*u,c[1]+d[1]*u];
         let denominator=dot(axis,axis);
         if !denominator.is_finite() || denominator<=f64::EPSILON*64.0*scale*scale {
-            continue;
+            return Err(OutsideCageError::InvalidBoundaryGeometry);
         }
         let residual=[q[0]-b[0]*u,q[1]-b[1]*u];
         let v=dot(residual,axis)/denominator;
         if !v.is_finite() { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        // Reject a locally singular inverse even if reconstruction happens to
+        // produce a small residual at floating-point precision.
+        let du=[b[0]+d[0]*v,b[1]+d[1]*v];
+        let jacobian_determinant=cross(du,axis);
+        let jacobian_scale=(dot(du,du)*denominator).sqrt();
+        if !jacobian_determinant.is_finite() || !jacobian_scale.is_finite()
+            || jacobian_scale<=0.0
+            || jacobian_determinant.abs()<=f64::EPSILON*64.0*jacobian_scale {
+            return Err(OutsideCageError::InvalidBoundaryGeometry);
+        }
         let reconstructed=[
             a[0]+b[0]*u+c[0]*v+d[0]*u*v,
             a[1]+b[1]*u+c[1]*v+d[1]*u*v,
