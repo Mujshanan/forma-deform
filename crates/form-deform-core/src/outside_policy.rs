@@ -372,7 +372,7 @@ mod tests {
     use crate::topology::{
         ControlPointState, ControlStateRevision, DeformationControlState,
         DeformationTopology, DeformationTopologyId, DeformationTopologyRevision,
-        IrregularCageTopology, TopologyFace,
+        IrregularCageTopology, TopologyFace, TopologyView,
     };
 
     fn id(value:u64)->ControlPointId { ControlPointId::new(value).unwrap() }
