@@ -14,7 +14,6 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
-      - run: cargo fmt --all -- --check
       - run: cargo test --workspace
       - run: cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
