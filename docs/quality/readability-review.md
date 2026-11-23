@@ -1,6 +1,6 @@
 # CQ2 — Readability and Code Consistency Review
 
-**Status:** Initial source inspection; not a complete repository-wide audit.  
+**Status:** Expanded source review complete; remediation proposal pending.  
 **Code reference:** `main` at `e7c7fef4e82345af311370426450146a4795523d`  
 **Audit branch:** `quality/cq0-audit-baseline`  
 **Review date:** 2026-11-23
