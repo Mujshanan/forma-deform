@@ -6,6 +6,7 @@
 //! is validated by the regular-lattice and irregular-cage implementation steps.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::num::NonZeroU64;
 
 /// Stable FDM-owned identity. Never use a vector index as a control-point ID.
@@ -207,6 +208,7 @@ impl IrregularCageTopology {
             return Err(TopologyContractError::EmptyCage);
         }
         validate_unique_ids(&self.control_point_ids)?;
+        let known_ids: HashSet<_> = self.control_point_ids.iter().copied().collect();
         for face in &self.faces {
             let ids = face.control_point_ids();
             let mut local = ids.to_vec();
@@ -216,11 +218,8 @@ impl IrregularCageTopology {
                 return Err(TopologyContractError::RepeatedVertexInFace);
             }
             for id in ids {
-                if self.control_point_ids.binary_search(id).is_err() {
-                    // The public list need not be sorted; use a complete membership check.
-                    if !self.control_point_ids.contains(id) {
-                        return Err(TopologyContractError::FaceReferencesUnknownPoint);
-                    }
+                if !known_ids.contains(id) {
+                    return Err(TopologyContractError::FaceReferencesUnknownPoint);
                 }
             }
         }
