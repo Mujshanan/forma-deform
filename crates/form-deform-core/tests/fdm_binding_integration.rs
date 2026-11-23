@@ -1,25 +1,25 @@
+use form_deform_core::binding::ValidatedCageGeometry;
 use form_deform_core::binding::{
     BindingRecord, BindingStamp, FeatureBindingEntry, MappingPolicy, OutsideCagePolicy,
     SourceFeatureBinding,
 };
 use form_deform_core::binding_persistence::{
-    load_validated_binding, persist_binding, BindingDiagnostic, BindingHostAdapter,
-    BindingPayloadRevision, BindingSlotSnapshot, BindingWriteConflict, BindingWriteOutcome,
-    HostBindingContext, LoadBindingError, PersistBindingError, PersistedBinding,
+    BindingDiagnostic, BindingHostAdapter, BindingPayloadRevision, BindingSlotSnapshot,
+    BindingWriteConflict, BindingWriteOutcome, HostBindingContext, LoadBindingError,
+    PersistBindingError, PersistedBinding, load_validated_binding, persist_binding,
+};
+use form_deform_core::curve_sampling::{
+    CurveMappingError, CurveSampleMapping, CurveSamplingPolicy, map_curve_samples,
+    sample_path_curves,
 };
 use form_deform_core::embedding::validate_cage_embedding;
-use form_deform_core::binding::ValidatedCageGeometry;
-use form_deform_core::curve_sampling::{
-    map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
-    CurveSamplingPolicy,
-};
 use form_deform_core::host_contract::{
     AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
     CoordinateSpaceKind, GeometryRevision, GeometrySnapshot, HostDocumentId, HostNamespace,
     HostTargetId, HostTargetKind, HostTargetRef, TopologyRevision,
 };
 use form_deform_core::path2d::{
-    Path2D, PathCommand, Point2, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION,
+    PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION, Path2D, PathCommand, Point2,
 };
 use form_deform_core::topology::{
     ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
@@ -191,19 +191,16 @@ impl BindingHostAdapter for MemoryAdapter {
         payload: String,
     ) -> Result<BindingWriteOutcome, Self::Error> {
         if self.change_source_before_write {
-            self.context.snapshot = snapshot(
-                target(1),
-                2,
-                1,
-                self.context.snapshot.payload().clone(),
-            );
+            self.context.snapshot =
+                snapshot(target(1), 2, 1, self.context.snapshot.payload().clone());
             self.change_source_before_write = false;
         }
         if self.change_binding_before_write {
             self.slot = BindingSlotSnapshot::new(
                 BindingPayloadRevision::new(2),
                 Some("competing host write".into()),
-            ).unwrap();
+            )
+            .unwrap();
             self.change_binding_before_write = false;
         }
         if self.delete_binding_before_write {
@@ -220,13 +217,13 @@ impl BindingHostAdapter for MemoryAdapter {
             }));
         }
 
-        let next_revision = expected_binding_revision.value()
+        let next_revision = expected_binding_revision
+            .value()
             .checked_add(1)
             .ok_or("binding revision overflow")?;
-        self.slot = BindingSlotSnapshot::new(
-            BindingPayloadRevision::new(next_revision),
-            Some(payload),
-        ).map_err(|_| "invalid binding slot state")?;
+        self.slot =
+            BindingSlotSnapshot::new(BindingPayloadRevision::new(next_revision), Some(payload))
+                .map_err(|_| "invalid binding slot state")?;
         Ok(BindingWriteOutcome::Written)
     }
 }
@@ -238,11 +235,7 @@ fn binding_json_round_trip_revalidates_against_current_certified_geometry() {
     let decoded = PersistedBinding::from_json(&json).unwrap();
 
     let validated = decoded
-        .validate_against(
-            &context.snapshot,
-            &context.topology,
-            &context.control_state,
-        )
+        .validate_against(&context.snapshot, &context.topology, &context.control_state)
         .unwrap();
 
     assert_eq!(validated.binding(), persisted.binding());
@@ -253,27 +246,13 @@ fn binding_json_round_trip_revalidates_against_current_certified_geometry() {
 fn source_revision_topology_revision_and_fingerprint_changes_are_stale() {
     let (context, persisted) = fixture();
 
-    let changed_geometry = snapshot(
-        target(1),
-        2,
-        1,
-        context.snapshot.payload().clone(),
-    );
+    let changed_geometry = snapshot(target(1), 2, 1, context.snapshot.payload().clone());
     assert!(matches!(
-        persisted.validate_against(
-            &changed_geometry,
-            &context.topology,
-            &context.control_state
-        ),
+        persisted.validate_against(&changed_geometry, &context.topology, &context.control_state),
         Err(BindingDiagnostic::StaleSourceGeometryRevision)
     ));
 
-    let changed_topology_revision = snapshot(
-        target(1),
-        1,
-        2,
-        context.snapshot.payload().clone(),
-    );
+    let changed_topology_revision = snapshot(target(1), 1, 2, context.snapshot.payload().clone());
     assert!(matches!(
         persisted.validate_against(
             &changed_topology_revision,
@@ -326,11 +305,7 @@ fn invalid_current_cage_embedding_is_rejected_before_binding_use() {
 
     assert!(validate_cage_embedding(&context.topology, &invalid_state).is_err());
     assert!(matches!(
-        persisted.validate_against(
-            &context.snapshot,
-            &context.topology,
-            &invalid_state
-        ),
+        persisted.validate_against(&context.snapshot, &context.topology, &invalid_state),
         Err(BindingDiagnostic::InvalidCageEmbedding(_))
     ));
 }
@@ -362,7 +337,9 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     let wrong_generation = target(2);
     assert!(matches!(
         persist_binding(&mut adapter, &wrong_generation, &persisted),
-        Err(PersistBindingError::Diagnostic(BindingDiagnostic::StaleTarget))
+        Err(PersistBindingError::Diagnostic(
+            BindingDiagnostic::StaleTarget
+        ))
     ));
     assert!(matches!(
         load_validated_binding(&adapter, &wrong_generation),
@@ -370,14 +347,10 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     ));
 }
 
-
 #[test]
 fn binding_slot_rejects_payload_with_never_used_revision() {
     assert!(matches!(
-        BindingSlotSnapshot::new(
-            BindingPayloadRevision::new(0),
-            Some("payload".into())
-        ),
+        BindingSlotSnapshot::new(BindingPayloadRevision::new(0), Some("payload".into())),
         Err(form_deform_core::binding_persistence::BindingPersistenceError::InvalidBindingRevision)
     ));
 }
@@ -401,7 +374,10 @@ fn path2d_persistence_rejects_source_edit_between_validation_and_commit() {
             binding_revision_changed: false,
         }))
     ));
-    assert!(adapter.slot.payload().is_none(), "stale write must not replace the slot");
+    assert!(
+        adapter.slot.payload().is_none(),
+        "stale write must not replace the slot"
+    );
 }
 
 #[test]
@@ -469,24 +445,21 @@ fn adaptive_curve_samples_map_through_certified_cage_without_replacing_path2d() 
     assert_eq!(samples.segments[0].samples.first().unwrap().t, 0.0);
     assert_eq!(samples.segments[0].samples.last().unwrap().t, 1.0);
 
-    let certificate =
-        validate_cage_embedding(&context.topology, &context.control_state).unwrap();
+    let certificate = validate_cage_embedding(&context.topology, &context.control_state).unwrap();
     let geometry =
         ValidatedCageGeometry::new(&context.topology, &context.control_state, &certificate)
             .unwrap();
-    let mapped = map_curve_samples(
-        &samples,
-        &geometry,
-        OutsideCagePolicy::UnboundZeroInfluence,
-    )
-    .unwrap();
+    let mapped =
+        map_curve_samples(&samples, &geometry, OutsideCagePolicy::UnboundZeroInfluence).unwrap();
 
     assert_eq!(mapped.policy_version, samples.policy_version);
     assert_eq!(mapped.samples.len(), samples.total_samples);
-    assert!(mapped
-        .samples
-        .iter()
-        .all(|sample| matches!(sample.mapping, CurveSampleMapping::Mapped { .. })));
+    assert!(
+        mapped
+            .samples
+            .iter()
+            .all(|sample| matches!(sample.mapping, CurveSampleMapping::Mapped { .. }))
+    );
     assert_eq!(context.snapshot.payload(), &source_path);
 
     let mut invalid_samples = samples.clone();
