@@ -203,9 +203,7 @@ fn compose_weighted_blend(
     Ok(Some(value))
 }
 
-fn eligible_weighted_contributions<'a>(
-    items: &[&'a Contribution],
-) -> Vec<&'a Contribution> {
+fn eligible_weighted_contributions<'a>(items: &[&'a Contribution]) -> Vec<&'a Contribution> {
     items
         .iter()
         .copied()
@@ -245,10 +243,7 @@ fn validate_blend_compatibility(
     Ok(())
 }
 
-fn blend_scalar(
-    eligible: &[&Contribution],
-    total_weight: f64,
-) -> Result<TypedValue, CoreError> {
+fn blend_scalar(eligible: &[&Contribution], total_weight: f64) -> Result<TypedValue, CoreError> {
     let mut sum = 0.0;
     for item in eligible {
         sum += item.value.as_scalar().expect("type checked")
@@ -257,10 +252,7 @@ fn blend_scalar(
     Ok(TypedValue::scalar(sum)?)
 }
 
-fn blend_vector2(
-    eligible: &[&Contribution],
-    total_weight: f64,
-) -> Result<TypedValue, CoreError> {
+fn blend_vector2(eligible: &[&Contribution], total_weight: f64) -> Result<TypedValue, CoreError> {
     let mut x = 0.0;
     let mut y = 0.0;
     for item in eligible {
