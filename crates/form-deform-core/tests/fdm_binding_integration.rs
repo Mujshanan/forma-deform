@@ -203,11 +203,11 @@ impl BindingHostAdapter for MemoryAdapter {
             self.slot = BindingSlotSnapshot::new(
                 BindingPayloadRevision::new(2),
                 Some("competing host write".into()),
-            );
+            ).unwrap();
             self.change_binding_before_write = false;
         }
         if self.delete_binding_before_write {
-            self.slot = BindingSlotSnapshot::new(BindingPayloadRevision::new(3), None);
+            self.slot = BindingSlotSnapshot::new(BindingPayloadRevision::new(3), None).unwrap();
             self.delete_binding_before_write = false;
         }
 
@@ -226,7 +226,7 @@ impl BindingHostAdapter for MemoryAdapter {
         self.slot = BindingSlotSnapshot::new(
             BindingPayloadRevision::new(next_revision),
             Some(payload),
-        );
+        ).map_err(|_| "invalid binding slot state")?;
         Ok(BindingWriteOutcome::Written)
     }
 }
@@ -341,7 +341,7 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None).unwrap(),
         change_source_before_write: false,
         change_binding_before_write: false,
         delete_binding_before_write: false,
