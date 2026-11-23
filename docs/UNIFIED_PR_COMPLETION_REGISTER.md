@@ -197,4 +197,6 @@ This PR is the single canonical review entry point. It must contain:
 
 This register was assembled from GitHub PR metadata and PR descriptions available on 2026-11-23, plus the previously recorded repository/branch audit. It is not a full source-diff review of all 82 PRs, does not establish that every listed commit is present in the default branch, and does not independently rerun historical CI. The “missing work” entries are acceptance gaps inferred from each PR's declared scope and limitations. Before any code cherry-pick or merge, inspect exact file diffs, ancestry, changed-file overlap, CI status and commit inclusion.
 
-**Current result:** one canonical register branch created. No code merged, no old PR closed, no S0 closure, no runtime implementation authorized, and no tests/CI claimed by this documentation change.
+**Administrative consolidation update (2026-11-23):** replacement PR #83 is open as the sole open PR. All previously open PRs (#3–#8, #12–#16, #19–#47, #49, #53, #57–#80, #81 and #82) have been closed without merging. Their head branches were retained; no branch deletion or force-push was performed. Previously merged PRs remain merged and previously closed PRs remain closed. This administrative closure does not integrate their commits into `main` or mark their work complete.
+
+**Current result:** one canonical review entry point (#83) is open. No feature/runtime code was merged by this consolidation. S0 remains OPEN; no runtime implementation is authorized; no tests or CI are claimed by this documentation change.
