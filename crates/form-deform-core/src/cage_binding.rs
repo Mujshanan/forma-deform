@@ -147,11 +147,11 @@ impl CageBinding {
         for binding in &self.points {
             let mut x = 0.0;
             let mut y = 0.0;
-            for index in 0..3 {
-                let position = positions.get(&binding.cage_vertex_ids[index])
+            for (vertex_id, weight) in binding.cage_vertex_ids.iter().zip(binding.barycentric.iter()) {
+                let position = positions.get(vertex_id)
                     .ok_or(CageBindingError::InconsistentCageVertexSet)?;
-                x += position.x() * binding.barycentric[index];
-                y += position.y() * binding.barycentric[index];
+                x += position.x() * weight;
+                y += position.y() * weight;
             }
             let position = Point2::new(x, y)
                 .map_err(|_| CageBindingError::NonFiniteEvaluation { point: binding.id })?;
