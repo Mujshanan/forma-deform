@@ -1,80 +1,80 @@
 # Forma Deform
 
-**Forma Deform** is AniCraft's proposed deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
+**Forma Deform** is AniCraft's deformation and rig-control subsystem. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
-The repository currently contains an experimental TypeScript rectangle/timeline demo and a Rust/WASM AniCraft command-plugin suite. Treat those as separate development tracks: the long-term product is the native AniCraft tool, while the current command plugins are prototypes and integration probes.
+The intended product is a native AniCraft tool/workspace. The repository contains Rust deformation/controller cores and historical AniCraft command-plugin adapters. The default `main` branch is not yet the complete native integration: active implementation, audit, and retirement work is tracked in separate pull-request chains.
 
-## What Forma Deform owns
+## Product boundary
 
-- Deformation specifications and pure deformation mathematics.
-- Smart Controller definitions, input normalization, mapping, easing, validation, and preview.
-- Deformation targets and explicit target bindings.
-- Pin, vector, lattice, and mesh deformation algorithms where AniCraft's native capabilities are insufficient.
-- Corrective poses, blend-shape contributions, and reusable deformation presets.
-- Deterministic, testable evaluation of its own controller and deformation models.
+### Forma Deform owns
 
-## What AniCraft owns
+- Pure deformation algorithms and deformation-specific data structures.
+- Smart Controller definitions, input normalization, mapping, easing, validation, and on-demand preview.
+- Deformation target abstractions and explicit target-binding specifications.
+- Corrective poses, deformation contributions, and reusable deformation presets.
+- Deterministic evaluation of its own models against explicit host inputs.
 
-- Canonical bone identity, bone transforms, coordinate spaces, and the authoritative rig model.
-- Asset Warp mesh/pin storage and rendering.
-- Timeline, playhead, keyframes, document persistence, undo/redo, command registration, plugin lifecycle, evaluation scheduling, cache invalidation, and export.
-- Host-side document integration needed for durable plugin-owned bindings.
+### AniCraft owns
 
-Forma Deform consumes host data through explicit contracts. It must not introduce a second document model, timeline, renderer, undo stack, or plugin framework.
+- Canonical document, element and bone identity; rig transforms and coordinate spaces.
+- Native Asset Warp storage, geometry editing and rendering.
+- Timeline, playhead, keyframes, document persistence, undo/redo and export.
+- Command registration, plugin lifecycle, evaluation scheduling, cache invalidation and host transactions.
 
-## UI proposal
+Forma Deform must consume host data through explicit contracts. It must not introduce a second document model, timeline, renderer, undo stack, cache system, or plugin framework.
 
-Forma Deform should appear as a native AniCraft tool/workspace, not as a separate application window.
+## Accepted integration constraints
 
-1. **Stage (center):** the selected artwork with deformation mesh, pins, handles, neutral/rest positions, selected target outlines, and preview overlays.
-2. **Tool strip (left):** Select Target, Pin, Handle, Soft Selection, Bind Controller, and Preview. Show only tools supported by the active target type.
-3. **Properties panel (right):**
-   - Target and binding inspector.
-   - Neutral input, source bone/controller, range, normalization, easing, and mapping.
-   - Per-target gains and axis constraints.
-   - Validation messages and a read-only evaluated preview.
-4. **Timeline (bottom):** use AniCraft's existing timeline and playhead. Do not create a second timeline. V1 preview is explicitly on demand; it does not claim continuous playback evaluation.
-5. **Controller preview:** show input value, normalized value, selected mapping segment/keyform, output value, and target displacement. Preview must be deterministic and must not mutate authored geometry.
-6. **Commands:** expose bind, unbind, capture neutral, preview, and apply/bake as explicit AniCraft commands. Destructive or persistent changes must participate in AniCraft undo.
+- Smart Controller binding evaluation and Form Deform pin evaluation remain independent (CCC-01.5). Do not combine their outputs implicitly.
+- Native Asset Warp remains AniCraft-owned; FDM must not replace it without a demonstrated capability gap and an explicit decision.
+- Preview is read-only and on demand. It does not imply continuous playback evaluation.
+- Apply/bake must be an explicit host command and participate in AniCraft undo.
+- Durable plugin-owned bindings require a verified AniCraft document-extension/persistence contract.
+- No runtime implementation, host change, PR merge, or release is authorized merely by this roadmap.
 
-### Conceptual layout
+## Proposed native-tool workspace
 
-```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ AniCraft menu / tool context / command palette                           │
-├──────────────┬───────────────────────────────────────┬───────────────────┤
-│ Tool strip   │ Stage                                 │ Properties        │
-│              │                                       │                   │
-│ Select       │       artwork + mesh                  │ Target            │
-│ Pin          │       pins / handles                  │ Controller        │
-│ Soft select  │       neutral + preview overlay       │ Mapping           │
-│ Bind         │                                       │ Diagnostics       │
-│ Preview      │                                       │ Preview values    │
-├──────────────┴───────────────────────────────────────┴───────────────────┤
-│ Existing AniCraft timeline / layers / playhead                           │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+1. **Stage:** selected artwork with supported deformation mesh, pins, handles, neutral/rest markers and preview overlays.
+2. **Tool strip:** target selection, pin/handle tools, soft selection, binding and preview; expose only tools supported by the active target.
+3. **Properties:** target/binding inspector, source input, neutral/range, normalization, easing, mapping, per-target gains, diagnostics and read-only preview.
+4. **Timeline:** use AniCraft's existing timeline and playhead; never create a second timeline.
+5. **Commands:** bind, unbind, capture neutral, preview and explicit apply/bake.
 
-This is a conceptual arrangement using AniCraft's existing dockable panels and stage. It is not a commitment to new host UI infrastructure.
+This is a workspace proposal using AniCraft's existing UI infrastructure, not a commitment to new host infrastructure. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
 
-## Current prototype status and limitations
+## Current repository status — 23 November 2026
 
-The current command-plugin suite contains:
+This status distinguishes the default branch from work on separate PR branches.
 
-- **Bone Query:** read-only inspection of armatures, bones, poses, spring state, joint translation, and skin weights.
-- **Form Deform:** deterministic bone-angle-driven Asset Warp pin positioning from an authored neutral position and per-degree gains.
-- **Smart Controller:** neutral-centered input mapping, easing, and preview output.
+| Area | Current evidence | Status |
+|---|---|---|
+| Default-branch baseline | Latest recorded `main` commit: `e182e447` — Flare source-level reuse audit | Current source/document baseline |
+| Legacy Bun/TypeScript demo retirement | PR [#52](https://github.com/Mujshanan/forma-deform/pull/52) merged into the LEG-01.4 branch; PR [#54](https://github.com/Mujshanan/forma-deform/pull/54) carries retirement into the FDM-04 branch chain | Not yet represented as a merge to default `main` |
+| FDM-05.4 output-contract hardening | PR [#60](https://github.com/Mujshanan/forma-deform/pull/60) | Open; do not treat as merged |
+| Workspace formatting remediation | PR [#68](https://github.com/Mujshanan/forma-deform/pull/68) records a 69-file baseline only | No formatting sweep performed by that PR |
+| Native host boundary and S0 audit | PRs [#73–#80](https://github.com/Mujshanan/forma-deform/pulls) | Open, documentation/audit/planning work; S0 remains OPEN |
 
-The current command-plugin API supports on-demand queries and explicit undoable pin edits. It does not currently establish arbitrary durable plugin metadata or a continuous custom playback evaluator. Do not describe the prototype as providing live Smart Controller playback. Persistent bindings and native evaluation require explicit AniCraft host support.
+The latest S0 evidence addendum is PR #80. It adds source-located evidence for the 36 previously missed inline callback entries, first-order effect classification, a first-pass graph for the 131 `mutates=false` commands, and a verified AniCraft archive/source baseline. This is not formal S0 closure: callback transitive-effect coverage, compiler-backed consumer verification and successful host CI evidence remain outstanding. Do not mark S0 closed.
 
-Smart Controller evaluation and Form Deform pin evaluation remain independent. Do not implicitly combine their outputs. Multi-source composition requires a separately approved semantic design.
+The AniCraft source baseline used by the current host audit is pinned to `2df7775907d1458ce653e7e6314ec8a5d7d565f5`. Reconfirm that baseline before relying on the audit for implementation.
+
+## Prototype capabilities and limitations
+
+The Rust workspace includes deformation and controller cores, together with historical command-plugin adapters for:
+
+- **Bone Query:** diagnostic/read-only rig inspection.
+- **Form Deform:** deterministic bone-angle-driven Asset Warp pin positioning from authored neutral positions and per-degree gains.
+- **Smart Controller:** neutral-centered input mapping, easing and on-demand preview.
+
+These adapters are integration probes, not a completed native authoring workflow. Do not claim live Smart Controller playback, durable plugin-owned binding persistence, or native FDM host integration until the corresponding host contracts and tests exist. Adapter retirement remains gated on verified native parity and consumer migration.
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the feature allocation matrix, external code-reuse audit, integration boundaries, milestones, and acceptance criteria. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) for the detailed native-tool UI/UX specification, workspace layout, interaction flows, preview states, and acceptance criteria.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the feature allocation matrix, code-reuse audit, current PR/evidence status, integration boundaries, milestones and acceptance criteria.
 
-Additional technical references:
+Additional references:
 
+- [Native-tool UI/UX design](docs/UI_UX_DESIGN.md)
 - [Plugin overview](plugins/README.md)
 - [Build and smoke-test guide](plugins/INSTALL.md)
 - [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md)
@@ -83,7 +83,7 @@ Additional technical references:
 
 ## Verification
 
-For the Rust workspace and WASM plugins:
+Use the commands appropriate to the checked-out branch and its current workspace. For the Rust workspace and WASM adapters:
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -94,4 +94,4 @@ cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-pl
 cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
 ```
 
-The separate TypeScript demo retains its Bun-based scripts. See the package scripts before running it.
+Do not infer that these commands passed on a branch from a result reported for a different commit or PR. Check the exact head SHA and workflow run. The legacy Bun demo/toolchain retirement is present on its dedicated PR branch chain; the default branch must not be described as retired until that work is integrated there.
