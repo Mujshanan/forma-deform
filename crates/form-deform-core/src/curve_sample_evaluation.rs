@@ -7,7 +7,7 @@ use crate::binding::{BindingError, BindingStamp, FaceCoordinates, ValidatedCageG
 use crate::binding_persistence::ValidatedBindingRecord;
 use crate::curve_sampling::{
     map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
-    CurveSamplingError, MappedCurveSample, MappedCurveSampleSet,
+    CurveSamplingError, MappedCurveSampleSet,
 };
 use crate::host_contract::{GeometrySnapshot, GeometrySnapshotStamp};
 use crate::path2d::Point2;
@@ -588,8 +588,6 @@ mod tests {
             Err(CurveSampleEvaluationError::Binding(_))
         ));
     }
-
-    #[test]
 
     #[test]
     fn output_refinement_detects_a_curve_crossing_the_shared_triangle_edge() {
