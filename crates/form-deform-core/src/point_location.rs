@@ -22,6 +22,15 @@ pub struct LocatedFace {
     pub coordinates: FaceCoordinates,
 }
 
+/// Stable policy for choosing among valid faces when a point lies on shared topology.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PointLocationTieBreak {
+    /// Preserve the Path2D binding policy: lowest deterministic topology face index.
+    LowestFaceIndex,
+    /// Generic point attachments choose the lowest sorted stable vertex-ID support.
+    LowestStableVertexIds,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PointLocationOutcome {
     Located(LocatedFace),
@@ -94,6 +103,15 @@ pub fn locate_point(
     point: Point2,
     geometry: &ValidatedCageGeometry,
 ) -> Result<PointLocationOutcome, PointLocationError> {
+    locate_point_with_tie_break(point, geometry, PointLocationTieBreak::LowestFaceIndex)
+}
+
+/// Locate a point using an explicit shared-boundary ownership policy.
+pub fn locate_point_with_tie_break(
+    point: Point2,
+    geometry: &ValidatedCageGeometry,
+    tie_break: PointLocationTieBreak,
+) -> Result<PointLocationOutcome, PointLocationError> {
     let mut candidates = Vec::new();
     for face_index in 0..geometry.face_count() {
         let face = geometry.face(face_index).ok_or(PointLocationError::InvalidFaceGeometry(face_index))?;
@@ -125,7 +143,21 @@ pub fn locate_point(
     }
 
     if candidates.is_empty() { return Ok(PointLocationOutcome::OutsideCage); }
-    candidates.sort_by_key(|candidate| candidate.located.face_index);
+    match tie_break {
+        PointLocationTieBreak::LowestFaceIndex => {
+            candidates.sort_by_key(|candidate| candidate.located.face_index);
+        }
+        PointLocationTieBreak::LowestStableVertexIds => {
+            candidates.sort_by(|left, right| {
+                let mut left_ids = left.located.control_point_ids.clone();
+                let mut right_ids = right.located.control_point_ids.clone();
+                left_ids.sort_unstable();
+                right_ids.sort_unstable();
+                left_ids.cmp(&right_ids)
+                    .then_with(|| left.located.face_index.cmp(&right.located.face_index))
+            });
+        }
+    }
 
     for first in 0..candidates.len() {
         for second in (first + 1)..candidates.len() {
