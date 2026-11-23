@@ -413,7 +413,7 @@ mod tests {
         assert_eq!(boundary.point,point(0.5,0.0));
         assert!((boundary.distance-0.5).abs()<1.0e-12);
         assert_eq!(offset,[0.0,-0.5]);
-        assert_eq!(coordinates,FaceCoordinates::TriangleBarycentric{weights:[0.75,0.25,-0.25]});
+        assert_eq!(coordinates,FaceCoordinates::TriangleBarycentric{weights:[1.0,0.25,-0.25]});
     }
 
     #[test]
