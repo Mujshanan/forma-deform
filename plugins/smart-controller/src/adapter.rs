@@ -131,7 +131,6 @@ pub enum BoneAnglePolicy {
     KeyedPosePlusSpringSwing,
 }
 
-/// Execute the verified, read-only bone query for a layer.
 /// Verify that a bone.info payload is for the exact requested zero-based frame.
 pub fn verify_bone_info_frame(response: &Value, expected_frame: u32) -> Result<(), String> {
     let actual = response.get("frame").and_then(Value::as_u64)
@@ -140,6 +139,20 @@ pub fn verify_bone_info_frame(response: &Value, expected_frame: u32) -> Result<(
         return Err(format!("bone.info returned frame {actual}, expected {expected_frame}"));
     }
     Ok(())
+}
+
+/// Verify that bone.info returned the exact armature layer explicitly mapped
+/// to the canonical bone input.
+pub fn verify_bone_info_layer(response: &Value, expected_layer: u64) -> Result<(), String> {
+    let armatures = response.get("armatures").and_then(Value::as_array)
+        .ok_or("bone.info response is missing armatures")?;
+    if armatures.iter().any(|armature| {
+        armature.get("layer").and_then(Value::as_u64) == Some(expected_layer)
+    }) {
+        Ok(())
+    } else {
+        Err(format!("bone.info response does not contain expected armature layer {expected_layer}"))
+    }
 }
 
 /// Execute the verified read-only bone query. Input collection must pass an
@@ -312,6 +325,13 @@ mod tests {
         ).unwrap();
         assert!(session.evaluation.composition.outputs.is_empty());
         assert!(session.target_preview.items.is_empty());
+    }
+
+    #[test]
+    fn bone_info_layer_must_match_the_explicit_source_mapping() {
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":4,"bones":[]}]}), 4).is_ok());
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":5,"bones":[]}]}), 4).is_err());
+        assert!(verify_bone_info_layer(&json!({"armatures":[]}), 4).is_err());
     }
 
     #[test]
