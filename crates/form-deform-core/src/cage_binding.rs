@@ -208,6 +208,11 @@ mod tests {
 
     fn point(x: f64, y: f64) -> Point2 { Point2::new(x, y).unwrap() }
 
+    fn assert_point_near(actual: Point2, expected: Point2) {
+        assert!((actual.x() - expected.x()).abs() <= 1.0e-12);
+        assert!((actual.y() - expected.y()).abs() <= 1.0e-12);
+    }
+
     fn square(offset_x: f64) -> CageEmbedding {
         CageEmbedding {
             vertices: vec![
@@ -227,7 +232,7 @@ mod tests {
     fn bind_and_evaluate_preserves_point_at_rest() {
         let cage = square(0.0);
         let binding = CageBinding::bind(&cage, &[BindingPoint { id: 1, position: point(2.0, 3.0) }]).unwrap();
-        assert_eq!(binding.evaluate(&cage).unwrap()[0].position, point(2.0, 3.0));
+        assert_point_near(binding.evaluate(&cage).unwrap()[0].position, point(2.0, 3.0));
     }
 
     #[test]
@@ -235,7 +240,7 @@ mod tests {
         let rest = square(0.0);
         let binding = CageBinding::bind(&rest, &[BindingPoint { id: 1, position: point(2.0, 3.0) }]).unwrap();
         let deformed = square(5.0);
-        assert_eq!(binding.evaluate(&deformed).unwrap()[0].position, point(7.0, 3.0));
+        assert_point_near(binding.evaluate(&deformed).unwrap()[0].position, point(7.0, 3.0));
     }
 
     #[test]
