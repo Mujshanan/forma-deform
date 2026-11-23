@@ -55,4 +55,4 @@ The current cage must pass the existing global embedding validator and have exac
 
 ## Follow-on work
 
-After this core contract is validated, add document persistence for binding records and revision/fingerprint stamps, then connect host geometry extraction and evaluation scheduling. Persistence must record enough cage identity and source geometry revision information to detect stale bindings rather than silently reusing them.
+Persistent binding records, source revision/fingerprint stamps, and stale-binding decisions are implemented in FDM-02.8 (`docs/FDM_02_8_PERSISTENT_CAGE_BINDINGS.md`). The remaining integration work is host geometry extraction, native document save/load and undo/redo, plus evaluation scheduling.
