@@ -475,4 +475,64 @@ mod tests {
         assert_eq!(start, point(0.25, 0.25));
         assert_eq!(result.unbound_features(), 1);
     }
+    #[test]
+    fn quad_bilinear_binding_uses_all_four_current_control_points() {
+        let ids = (1..=4).map(|value| ControlPointId::new(value).unwrap()).collect::<Vec<_>>();
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: DeformationTopologyId::new(2).unwrap(),
+            revision: DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids: ids.clone(),
+            faces: vec![TopologyFace::Quad([ids[0], ids[1], ids[2], ids[3]])],
+        });
+        let make_state = |revision, positions: [(f64, f64); 4]| DeformationControlState {
+            topology_id: topology.topology_id(),
+            topology_revision: topology.topology_revision(),
+            revision: ControlStateRevision::new(revision).unwrap(),
+            points: ids.iter().copied().zip(positions).map(|(id, (x, y))| ControlPointState {
+                id,
+                position: ControlPointPosition::new(x, y).unwrap(),
+                pinned: false,
+            }).collect(),
+        };
+        let rest_state = make_state(1, [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]);
+        let source_path = Path2D::new(vec![PathCommand::MoveTo(point(0.5, 0.5))]).unwrap();
+        let source = snapshot(source_path);
+        let rest_certificate = validate_cage_embedding(&topology, &rest_state).unwrap();
+        let rest_geometry = ValidatedCageGeometry::new(&topology, &rest_state, &rest_certificate).unwrap();
+        let feature = enumerate_source_features(source.payload()).unwrap()[0];
+        let PointLocationOutcome::Located(location) = locate_point(feature.point, &rest_geometry).unwrap() else {
+            panic!("expected point inside quad");
+        };
+        assert!(matches!(location.coordinates, FaceCoordinates::QuadBilinear { .. }));
+        let stamp = BindingStamp::from_snapshot(
+            &source,
+            &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence,
+        ).unwrap();
+        let record = BindingRecord::new(stamp, vec![FeatureBindingEntry {
+            locator: feature.locator,
+            status: SourceFeatureBinding::Mapped(crate::binding::MappingRecord {
+                locator: feature.locator,
+                face_index: 0,
+                subface_index: 0,
+                control_point_ids: ids,
+                coordinates: location.coordinates,
+            }),
+        }]);
+        let persisted = PersistedBinding::new(record).unwrap();
+        let validated = persisted.validate_against(&source, &topology, &rest_state).unwrap();
+
+        let current_state = make_state(2, [(0.0, 0.0), (4.0, 0.0), (3.0, 3.0), (0.0, 2.0)]);
+        let current_certificate = validate_cage_embedding(&topology, &current_state).unwrap();
+        let current_geometry = ValidatedCageGeometry::new(&topology, &current_state, &current_certificate).unwrap();
+        let evaluated = evaluate_binding(&validated, &source, &topology, &current_geometry).unwrap();
+
+        let PathCommand::MoveTo(result) = evaluated.geometry().commands()[0] else {
+            panic!("expected evaluated MoveTo");
+        };
+        assert!((result.x() - 0.9375).abs() < 1.0e-9);
+        assert!((result.y() - 0.9375).abs() < 1.0e-9);
+    }
+
 }
