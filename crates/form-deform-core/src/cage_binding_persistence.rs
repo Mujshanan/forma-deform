@@ -417,13 +417,13 @@ mod tests {
     use crate::embedding::validate_cage_embedding;
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceId, CoordinateSpaceKind,
-        GeometryFingerprint, GeometryRevision, HostDocumentId, HostNamespace,
+        GeometryRevision, HostDocumentId, HostNamespace,
         HostTargetId, HostTargetKind, TopologyRevision,
     };
     use crate::path2d::{Path2D, PathCommand, Point2};
     use crate::topology::{
         ControlPointPosition, ControlPointState, ControlStateRevision,
-        DeformationControlState, IrregularCageTopology,
+        DeformationControlState, IrregularCageTopology, TopologyFace,
     };
 
     fn id(value: u64) -> ControlPointId { ControlPointId::new(value).unwrap() }
