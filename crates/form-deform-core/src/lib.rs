@@ -12,6 +12,7 @@ pub mod regular_lattice;
 pub mod irregular_cage;
 pub mod topology_edit;
 pub mod lattice_edit;
+pub mod embedding;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 { pub x: f64, pub y: f64 }
