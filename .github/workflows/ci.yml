@@ -22,6 +22,7 @@ jobs:
       - run: bun test
       - run: bun run build
       - run: cargo test --workspace
+      - run: cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
