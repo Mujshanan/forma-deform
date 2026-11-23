@@ -19,7 +19,6 @@ pub enum TargetCapabilityStatus {
     CommandPreviewOnly,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
 /// Result of resolving a canonical target against the active host document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TargetResolution {
@@ -31,6 +30,7 @@ pub enum TargetResolution {
     Unavailable(String),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetCapability {
     pub status: TargetCapabilityStatus,
     pub target_key: String,
