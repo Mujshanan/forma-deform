@@ -579,4 +579,60 @@ mod tests {
             Err(CurveSampleEvaluationError::Binding(_))
         ));
     }
+
+    #[test]
+    fn output_space_refinement_is_deterministic_and_uses_current_pose() {
+        use crate::output_space_refinement::{refine_path_curves, OutputRefinementPolicy};
+        let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
+        let moved = translated_state(&topology, &rest_state, 5.0, -2.0);
+        let certificate = validate_cage_embedding(&topology, &moved).unwrap();
+        let current = ValidatedCageGeometry::new(&topology, &moved, &certificate).unwrap();
+        let policy = OutputRefinementPolicy {
+            max_deviation: 0.01,
+            max_subdivision_depth: 16,
+            max_samples_per_curve: 4096,
+            max_total_samples: 8192,
+            max_total_evaluations: 100_000,
+        };
+        let first = refine_path_curves(
+            &validated, &source, &topology, &rest_geometry, &current,
+            validated.binding().stamp().outside_policy, policy,
+        ).unwrap();
+        let second = refine_path_curves(
+            &validated, &source, &topology, &rest_geometry, &current,
+            validated.binding().stamp().outside_policy, policy,
+        ).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.segments.len(), 1);
+        let segment = &first.segments[0];
+        assert_eq!(segment.samples.first().unwrap().t, 0.0);
+        assert_eq!(segment.samples.last().unwrap().t, 1.0);
+        assert!(segment.samples.len() > 2);
+        assert!(segment.samples.windows(2).all(|pair| pair[0].t < pair[1].t));
+        for sample in &segment.samples {
+            assert!((sample.output_point.x() - (sample.source_point.x() + 5.0)).abs() < 1.0e-8);
+            assert!((sample.output_point.y() - (sample.source_point.y() - 2.0)).abs() < 1.0e-8);
+        }
+        assert!(first.max_observed_deviation <= policy.max_deviation);
+        assert!(first.total_evaluations <= policy.max_total_evaluations);
+    }
+
+    #[test]
+    fn output_space_refinement_fails_closed_when_depth_budget_is_exhausted() {
+        use crate::output_space_refinement::{refine_path_curves, OutputRefinementError, OutputRefinementPolicy};
+        let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
+        let policy = OutputRefinementPolicy {
+            max_deviation: 1.0e-12,
+            max_subdivision_depth: 0,
+            max_samples_per_curve: 64,
+            max_total_samples: 64,
+            max_total_evaluations: 64,
+        };
+        let result = refine_path_curves(
+            &validated, &source, &topology, &rest_geometry, &rest_geometry,
+            validated.binding().stamp().outside_policy, policy,
+        );
+        assert!(matches!(result, Err(OutputRefinementError::SubdivisionDepthExceeded { .. })));
+        let _ = rest_state;
+    }
 }
