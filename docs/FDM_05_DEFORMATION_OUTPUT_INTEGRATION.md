@@ -45,7 +45,7 @@ FDM-05.2 will add deterministic output-space adaptive refinement:
 1. Evaluate the source Bézier segment at a parameter `t` using its original Path2D command.
 2. Resolve that source point against the validated rest-cage mapping policy.
 3. Evaluate the corresponding point on the certified current cage.
-4. Compare the evaluated midpoint/curve against the output chord using a documented conservative flatness/deviation bound.
+4. Compare deterministic quarter-, midpoint-, and three-quarter-parameter probes against the evaluated output chord. The v1 result is a sampled deviation estimate, not a certified upper bound.
 5. Subdivide deterministically until the output-space tolerance is met or a depth/sample budget is exhausted.
 6. On budget exhaustion, return an explicit error; never silently claim the requested tolerance.
 
@@ -80,6 +80,7 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Enforce explicit depth, per-curve sample, total sample, and total evaluation budgets; any exhausted budget fails closed.
 - Use the same point locator and outside-cage policies as FDM-04. Outside-policy behavior is evaluated at every probe.
 - Face-crossing behavior is observed through the output-space probes; the finite probe set cannot prove that an arbitrarily narrow crossing was detected. This limitation is part of the v1 contract.
+- Regression coverage crosses the shared edge of two cage triangles under a warped current pose, checks all three outside-cage policies and the bounded-extrapolation distance failure, and exercises invalid tolerances, degenerate chords, and extreme finite coordinates.
 - A future certified bound requires a separate proof/algorithm (e.g. face-aware subdivision and conservative mapped control-hull bounds); it is not claimed by this milestone.
 
 ### FDM-05.3 — Structured/Derived Output Assembly
@@ -88,7 +89,7 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Keep the original Path2D structure intact and independently inspectable.
 
 ### FDM-05.4 — Numerical and Adversarial Regression
-- Add reference-curve deviation tests, nonlinear cage deformations, discontinuity/face-crossing cases, determinism, stale provenance, and no-accumulation tests.
+- Add reference-curve deviation tests, nonlinear cage deformations, discontinuity/face-crossing cases, determinism, stale provenance, and no-accumulation tests. FDM-05.2 currently covers triangle-edge crossings, all outside policies, extrapolation limits, invalid policy values, degenerate chords, and overflow.
 - Strengthen finite-value and resource-budget failure coverage.
 
 ### FDM-05.5 — Performance Baseline and Quality Gates
