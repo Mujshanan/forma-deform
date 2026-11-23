@@ -51,6 +51,11 @@ pub enum BindingFreshness {
     TargetMismatch,
 }
 
+impl BindingFreshness {
+    pub fn is_current(self) -> bool { self == Self::Current }
+    pub fn requires_rebind(self) -> bool { self != Self::Current }
+}
+
 impl PersistedCageBinding {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -221,7 +226,13 @@ mod tests {
         assert_eq!(value.freshness_against(&stamp(2, 1, 7)), BindingFreshness::GeometryChanged);
         assert_eq!(value.freshness_against(&stamp(1, 2, 7)), BindingFreshness::TopologyChanged);
         assert_eq!(value.freshness_against(&stamp(1, 1, 8)), BindingFreshness::FingerprintIntegrityError);
-        assert_eq!(value.freshness_against(&stamp(0, 1, 7)), BindingFreshness::GeometryRevisionRegressed);
+        let older = PersistedCageBinding::new(
+            "binding-older", 1, target(), stamp(2, 2, 7), space(),
+            vec![10, 20, 30], vec![[10, 20, 30]],
+            vec![PersistedBoundPoint { point_id: 5, cage_vertex_ids: [10, 20, 30], barycentric: [0.2, 0.3, 0.5] }],
+        ).unwrap();
+        assert_eq!(older.freshness_against(&stamp(1, 2, 7)), BindingFreshness::GeometryRevisionRegressed);
+        assert_eq!(older.freshness_against(&stamp(2, 1, 7)), BindingFreshness::TopologyRevisionRegressed);
     }
     #[test]
     fn invalid_weights_and_support_fail_closed() {
