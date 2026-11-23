@@ -364,8 +364,8 @@ mod tests {
     #[test]
     fn rejects_bow_tie_vertex_with_disconnected_face_fans() {
         let cage = CageEmbedding {
-            vertices: vec![v(1,0.,0.),v(2,2.,0.),v(3,1.,1.),v(4,0.,2.),v(5,2.,2.)],
-            triangles: vec![t(0,1,2),t(0,4,3)],
+            vertices: vec![v(1,0.,0.),v(2,2.,0.),v(3,1.,-1.),v(4,-2.,0.),v(5,-1.,1.)],
+            triangles: vec![t(0,1,2),t(0,3,4)],
         };
         assert!(matches!(cage.validate_global(), Err(CageEmbeddingError::NonManifoldVertex { vertex: 0 })));
     }
@@ -387,22 +387,22 @@ mod tests {
     fn rejects_degenerate_duplicate_and_mixed_winding_faces() {
         let mut c=square(); c.vertices[2].position=Point2::new(5.,0.).unwrap();
         assert!(matches!(c.validate_global(),Err(CageEmbeddingError::DegenerateTriangle{..})));
-        let mut c=square(); c.triangles[1]=t(0,2,3);
+        let mut c=square(); c.triangles[1]=t(2,1,0);
         assert!(matches!(c.validate_global(),Err(CageEmbeddingError::DuplicateTriangle{..})));
         let mut c=square(); c.triangles[1]=t(3,2,0);
         assert!(matches!(c.validate_global(),Err(CageEmbeddingError::InconsistentFaceOrientation{..})));
     }
     #[test]
     fn rejects_crossing_edges_and_contained_overlapping_faces() {
-        let crossing=CageEmbedding { vertices:vec![v(1,0.,0.),v(2,4.,4.),v(3,0.,4.),v(4,4.,0.),v(5,5.,5.)], triangles:vec![t(0,1,4),t(2,3,4)] };
-        assert!(matches!(crossing.validate_global(),Err(CageEmbeddingError::CrossingEdges{..})|Err(CageEmbeddingError::InconsistentFaceOrientation{..})));
+        let crossing=CageEmbedding { vertices:vec![v(1,0.,0.),v(2,4.,0.),v(3,2.,4.),v(4,0.,3.),v(5,2.,-1.),v(6,4.,3.)], triangles:vec![t(0,1,2),t(3,4,5)] };
+        assert!(matches!(crossing.validate_global(),Err(CageEmbeddingError::CrossingEdges{..})));
         let overlap=CageEmbedding { vertices:vec![v(1,0.,0.),v(2,10.,0.),v(3,0.,10.),v(4,1.,1.),v(5,2.,1.),v(6,1.,2.)], triangles:vec![t(0,1,2),t(3,4,5)] };
         assert!(matches!(overlap.validate_global(),Err(CageEmbeddingError::OverlappingFaces{..})));
     }
     #[test]
     fn rejects_non_manifold_edges_and_accepts_separate_components() {
-        let mut c=square(); c.vertices.push(v(5,5.,-5.)); c.triangles.push(t(1,0,4));
-        assert!(matches!(c.validate_global(),Err(CageEmbeddingError::NonManifoldEdge{..})|Err(CageEmbeddingError::InconsistentFaceOrientation{..})));
+        let mut c=square(); c.vertices.push(v(5,5.,-5.)); c.vertices.push(v(6,6.,-6.)); c.triangles.push(t(1,0,4)); c.triangles.push(t(1,0,5));
+        assert!(matches!(c.validate_global(),Err(CageEmbeddingError::NonManifoldEdge{..})));
         let separate=CageEmbedding { vertices:vec![v(1,0.,0.),v(2,2.,0.),v(3,0.,2.),v(4,5.,0.),v(5,7.,0.),v(6,5.,2.)], triangles:vec![t(0,1,2),t(3,4,5)] };
         assert_eq!(separate.validate_global().unwrap().connected_component_count,2);
     }
