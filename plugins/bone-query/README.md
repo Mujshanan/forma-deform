@@ -1,8 +1,8 @@
 # Bone Query
 
-**Status:** Read-only command-plugin implementation; host integration still needs testing.
+**Status:** Retained read-only development and diagnostic command adapter.
 
-Bone Query calls AniCraft's bone.info command and reports the armature data exposed by Mujshanan/anicraft:main. It does not modify the document.
+Bone Query calls AniCraft's `bone.info` command and reports the armature data exposed by Mujshanan/anicraft:main. It does not modify the document. It is a diagnostic probe, not a production dependency of the deformation engine.
 
 ## Reported data
 
@@ -45,15 +45,15 @@ The output is:
 target/wasm32-unknown-unknown/release/anicraft_bone_query_plugin.wasm
 ~~~
 
-Install the WASM file through AniCraft's **Commands → Install Plug-in…** workflow.
+Install the WASM file through AniCraft's **Commands → Install Plug-in…** workflow only for a development diagnostic session.
 
 ## Host limitations
 
 - This is an on-demand command plugin, not a persistent bone observer. It does not automatically refresh during playback or scrubbing.
 - Command plugins run in a fresh sandboxed instance for each invocation.
 - Shape-point details are requested from the host only when enabled; output is capped independently for each shape.
-- The plugin depends on the bone.info fields currently implemented in the Mujshanan AniCraft fork. It should not be assumed compatible with upstream Storytold AniCraft revisions that expose a different response schema.
+- The plugin depends on the `bone.info` fields implemented in the Mujshanan AniCraft fork. It should not be assumed compatible with upstream Storytold AniCraft revisions that expose a different response schema.
 
-## Verification status
+## Verification boundary
 
-The implementation and fixture tests have been updated against the fork's current cmds_bone.rs response. Compilation, native test execution, WASM compilation, and an in-app run have **not yet been verified**.
+The repository CI workflow is configured to run native workspace tests and build this adapter for `wasm32-unknown-unknown`. Those automated checks do not prove that the plugin has been installed or smoke-tested in AniCraft. Record a successful in-app smoke test separately before describing host integration as verified.
