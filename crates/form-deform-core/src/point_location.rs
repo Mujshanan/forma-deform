@@ -6,7 +6,7 @@
 
 use crate::binding::{FaceCoordinates, ValidatedCageGeometry};
 use crate::path2d::Point2;
-use crate::topology::{ControlPointId, ControlPointPosition, TopologyFace, TopologyView};
+use crate::topology::{ControlPointId, ControlPointPosition, TopologyFace};
 
 pub const POINT_LOCATION_POLICY_VERSION: u32 = 1;
 const PARAMETER_TOLERANCE: f64 = 1.0e-9;
@@ -333,7 +333,7 @@ mod tests {
     use crate::topology::{
         ControlPointState, ControlStateRevision, DeformationControlState, DeformationTopology,
         DeformationTopologyId, DeformationTopologyRevision, IrregularCageTopology,
-        RegularLatticeTopology, TopologyFace,
+        RegularLatticeTopology, TopologyFace, TopologyView,
     };
 
     fn p(x:f64,y:f64)->ControlPointPosition { ControlPointPosition::new(x,y).unwrap() }
