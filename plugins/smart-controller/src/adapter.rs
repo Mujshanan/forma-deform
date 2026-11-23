@@ -146,12 +146,13 @@ pub fn verify_bone_info_frame(response: &Value, expected_frame: u32) -> Result<(
 pub fn verify_bone_info_layer(response: &Value, expected_layer: u64) -> Result<(), String> {
     let armatures = response.get("armatures").and_then(Value::as_array)
         .ok_or("bone.info response is missing armatures")?;
-    if armatures.iter().any(|armature| {
-        armature.get("layer").and_then(Value::as_u64) == Some(expected_layer)
-    }) {
+    if armatures.len() != 1 {
+        return Err(format!("bone.info layer-scoped response must contain exactly one armature; found {}", armatures.len()));
+    }
+    if armatures[0].get("layer").and_then(Value::as_u64) == Some(expected_layer) {
         Ok(())
     } else {
-        Err(format!("bone.info response does not contain expected armature layer {expected_layer}"))
+        Err(format!("bone.info response does not match expected armature layer {expected_layer}"))
     }
 }
 
@@ -332,6 +333,7 @@ mod tests {
         assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":4,"bones":[]}]}), 4).is_ok());
         assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":5,"bones":[]}]}), 4).is_err());
         assert!(verify_bone_info_layer(&json!({"armatures":[]}), 4).is_err());
+        assert!(verify_bone_info_layer(&json!({"armatures":[{"layer":4},{"layer":5}]}), 4).is_err());
     }
 
     #[test]
