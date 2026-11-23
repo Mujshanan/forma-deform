@@ -145,6 +145,7 @@ pub enum BindingPersistenceError {
     InvalidStamp(BindingError),
     Serialization,
     ResourceLimitExceeded,
+    InvalidBindingRevision,
 }
 
 impl std::fmt::Display for BindingPersistenceError {
@@ -235,8 +236,14 @@ pub struct BindingSlotSnapshot {
 }
 
 impl BindingSlotSnapshot {
-    pub fn new(revision: BindingPayloadRevision, payload: Option<String>) -> Self {
-        Self { revision, payload }
+    pub fn new(
+        revision: BindingPayloadRevision,
+        payload: Option<String>,
+    ) -> Result<Self, BindingPersistenceError> {
+        if revision.value() == 0 && payload.is_some() {
+            return Err(BindingPersistenceError::InvalidBindingRevision);
+        }
+        Ok(Self { revision, payload })
     }
 
     pub fn revision(&self) -> BindingPayloadRevision {
