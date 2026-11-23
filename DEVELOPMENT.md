@@ -1,9 +1,22 @@
 # Forma Deform — Development and Architecture
 
-**Project role:** AniCraft deformation and rig-control tool/plugin.  
-**Status:** prototype and architecture definition; native tool integration is staged and must not be represented as complete.  
+**Project role:** AniCraft's consolidated deformation and rig-control product, evolving as a native AniCraft tool.  
+**Status:** reusable core and plugin-probe implementation are present; native Smart Controller UI work exists on a separate AniCraft feature branch, but persistence, host-core wiring, source evaluation, target application, and live preview are not yet complete.  
 **Canonical scope:** deformation, controller authoring/preview, target bindings, and deformation evaluation.  
 **Non-goal:** a second animation application or a duplicate of AniCraft host infrastructure.
+
+## 0. Product evolution and native host status
+
+Forma Deform began as three separate proof-of-concept plugins. Those capabilities were consolidated into one Forma Deform product and codebase, then developed toward a native AniCraft tool. The three plugin crates retained in this repository are implementation/probe tracks, not three separate products.
+
+The native Smart Controller UI slice is tracked in the AniCraft repository on [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03). It adds a toolbar tool, Stage handles, and a Properties inspector. The branch is 17 commits ahead of AniCraft `main` and was not merged at the time of the 2026-11-23 traceability check. Its UI state is transient. The host application does not yet wire the added `anicraft-controller` crate into the app binary, and the tool explicitly reports that binding and preview are not connected. The branch's acceptance document remains a target checklist, not proof that UI-01–UI-03 are complete.
+
+Ownership remains:
+- Forma Deform owns reusable, deterministic controller/deformation domain logic.
+- AniCraft owns native UI lifecycle, authoritative document state, persistence, commands, undo/redo, evaluated rig input, target application, and scheduling.
+- Adapters bridge the two; the native view must not duplicate core evaluation or introduce a second document model.
+
+See [the native host integration traceability report](docs/quality/native-host-integration-traceability.md) for exact source references, verified gaps, and reconciliation recommendations.
 
 ## 1. Product boundary
 
