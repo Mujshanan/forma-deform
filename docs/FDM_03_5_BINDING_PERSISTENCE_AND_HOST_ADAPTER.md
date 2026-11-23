@@ -80,7 +80,7 @@ Control-state revision is intentionally not a binding-staleness reason. Moving o
 
 The adapter must ensure that target lookup respects the full `HostTargetRef`, including generation. Writes must participate atomically in the host's document transaction. The adapter must not persist runtime caches or treat the FDM payload as a replacement for canonical Path2D or native Asset Warp data.
 
-The generic `load_validated_binding` helper implements read, decode, and revalidation. Host-specific error types remain owned by the adapter.
+The generic `load_validated_binding` helper implements read, decode, and revalidation. `persist_binding` validates the payload against the current host context before writing it. Both helpers verify that the context returned by the adapter belongs to the exact requested `HostTargetRef`; an adapter returning a different target is rejected as stale. Host-specific error types remain owned by the adapter.
 
 ## Compatibility and migration
 
