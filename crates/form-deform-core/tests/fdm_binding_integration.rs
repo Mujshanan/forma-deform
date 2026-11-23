@@ -348,6 +348,12 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     };
 
     persist_binding(&mut adapter, &target_ref, &persisted).unwrap();
+    assert_eq!(adapter.slot.revision().value(), 1);
+
+    // A subsequent save compares against the host-issued revision and advances it.
+    persist_binding(&mut adapter, &target_ref, &persisted).unwrap();
+    assert_eq!(adapter.slot.revision().value(), 2);
+
     let loaded = load_validated_binding(&adapter, &target_ref)
         .unwrap()
         .expect("persisted binding should load");
