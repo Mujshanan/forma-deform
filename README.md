@@ -51,7 +51,7 @@ This status distinguishes the default branch from work on separate PR branches.
 | Default-branch baseline | Latest recorded `main` commit: `e182e447` — Flare source-level reuse audit | Current source/document baseline |
 | Legacy Bun/TypeScript demo retirement | PR [#52](https://github.com/Mujshanan/forma-deform/pull/52) merged into the LEG-01.4 branch; PR [#54](https://github.com/Mujshanan/forma-deform/pull/54) carries retirement into the FDM-04 branch chain | Not yet represented as a merge to default `main` |
 | FDM-05.4 output-contract hardening | PR [#60](https://github.com/Mujshanan/forma-deform/pull/60) | Open; do not treat as merged |
-| Workspace formatting remediation | PR [#68](https://github.com/Mujshanan/forma-deform/pull/68) records a 69-file baseline only | No formatting sweep performed by that PR |
+| Workspace formatting remediation | PR [#68](https://github.com/Mujshanan/forma-deform/pull/68) records the 69-file baseline; FDM-FMT-01.2 is the next scoped task | **0/36 files formatted**; execution blocked because `cargo`/`rustfmt` are unavailable; FDM-FMT-01.3 not started |
 | Native host boundary and S0 audit | PRs [#73–#80](https://github.com/Mujshanan/forma-deform/pulls) | Open, documentation/audit/planning work; S0 remains OPEN |
 
 The latest S0 evidence addendum is PR #80. It adds source-located evidence for the 36 previously missed inline callback entries, first-order effect classification, a first-pass graph for the 131 `mutates=false` commands, and a verified AniCraft archive/source baseline. This is not formal S0 closure: callback transitive-effect coverage, compiler-backed consumer verification and successful host CI evidence remain outstanding. Do not mark S0 closed.
