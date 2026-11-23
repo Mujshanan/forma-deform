@@ -2,7 +2,7 @@ name: CQ2 Formatting Review
 
 on:
   push:
-    branches: [quality/cq2-formatting-review]
+    branches: [quality/cq2-formatting-review, quality/cq2-formatting-patch]
   workflow_dispatch:
 
 permissions:
