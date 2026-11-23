@@ -42,6 +42,9 @@ pub enum CageEmbeddingError {
     EmptyTriangles,
     DuplicateVertexId { vertex: usize, id: u64 },
     DuplicateVertexPosition { first: usize, second: usize },
+    UnusedVertex { vertex: usize },
+    NonManifoldVertex { vertex: usize },
+    SharedVertexEdgeOverlap { vertex: usize, first: usize, second: usize },
     InvalidVertexIndex { triangle: usize, vertex: usize },
     RepeatedTriangleVertex { triangle: usize },
     DuplicateTriangle { first: usize, second: usize },
@@ -63,6 +66,9 @@ impl std::fmt::Display for CageEmbeddingError {
             Self::EmptyTriangles => write!(f, "cage must contain triangles"),
             Self::DuplicateVertexId { vertex, id } => write!(f, "vertex {vertex} duplicates stable ID {id}"),
             Self::DuplicateVertexPosition { first, second } => write!(f, "vertices {first} and {second} occupy the same position"),
+            Self::UnusedVertex { vertex } => write!(f, "vertex {vertex} is not referenced by any face"),
+            Self::NonManifoldVertex { vertex } => write!(f, "vertex {vertex} has a disconnected or non-manifold face link"),
+            Self::SharedVertexEdgeOverlap { vertex, first, second } => write!(f, "edges from shared vertex {vertex} to {first} and {second} overlap"),
             Self::InvalidVertexIndex { triangle, vertex } => write!(f, "triangle {triangle} references missing vertex {vertex}"),
             Self::RepeatedTriangleVertex { triangle } => write!(f, "triangle {triangle} repeats a vertex"),
             Self::DuplicateTriangle { first, second } => write!(f, "triangles {first} and {second} have the same vertex set"),
@@ -93,6 +99,7 @@ impl CageEmbedding {
         let tol = self.tolerance()?;
         self.validate_vertex_identity(tol)?;
         self.validate_faces(tol)?;
+        self.validate_vertex_links()?;
         let (edges, components) = self.validate_topology()?;
         self.validate_global_intersections(tol)?;
         Ok(ValidatedCageEmbedding {
@@ -162,6 +169,53 @@ impl CageEmbedding {
         Ok(())
     }
 
+    /// Every used vertex must have one connected link: a path on the boundary
+    /// or a cycle in the interior. This rejects bow-tie vertices where two
+    /// otherwise valid triangle fans touch at only one indexed vertex.
+    fn validate_vertex_links(&self) -> Result<(), CageEmbeddingError> {
+        let mut links = vec![BTreeMap::<usize, Vec<usize>>::new(); self.vertices.len()];
+        let mut used = vec![false; self.vertices.len()];
+        for tri in &self.triangles {
+            let [a, b, c] = tri.vertices;
+            used[a] = true; used[b] = true; used[c] = true;
+            links[a].entry(b).or_default().push(c);
+            links[a].entry(c).or_default().push(b);
+            links[b].entry(a).or_default().push(c);
+            links[b].entry(c).or_default().push(a);
+            links[c].entry(a).or_default().push(b);
+            links[c].entry(b).or_default().push(a);
+        }
+        for vertex in 0..self.vertices.len() {
+            if !used[vertex] {
+                return Err(CageEmbeddingError::UnusedVertex { vertex });
+            }
+            let link = &links[vertex];
+            let mut visited = std::collections::BTreeSet::new();
+            let Some(start) = link.keys().next().copied() else {
+                return Err(CageEmbeddingError::NonManifoldVertex { vertex });
+            };
+            let mut stack = vec![start];
+            while let Some(node) = stack.pop() {
+                if !visited.insert(node) { continue; }
+                let Some(neighbors) = link.get(&node) else {
+                    return Err(CageEmbeddingError::NonManifoldVertex { vertex });
+                };
+                if neighbors.len() > 2 || neighbors.is_empty() {
+                    return Err(CageEmbeddingError::NonManifoldVertex { vertex });
+                }
+                stack.extend(neighbors.iter().copied());
+            }
+            if visited.len() != link.len() {
+                return Err(CageEmbeddingError::NonManifoldVertex { vertex });
+            }
+            let endpoints = link.values().filter(|neighbors| neighbors.len() == 1).count();
+            if endpoints != 0 && endpoints != 2 {
+                return Err(CageEmbeddingError::NonManifoldVertex { vertex });
+            }
+        }
+        Ok(())
+    }
+
     fn validate_topology(&self) -> Result<(BTreeMap<(usize, usize), Vec<(usize, i8)>>, usize), CageEmbeddingError> {
         let mut edges = BTreeMap::<(usize, usize), Vec<(usize, i8)>>::new();
         let mut parent: Vec<usize> = (0..self.triangles.len()).collect();
@@ -197,7 +251,22 @@ impl CageEmbedding {
         for i in 0..edges.len() {
             for j in (i+1)..edges.len() {
                 let (a,b) = edges[i]; let (c,d) = edges[j];
-                if a == c || a == d || b == c || b == d { continue; }
+                let shared = [a, b].into_iter().find(|v| *v == c || *v == d);
+                if let Some(vertex) = shared {
+                    let first = if a == vertex { b } else { a };
+                    let second = if c == vertex { d } else { c };
+                    let origin = self.p(vertex);
+                    let p = self.p(first);
+                    let q = self.p(second);
+                    let collinear = orient(origin, p, q).abs() <= tol.area;
+                    let dot = (p.x() - origin.x()) * (q.x() - origin.x())
+                        + (p.y() - origin.y()) * (q.y() - origin.y());
+                    if !dot.is_finite() { return Err(CageEmbeddingError::ArithmeticOverflow); }
+                    if collinear && dot > tol.length * tol.length {
+                        return Err(CageEmbeddingError::SharedVertexEdgeOverlap { vertex, first, second });
+                    }
+                    continue;
+                }
                 match segment_relation(self.p(a), self.p(b), self.p(c), self.p(d), tol)? {
                     SegmentRelation::Disjoint => {},
                     SegmentRelation::Crossing => return Err(CageEmbeddingError::CrossingEdges { first: (a,b), second: (c,d) }),
@@ -290,6 +359,28 @@ mod tests {
         assert!(matches!(c.validate_global(),Err(CageEmbeddingError::DuplicateVertexPosition{..})));
         let mut c=square(); c.triangles[0]=t(0,1,9);
         assert!(matches!(c.validate_global(),Err(CageEmbeddingError::InvalidVertexIndex{..})));
+    }
+    #[test]
+    fn rejects_bow_tie_vertex_with_disconnected_face_fans() {
+        let cage = CageEmbedding {
+            vertices: vec![v(1,0.,0.),v(2,2.,0.),v(3,1.,1.),v(4,0.,2.),v(5,2.,2.)],
+            triangles: vec![t(0,1,2),t(0,3,4)],
+        };
+        assert!(matches!(cage.validate_global(), Err(CageEmbeddingError::NonManifoldVertex { vertex: 0 })));
+    }
+    #[test]
+    fn rejects_unused_vertices() {
+        let mut cage = square();
+        cage.vertices.push(v(5,20.,20.));
+        assert!(matches!(cage.validate_global(), Err(CageEmbeddingError::UnusedVertex { vertex: 4 })));
+    }
+    #[test]
+    fn rejects_collinear_edges_overlapping_after_shared_vertex() {
+        let cage = CageEmbedding {
+            vertices: vec![v(1,0.,0.),v(2,4.,0.),v(3,2.,0.),v(4,0.,3.),v(5,2.,3.)],
+            triangles: vec![t(0,1,3),t(0,2,4)],
+        };
+        assert!(matches!(cage.validate_global(), Err(CageEmbeddingError::SharedVertexEdgeOverlap { .. })));
     }
     #[test]
     fn rejects_degenerate_duplicate_and_mixed_winding_faces() {
