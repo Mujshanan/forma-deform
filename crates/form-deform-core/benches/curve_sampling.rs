@@ -2,6 +2,7 @@
 //!
 //! Run with:
 //! cargo bench -p form-deform-core --bench curve_sampling
+//! cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
@@ -49,9 +50,8 @@ fn workload(
     }
 }
 
-fn report(workload: &Workload) {
+fn report(workload: &Workload, measured_iterations: usize) {
     const WARMUP_ITERATIONS: usize = 20;
-    const MEASURED_ITERATIONS: usize = 200;
 
     let reference = sample_path_curves(&workload.path, workload.policy)
         .expect("reference sample must succeed");
@@ -64,14 +64,26 @@ fn report(workload: &Workload) {
     }
 
     let start = Instant::now();
-    for _ in 0..MEASURED_ITERATIONS {
+    let mut measured_sample_count = 0usize;
+    for _ in 0..measured_iterations {
         let output = sample_path_curves(black_box(&workload.path), workload.policy)
             .expect("measured sample must succeed");
-        assert_eq!(output, reference, "sampling output must be deterministic");
+        measured_sample_count = measured_sample_count.saturating_add(output.total_samples);
         black_box(output);
     }
     let elapsed = start.elapsed();
-    print_result(workload.name, elapsed, reference.total_samples, MEASURED_ITERATIONS);
+
+    assert_eq!(
+        measured_sample_count,
+        reference.total_samples.saturating_mul(measured_iterations),
+        "measured sample count must remain deterministic"
+    );
+    print_result(
+        workload.name,
+        elapsed,
+        reference.total_samples,
+        measured_iterations,
+    );
 }
 
 fn print_result(name: &str, elapsed: Duration, samples: usize, iterations: usize) {
@@ -83,7 +95,18 @@ fn print_result(name: &str, elapsed: Duration, samples: usize, iterations: usize
     );
 }
 
+fn iterations_from_args() -> usize {
+    let iterations = std::env::args()
+        .skip_while(|argument| argument != "--iterations")
+        .nth(1)
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(200);
+    assert!(iterations > 0, "iterations must be greater than zero");
+    iterations
+}
+
 fn main() {
+    let measured_iterations = iterations_from_args();
     let workloads = [
         workload("single-high-curvature", 1, 100.0, 1.0),
         workload("many-high-curvature", 32, 100.0, 1.0),
@@ -93,6 +116,6 @@ fn main() {
 
     println!("Adaptive Path2D sampling benchmark (release profile)");
     for item in &workloads {
-        report(item);
+        report(item, measured_iterations);
     }
 }
