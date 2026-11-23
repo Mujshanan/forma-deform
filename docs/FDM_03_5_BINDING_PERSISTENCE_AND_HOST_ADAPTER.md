@@ -43,12 +43,13 @@ Deserialization is not validation. The safe load path is:
 1. Read the opaque payload from host-owned storage.
 2. Enforce byte limits, decode the known envelope, reject unknown fields/schema versions, and validate the binding stamp.
 3. Ask the host adapter for the current immutable geometry snapshot, topology, and control state.
-4. Validate the snapshot envelope and recompute the global cage-embedding certificate.
-5. Construct `ValidatedCageGeometry` from that certificate.
-6. Run `BindingRecord::validate_against` for complete source-feature coverage, exact locator ordering, mapping-policy compatibility, face/control-ID order, coordinate domains, outside-policy consistency, and source-point reconstruction.
-7. Only then return `ValidatedBindingRecord`, the capability wrapper indicating that this exact record passed current validation.
+4. Validate the snapshot envelope and compare the binding stamp against the current source and cage-topology revisions. Return a typed stale diagnostic immediately when a dependency changed.
+5. Recompute the global cage-embedding certificate only after freshness passes.
+6. Construct `ValidatedCageGeometry` from that certificate.
+7. Run `BindingRecord::validate_against` for complete source-feature coverage, exact locator ordering, mapping-policy compatibility, face/control-ID order, coordinate domains, outside-policy consistency, and source-point reconstruction.
+8. Only then return `ValidatedBindingRecord`, the capability wrapper indicating that this exact record passed current validation.
 
-The host must not pass deserialized records directly into evaluation. It must use the validated wrapper/load path.
+The host must not pass deserialized records directly into evaluation. It must use the validated wrapper/load path. A `ValidatedBindingRecord` represents a point-in-time validation result, not a permanent lease: the host must revalidate whenever source identity/revisions/fingerprint or cage topology changes, and must separately invalidate evaluation data when control-state revision changes.
 
 ## Stale-binding diagnostics
 
