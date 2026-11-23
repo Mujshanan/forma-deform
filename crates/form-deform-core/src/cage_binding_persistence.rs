@@ -528,7 +528,7 @@ mod tests {
     use crate::embedding::validate_cage_embedding;
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceId, CoordinateSpaceKind,
-        GeometryRevision, HostDocumentId, HostNamespace,
+        GeometryRevision, GeometrySnapshot, HostDocumentId, HostNamespace,
         HostTargetId, HostTargetKind, TopologyRevision,
     };
     use crate::path2d::{Path2D, PathCommand, Point2};
