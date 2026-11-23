@@ -100,3 +100,8 @@ The separate TypeScript demo retains its Bun-based scripts. See the package scri
 ## Native UI implementation status (2026-11-23)
 
 The first M1 Smart Controller UI foundation is merged in [AniCraft PR #2](https://github.com/Mujshanan/anicraft/pull/2). It adds a native tool-strip entry, transient Stage handles, a foreground overlay, and a draft-only Properties inspector. It does not yet implement source/target binding, mapping, evaluation, preview, persistence, target application, or live playback. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) for the detailed specification and the implementation-status addendum.
+
+
+## Native UI progress (2026-11-23)
+
+The M1 Smart Controller UI now supports click-to-create/select and drag-to-move transient Stage handles, with live coordinates in Properties. This is merged into AniCraft in [PR #3](https://github.com/Mujshanan/anicraft/pull/3). It remains draft-only editor state; persistent bindings, mapping/evaluation, target application, undo integration and live playback are not implemented. Native CI and manual Windows smoke-test evidence remain outstanding. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
