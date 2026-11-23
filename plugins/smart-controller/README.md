@@ -1,16 +1,16 @@
 # Smart Controller
 
-**V1 status:** Slider mapping and deterministic, on-demand preview.
+**Adapter status:** Transitional ABI v1 command adapter. The active `run()` entry point remains the V1 Slider preview command. The Rust core and additional adapter modules contain broader capabilities, but those foundations are not a complete native AniCraft workflow.
 
-The host-independent Rust core performs validation, normalization, endpoint-aware frame mapping, and preview calculation. The AniCraft adapter only resolves the driver input through the verified bone.info command, calls the core, and logs JSON output.
+The host-independent Rust core owns controller models, validation, normalization, mapping, migration, and deterministic evaluation. The adapter translates selected host inputs and read-only target inspection into core types.
 
-## V1 workflow
+## V1 command workflow
 
 1. Select the driver layer/armature and driver bone name.
 2. Select the action layer and configure its start/end frame range.
 3. Set minimum and maximum driver rotation angles.
 4. Choose Exclusive (default) or Inclusive endpoint policy.
-5. Run using the host bone input, or provide manual_value for deterministic tests.
+5. Run using the host bone input, or provide `manual_value` for deterministic tests.
 6. Inspect normalized input and calculated output frame in the plugin log.
 
 Manual input overrides the host query. A missing or malformed bone response is an error; it is never silently replaced with zero.
@@ -22,41 +22,38 @@ Manual input overrides the host query. A missing or malformed bone response is a
 - Degenerate mapping helper intervals return start, although Slider validation requires end > start.
 - Rotation endpoints may be reversed; +45° to -45° maps +45° to normalized 0 and -45° to normalized 1.
 
-## Boundaries
+## Boundaries of the active V1 command
 
 - V1 is an on-demand preview command, not a playback/scrubbing evaluator.
-- The plugin does not set the AniCraft timeline or write bone properties; no unverified command IDs are used.
-- action_layer_id is validated as configuration metadata; no host action/timeline API is assumed.
-- Transform calculations are pure-core groundwork for V2; the V1 adapter rejects Transform mode.
+- The command does not set the AniCraft timeline or write bone properties.
+- `action_layer_id` is validated as configuration metadata; no host action/timeline API is assumed.
+- Transform calculations are pure-core groundwork; the active V1 command rejects Transform mode.
 - Bindings are not durably persisted in the AniCraft document.
+- The active V1 command does not apply geometry pins or generic target properties.
 
-## Build and test
+## Additional adapter foundations
 
-    cargo test -p smart-controller-core
-    cargo test -p anicraft-smart-controller-plugin
-    cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
-
-
-## Unified adapter foundations (Phase 5)
-
-The adapter now has isolated modules for:
+The adapter has isolated modules for:
 
 - Parsing the verified `bone.info` response by numeric bone ID, with explicit spring-swing and angle-wrapping choices.
 - Assessing target capability and verifying exact geometry pin identity through read-only `warp.info`.
 - Delegating legacy BindingSet / Params migration to `smart-controller-core` while retaining its migration report.
+- Evaluating a canonical document through an injected mapper and producing deterministic, read-only target preview plans.
 
-The adapter also exposes `evaluate_document_preview`, which validates a canonical document, runs the evaluator and composition post-pass through an injected mapper, and returns target capability assessments in deterministic target order. It performs no host writes. Compatibility helpers support legacy-format detection and guarded reverse export to V1 BindingSet / Params while retaining migration reports.\n\nThese modules are foundations only. The existing V1 Slider command still uses its original preview path. Geometry pin mutation is not issued by the new adapter; the documented `warp.pin_move` path requires a host preview/undo transaction. Symbol-frame display, generic property application, playback evaluation and durable document persistence remain unverified or unsupported.
+The canonical preview path accepts manual values keyed by canonical InputId and an explicit bone-ID → AniCraft layer-ID map. Its input provider supports Manual and BoneTransform Rotation inputs. The evaluator resolves ControllerOutput dependencies and performs the independent composition pass using an injected ControllerMapper. The target preview planner returns composed values paired with canonical target mappings and capability assessments in TargetId order.
 
+These helpers are descriptive/read-only foundations. They do not issue target setters or mutate the document. Geometry pin application still requires a host preview/undo transaction; symbol-frame and generic property setters remain unverified. The concrete Pose2D/joystick mapper is a separate core prerequisite and must be supplied through the mapper boundary.
 
-### Canonical preview adapter (Phase 5)
+## Compatibility and migration
 
-The adapter exposes a read-only canonical preview path:
+The core's `legacy.rs` and `migration.rs` modules preserve older binding formats and explicit migration/reverse-export behavior. They are not the retired adapter runtime and must not be deleted as part of adapter retirement without a separate compatibility decision and migration test plan.
 
-1. Supply manual values keyed by canonical InputId and an explicit bone-ID → AniCraft layer-ID map.
-2. The input provider queries each required layer once with the read-only `bone.info` command, parses stable numeric bone IDs, and creates an invocation-scoped snapshot.
-3. The core evaluator resolves ControllerOutput dependencies, evaluates the graph and performs the independent composition pass using an injected ControllerMapper.
-4. The target preview planner returns composed values paired with their canonical target mappings and capability assessments in TargetId order.
+## Build and test
 
-The provider currently supports Manual and BoneTransform Rotation inputs. LegacyScalar sources and Translation/Scale bone channels require an explicit provider implementation and fail closed. Wrapped-angle semantics and spring-swing inclusion are explicit caller choices.
+```sh
+cargo test -p smart-controller-core
+cargo test -p anicraft-smart-controller-plugin
+cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+```
 
-The preview plan is descriptive data only. The host-driven path verifies GeometryDeform element/pin identity with read-only `warp.info`; it does not call target setters or mutate the document. Geometry pin application still requires the host preview/undo transaction; symbol-frame and generic property setters remain unverified. The concrete Pose2D/joystick mapper is a separate core prerequisite and must be supplied through the mapper boundary. No playback, scrubbing, durable document persistence, or Form Deform composition is claimed.
+See [Legacy Adapter Status and Retirement Plan](../../docs/LEGACY_ADAPTER_RETIREMENT.md) for the adapter's eventual replacement gates.
