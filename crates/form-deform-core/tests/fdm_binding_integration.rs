@@ -410,7 +410,7 @@ fn path2d_persistence_rejects_competing_binding_write_between_read_and_commit() 
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None).unwrap(),
         change_source_before_write: false,
         change_binding_before_write: true,
         delete_binding_before_write: false,
