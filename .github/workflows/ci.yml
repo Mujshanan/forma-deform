@@ -14,10 +14,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
-      - run: cargo fmt --all -- --check
       - run: cargo clippy --manifest-path crates/form-deform-core/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
+      # Keep the known workspace formatting debt visible after functional checks run.
+      - run: cargo fmt --all -- --check
