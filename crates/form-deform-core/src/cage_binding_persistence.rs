@@ -19,7 +19,6 @@ use crate::topology::{
     ControlPointId, DeformationControlState, DeformationTopology,
     DeformationTopologyId, DeformationTopologyRevision, TopologyView,
 };
-use crate::binding::ValidatedCageGeometry;
 
 pub const CAGE_BINDING_SCHEMA_NAME: &str = "forma-deform-point-cage-binding";
 pub const CAGE_BINDING_SCHEMA_VERSION: u32 = 1;
