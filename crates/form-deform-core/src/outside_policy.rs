@@ -362,3 +362,82 @@ fn interpolate_coordinates(
         _ => Err(OutsideCageError::InvalidBoundaryGeometry),
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::embedding::validate_cage_embedding;
+    use crate::topology::{
+        ControlPointState, ControlStateRevision, DeformationControlState,
+        DeformationTopology, DeformationTopologyId, DeformationTopologyRevision,
+        IrregularCageTopology, TopologyFace,
+    };
+
+    fn id(value:u64)->ControlPointId { ControlPointId::new(value).unwrap() }
+    fn position(x:f64,y:f64)->crate::topology::ControlPointPosition {
+        crate::topology::ControlPointPosition::new(x,y).unwrap()
+    }
+    fn point(x:f64,y:f64)->Point2 { Point2::new(x,y).unwrap() }
+
+    fn certified_face(face:TopologyFace, coordinates:&[(u64,f64,f64)]) -> ValidatedCageGeometry {
+        let topology=DeformationTopology::IrregularCage(IrregularCageTopology {
+            id:DeformationTopologyId::new(91).unwrap(),
+            revision:DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids:coordinates.iter().map(|(key,_,_)|id(*key)).collect(),
+            faces:vec![face],
+        });
+        let state=DeformationControlState {
+            topology_id:topology.topology_id(),
+            topology_revision:topology.topology_revision(),
+            revision:ControlStateRevision::new(1).unwrap(),
+            points:coordinates.iter().map(|(key,x,y)|ControlPointState {
+                id:id(*key),position:position(*x,*y),pinned:false,
+            }).collect(),
+        };
+        let certificate=validate_cage_embedding(&topology,&state).unwrap();
+        ValidatedCageGeometry::new(&topology,&state,&certificate).unwrap()
+    }
+
+    #[test]
+    fn triangle_extrapolation_returns_unbounded_barycentric_coordinates_within_limit() {
+        let geometry=certified_face(
+            TopologyFace::Triangle([id(1),id(2),id(3)]),
+            &[(1,0.0,0.0),(2,2.0,0.0),(3,0.0,2.0)],
+        );
+        let result=resolve_outside_point(point(0.5,-0.5),&geometry,
+            OutsideCageResolutionPolicy::BoundedExtrapolation{max_distance:0.6}).unwrap();
+        let OutsideCageResolution::Extrapolated{boundary,coordinates,offset}=result else {
+            panic!("expected bounded extrapolation");
+        };
+        assert_eq!(boundary.point,point(0.5,0.0));
+        assert!((boundary.distance-0.5).abs()<1.0e-12);
+        assert_eq!(offset,[0.0,-0.5]);
+        assert_eq!(coordinates,FaceCoordinates::TriangleBarycentric{weights:[0.75,0.25,-0.25]});
+    }
+
+    #[test]
+    fn quad_extrapolation_inverts_the_bilinear_patch_outside_parameter_domain() {
+        let geometry=certified_face(
+            TopologyFace::Quad([id(1),id(2),id(3),id(4)]),
+            &[(1,0.0,0.0),(2,2.0,0.0),(3,2.0,2.0),(4,0.0,2.0)],
+        );
+        let result=resolve_outside_point(point(1.0,-0.5),&geometry,
+            OutsideCageResolutionPolicy::BoundedExtrapolation{max_distance:0.6}).unwrap();
+        let OutsideCageResolution::Extrapolated{coordinates,..}=result else {
+            panic!("expected bounded extrapolation");
+        };
+        assert_eq!(coordinates,FaceCoordinates::QuadBilinear{u:0.5,v:-0.25});
+    }
+
+    #[test]
+    fn bounded_extrapolation_rejects_points_beyond_the_distance_budget() {
+        let geometry=certified_face(
+            TopologyFace::Triangle([id(1),id(2),id(3)]),
+            &[(1,0.0,0.0),(2,2.0,0.0),(3,0.0,2.0)],
+        );
+        assert!(matches!(resolve_outside_point(point(0.5,-0.5),&geometry,
+            OutsideCageResolutionPolicy::BoundedExtrapolation{max_distance:0.4}),
+            Err(OutsideCageError::DistanceLimitExceeded{..})));
+    }
+}
