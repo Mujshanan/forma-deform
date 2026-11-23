@@ -71,7 +71,7 @@ Smart Controller evaluation and Form Deform pin evaluation remain independent. D
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the feature allocation matrix, external code-reuse audit, UI behavior, integration boundaries, milestones, and acceptance criteria.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the feature allocation matrix, external code-reuse audit, integration boundaries, milestones, and acceptance criteria. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) for the detailed native-tool UI/UX specification, workspace layout, interaction flows, preview states, and acceptance criteria.
 
 Additional technical references:
 
