@@ -65,6 +65,7 @@ impl EvaluationDiagnostic {
             target: Some(target.clone()),
             contract_error: None,
             operator_error: None,
+            interface_error: None,
         }
     }
 
@@ -74,6 +75,7 @@ impl EvaluationDiagnostic {
             target: None,
             contract_error: Some(error),
             operator_error: None,
+            interface_error: None,
         }
     }
 
