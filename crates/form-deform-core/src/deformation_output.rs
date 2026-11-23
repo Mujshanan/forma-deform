@@ -206,7 +206,7 @@ mod tests {
         use crate::topology::{
             ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
             DeformationControlState, DeformationTopology, DeformationTopologyId,
-            DeformationTopologyRevision, IrregularCageTopology, TopologyFace,
+            DeformationTopologyRevision, IrregularCageTopology, TopologyFace, TopologyView,
         };
 
         let path = Path2D::new(vec![
@@ -300,8 +300,9 @@ mod tests {
         use crate::curve_sample_evaluation::evaluate_curve_samples;
         use crate::curve_sampling::{map_curve_samples, sample_path_curves, CurveSamplingPolicy};
         use crate::embedding::validate_cage_embedding;
+        use crate::binding::ValidatedCageGeometry;
         use crate::binding_evaluation::evaluate_binding;
-        use crate::topology::{ControlPointPosition, ControlStateRevision, TopologyView};
+        use crate::topology::{ControlPointPosition, ControlStateRevision};
 
         let (source, topology, rest_state, rest_geometry, validated) = integration_fixture();
         let samples = sample_path_curves(source.payload(), CurveSamplingPolicy::default()).unwrap();
