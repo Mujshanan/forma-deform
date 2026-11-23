@@ -4,7 +4,7 @@ on:
   push:
     branches: [quality/cq2-rustfmt-apply]
     paths:
-      - "docs/quality/rustfmt-apply-trigger.txt"
+      - "docs/quality/rustfmt-apply-trigger*.txt"
 
 permissions:
   actions: read
