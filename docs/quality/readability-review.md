@@ -212,3 +212,25 @@ The following external tools were evaluated as possible instruments for CQ2 and 
 - A written decision for each candidate tool: adopt, limited use, or reject.
 
 **Status:** Recommendations documented. No candidate tool execution or CI integration has yet been performed.
+
+
+## CQ2 tool pilot — CI wiring
+
+**Status:** Workflow added; execution pending a GitHub Actions dispatch.
+
+- Workflow: `.github/workflows/cq2-tool-pilot.yml`
+- Branch: `quality/cq2-tool-pilot`
+- Trigger: manual `workflow_dispatch`; caller supplies the branch/tag/commit to audit.
+- Analyzer: `rustqual 1.8.3`, installed with `--locked`.
+- Mode: `--no-fail --verbose`; findings are reported but do not fail the job. Installation/runtime errors still fail the job.
+- Output: `quality-reports/rustqual-report.txt` and tool version, uploaded as a 30-day Actions artifact.
+- Permissions: read-only repository contents.
+- No application source, normal CI workflow, lockfile, or analyzer configuration was changed.
+
+### Why Mozilla rust-code-analysis is not wired yet
+
+The Mozilla CLI remains a measurement candidate, but I have not added an unverified install/build step. The currently surfaced CLI release is `0.0.25`; the project documentation describes building the CLI from its source workspace, while the repository issue tracker includes an open report that `cargo install rust-code-analysis-cli` does not compile. That is a reproducibility risk for a first audit workflow. Before wiring it, verify a supported installation path (preferably a maintained release binary or a pinned source build) on the exact Ubuntu runner and record the CLI version. The metrics command itself supports directory analysis and JSON export; the intended source scope is the workspace Rust crates, with raw output retained as an artifact.
+
+### Execution boundary
+
+The workflow has been committed but has not yet been dispatched. Therefore there are no rustqual findings or Mozilla metrics to report at this point. Once Actions runs, review rustqual findings manually and compare them with the CQ2 source-review findings; do not treat its score or default architecture assumptions as a quality verdict.
