@@ -160,14 +160,12 @@ Host owns persistence orchestration; FDM defines and validates the binding paylo
 
 ## 11. Implementation sequence
 
-- FDM-03.0 — This architecture and mapping contract.
-- FDM-03.1 — Binding data types, source feature enumeration, freshness stamps, policy enums, and validation. Resolve quadrilateral mapping policy.
-- FDM-03.2 — Deterministic point location and source-feature-to-cage mapping for triangles and quads.
-- FDM-03.3 — Outside-cage policies, boundary projection, bounded extrapolation, and deterministic tie-breaking.
+- FDM-02.6 — Global cage embedding validation (new prerequisite): prove non-overlapping, unambiguous cage embedding and issue a geometry-bound validation certificate.
+- FDM-03.1 — Binding data model and validation, including source feature enumeration, freshness stamps, typed policy identifiers, and validated control-position access. The revised design is documented in [FDM_03_1_BINDING_DATA_MODEL_AND_VALIDATION_DESIGN.md](FDM_03_1_BINDING_DATA_MODEL_AND_VALIDATION_DESIGN.md). Quad faces use bilinear coordinates; triangle faces use barycentric coordinates.
+- FDM-03.2 — Deterministic point location and source-feature-to-cage mapping for triangles and quads, including inverse-bilinear solving and deterministic shared-boundary ownership.
+- FDM-03.3 — Outside-cage policies, boundary projection, and bounded extrapolation.
 - FDM-03.4 — Curve-feature sampling/adaptive mapping policy with explicit error and resource budgets.
 - FDM-03.5 — Binding schema serialization, stale-binding diagnostics, and host adapter contract.
-
-Each implementation step should remain independent of AniCraft's native Asset Warp internals.
 
 ## 12. Explicit non-goals
 
