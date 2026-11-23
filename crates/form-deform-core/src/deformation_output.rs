@@ -27,6 +27,9 @@ impl EvaluatedDeformationOutput {
         if structured.source_stamp() != curves.source_stamp() {
             return Err(DeformationOutputError::SourceStampMismatch);
         }
+        if structured.binding_stamp() != curves.binding_stamp() {
+            return Err(DeformationOutputError::BindingStampMismatch);
+        }
         if structured.cage_geometry_fingerprint() != curves.current_cage_fingerprint() {
             return Err(DeformationOutputError::CurrentCageMismatch);
         }
@@ -132,6 +135,7 @@ fn validate_curve_alignment(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeformationOutputError {
     SourceStampMismatch,
+    BindingStampMismatch,
     CurrentCageMismatch,
     CommandIndexOverflow,
     SubpathIndexOverflow,
@@ -144,6 +148,7 @@ impl std::fmt::Display for DeformationOutputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SourceStampMismatch => write!(f, "structured path and curve samples refer to different source snapshots"),
+            Self::BindingStampMismatch => write!(f, "structured path and curve samples were evaluated from different validated bindings"),
             Self::CurrentCageMismatch => write!(f, "structured path and curve samples refer to different current cage poses"),
             Self::CommandIndexOverflow => write!(f, "Path2D command index exceeds curve-sample locator capacity"),
             Self::SubpathIndexOverflow => write!(f, "Path2D subpath index exceeds curve-sample locator capacity"),
