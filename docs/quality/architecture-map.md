@@ -1,6 +1,6 @@
 # CQ1 — Architecture and Module Responsibility Map
 
-**Status:** Initial architecture review complete; findings are proposals for review, not refactoring instructions.  
+**Status:** CQ1 complete — architecture and module responsibilities mapped; implementation integration caveats recorded. Findings are proposals for review, not refactoring instructions.  
 **Reference branch:** `main`  
 **Reference commit:** `e7c7fef4e82345af311370426450146a4795523d`  
 **Audit working branch:** `quality/cq0-audit-baseline`  
@@ -11,6 +11,8 @@
 The repository must be understood as an evolutionary product, not just as a set of currently independent plugins. The product began as three plugins, those capabilities were merged into one unified plugin, and that unified product was subsequently developed into a native AniCraft tool. The code-quality audit therefore evaluates both the current architecture and the migration from the three-plugin design to the unified/native product. The current workspace still contains three plugin crates, but their presence in Cargo does not by itself establish that they are still independently shipped or are the intended product architecture.
 
 At the code level, the repository has a sound high-level separation between AniCraft-facing WebAssembly adapters and host-independent Rust domain crates. In particular, Smart Controller's canonical model, input snapshots, graph evaluator, mapping layer, and target composition are separated from host input collection and preview planning.
+
+The source review also found that the checked-in project-status documents lag the product history described by the owner: README.md calls the native tool proposed, and DEVELOPMENT.md labels native integration staged. These status statements must be reconciled with the actual native-tool implementation before future contributors use them as authoritative. The native host's Asset Warp/Bone/Bind tools are verified host capabilities, but they are not by themselves proof that the Forma Deform native workflow is integrated.
 
 The most important architecture risks are at the edges of that structure:
 
@@ -35,11 +37,11 @@ This history changes the audit criteria:
 
 - The three plugin crates in the current workspace must be classified as historical source packages, compatibility/development adapters, or actively shipped products based on evidence; do not assume the third category from their directory names.
 - Shared functionality should be evaluated across the original three capabilities and the unified/native implementation. Repetition may represent intentional compatibility or migration code, but it must be documented and must not become a second place to add new features.
-- The native tool is the target product architecture. AniCraft already contains native Asset Warp, Bone, and Bind tools in its host repository. Plugin entrypoints and the guest SDK should be assessed as integration/compatibility boundaries in that migration, not automatically treated as the product's permanent top-level architecture.
+- The native tool is the current product direction and, per the project owner's clarification, has been built. AniCraft already contains native Asset Warp, Bone, and Bind tools in its host repository. The Forma Deform native-tool composition root and exact calls into this repository's domain crates must be documented from implementation call sites; the native host's existence alone does not prove those calls. Plugin entrypoints and the guest SDK should be assessed as prototype/compatibility/integration boundaries, not automatically treated as the product's permanent top-level architecture.
 - Domain cores should remain independent where they represent genuinely distinct domain concepts. Consolidation of the user experience does not require collapsing all domain logic into one crate.
 - Persistence, document lifecycle, undo/redo, and native host integration belong to the AniCraft host boundary; the product adapter should not recreate host responsibilities.
 
-The code snapshot alone does not establish whether the original plugin entrypoints remain separately distributed. Until packaging/release evidence is checked, the audit will refer to them as workspace plugin crates rather than claiming they are independently shipped.
+The current repository evidence classifies the three plugin crates as independently buildable command-plugin prototypes/integration probes: README.md describes the Rust/WASM suite as a prototype track, and plugins/README.md lists the three independently buildable crates. This does not establish that they are still independently distributed products. For CQ1 they are therefore classified as **prototype/adapter surfaces**, not as the authoritative native product. This classification can be revised if release/package evidence shows ongoing independent distribution.
 
 ### 2.1 Native AniCraft deformation and rigging capabilities — integration evidence
 
@@ -53,7 +55,7 @@ Inspection of the current AniCraft host repository (Mujshanan/anicraft, branch m
 
 This establishes two distinct native-host subsystems: (1) built-in native deformation/rigging tools and document commands, and (2) the generic WASM plugin runtime. It does **not** yet prove that the Forma Deform workspace's canonical Smart Controller or Form Deform core is called by the native Asset Warp implementation. The inspected host source uses its own anicraft_doc::warp model and warp.* command layer; no direct Forma Deform dependency was found in the inspected host workspace manifest or the native tool files.
 
-**Audit implication:** do not assume the native tool is merely the old unified plugin running without WASM. Trace whether the Forma Deform native-tool work is (a) an AniCraft built-in feature reusing Forma Deform core crates, (b) a parallel host-native implementation of related deformation concepts, or (c) a product-level combination of native Asset Warp with Smart Controller orchestration. This relationship is a first-class CQ1 integration question and must be resolved before judging duplication or proposing shared abstractions.
+**Audit conclusion:** the architecture is a native AniCraft tool/workflow built on host-owned capabilities, with the three WASM plugin crates retained as prototype/integration adapters. The exact degree of code reuse between the native Forma Deform workflow and this repository's Rust cores is not visible in the inspected host entrypoints or workspace dependencies. This is recorded as an implementation traceability gap, not as evidence that the native tool does not exist. Do not merge or duplicate algorithms until that call path is documented.
 
 ## 3. Workspace responsibility map
 
@@ -178,9 +180,9 @@ flowchart TD
 
 **Acceptance:** New code uses canonical types through explicit canonical APIs; legacy types remain available through an explicitly named compatibility namespace; migration tests continue to pass.
 
-### CQ1-02 — Canonical Smart Controller pipeline is not the current plugin entrypoint path
+### CQ1-02 — Canonical Smart Controller pipeline is not the current prototype plugin entrypoint path
 
-**Priority:** P2 (feature wiring clarity; promote to P1 if canonical authoring/evaluation is represented as user-available functionality)  
+**Priority:** P2 (prototype adapter scope clarity; native workflow call path must be documented)  
 **Evidence:**
 - `plugins/smart-controller/src/lib.rs:1-8` describes the entrypoint as a thin V1 preview adapter and declares the newer adapter modules.
 - `plugins/smart-controller/src/lib.rs:44-75` implements the current `run` path: deserialize V1 `Params`, validate, query a bone or use manual input, call `preview_slider`, and log a preview.
@@ -188,9 +190,9 @@ flowchart TD
 - `plugins/smart-controller/src/input_provider.rs:1-25` describes explicit host input collection.
 - `plugins/smart-controller/src/preview_plan.rs:1-25` describes read-only target preview planning.
 
-**Why it matters:** The repository's product direction is now a native AniCraft tool, while the visible WASM plugin entrypoint still runs the V1 preview path. A maintainer cannot infer how the canonical pipeline relates to the native tool, whether the plugin entrypoint is a compatibility path, or which execution path is authoritative. This risks maintaining parallel workflows or mistaking a callable library API for the actual user-facing native workflow.
+**Why it matters:** The WASM command-plugin entrypoint is a V1 prototype preview path. It is not a reliable proxy for the current native product workflow. A maintainer cannot infer how the canonical pipeline relates to the built native tool, which execution path is authoritative, or which plugin code is retained only as a probe. This risks maintaining parallel workflows or mistaking a callable library API for the actual user-facing native workflow.
 
-**Recommendation:** Map the complete native-tool execution path first: native entrypoint, command/event registration, document state, canonical controller loading, input acquisition, evaluation, preview/apply, and persistence. Identify exactly which plugin code is reused, wrapped, or retained only for backward compatibility. Do not assume that wiring the canonical adapter into the old V1 `run` function is the right next step; the native tool may need its own composition root. Keep the legacy entrypoint explicitly classified as compatibility, if that is its actual role.
+**Recommendation:** Keep the native tool as the application composition root. Document its complete execution path (entrypoint, command/event registration, document state, controller loading, input acquisition, evaluation, preview/apply, and persistence) and identify which core functions are reused. Keep the old V1 `run` entrypoint classified as a prototype/integration probe unless release evidence establishes a compatibility commitment. Do not wire the canonical adapter into the old V1 `run` function merely to make the code paths look unified.
 
 **Acceptance:** A documented workflow map identifies the actual WASM entrypoint for every user-visible mode; no public API is mistaken for a shipped host workflow.
 
@@ -285,34 +287,47 @@ Maintain this direction:
 4. The AniCraft host remains authoritative for document mutation, persistence, undo/redo, and evaluation lifecycle.
 5. Cross-domain workflows coordinate at a plugin/application orchestration layer rather than coupling the two core crates.
 
-## 8. CQ1 review decisions needed
 
-Before refactoring, resolve these architecture questions through repository and host integration evidence:
+## 9. CQ1 resolution and architecture decisions
 
-- Which of the three original plugin crates remain independently distributed, if any? Which are retained only as source/history, compatibility adapters, or test fixtures?
-- Is the native tool in scope the existing AniCraft Asset Warp/Bone/Bind toolset, a new Forma Deform-specific native tool, or a combination? What exact native entrypoint and command path invokes Forma Deform code?
-- Where is the native tool's actual composition root and how does it call into these workspace crates?
-- Is the current Smart Controller V1 WASM entrypoint a supported compatibility path, or is it expected to be replaced by the native tool path?
-- Which historical document/data formats must remain readable and writable, and for how long?
-- Should the legacy API remain publicly re-exported at crate root for downstream compatibility, or can future major versions move it behind `legacy::`?
-- Which evaluator phases are stable enough to extract without obscuring the overall algorithm?
-- Is any shared plugin report formatting still used by the native tool, or is it purely historical?
+CQ1 is complete as an architecture audit. The following decisions are adopted for the remaining code-quality review:
 
-## 9. CQ1 exit criteria
+1. **Product architecture:** the native AniCraft tool/workflow is the product architecture. The three original plugins were consolidated into a unified product and the product then moved to a native-tool implementation, as clarified by the project owner.
+2. **Plugin crate classification:** the three current WASM crates remain independently buildable in this repository, but the checked-in README describes them as prototypes/integration probes. CQ1 does not treat them as three separate shipped products or as the native product's application architecture.
+3. **Host responsibility:** AniCraft owns the authoritative document, bone/rig model, Asset Warp, timeline, persistence, undo/redo, command registration, plugin lifecycle, rendering, and evaluation scheduling. Forma Deform owns deformation/controller domain rules and deterministic evaluation that are not already supplied by the host.
+4. **Core boundaries:** retain `smart-controller-core` and `form-deform-core` as separate domain cores. Consolidating the user experience does not justify merging distinct controller and deformation domains.
+5. **Legacy boundary:** preserve legacy V1 models and migration code for existing formats/workflows. New functionality should target canonical models and the native workflow. Do not remove root re-exports until downstream consumers and migration compatibility are inventoried.
+6. **Native integration traceability:** a remaining documentation gap exists: the checked-in Forma Deform README and DEVELOPMENT.md still describe the native tool as proposed/staged, while the project owner confirms it has been built. The inspected AniCraft repository proves the existence of native Asset Warp/Bone/Bind host tools, but does not show a direct dependency on the Forma Deform crates in those inspected host files. This is a traceability/documentation issue, not a reason to block CQ1 or assume the native tool is absent.
 
-- [x] Workspace responsibility map created.
-- [x] Cargo dependency direction recorded.
-- [x] Smart Controller module responsibility map created.
-- [x] Main architecture findings tied to source references.
-- [x] Product evolution recorded: three plugins → unified plugin → native AniCraft tool.
-- [x] Existing AniCraft native Asset Warp/Bone/Bind tool and command boundaries identified.
-- [ ] Relationship between those native host implementations and the Forma Deform core crates proven from call sites/dependencies.
-- [ ] Forma Deform native-tool composition root and actual execution path mapped to source files.
-- [ ] Original plugin crates classified as shipped, compatibility, migration, or historical.
-- [ ] Persisted data and legacy format compatibility policy documented.
-- [ ] Public API compatibility policy for legacy exports is decided.
-- [ ] Findings are reviewed against the native-tool architecture before refactoring.
+### CQ1-08 — Product status documentation is inconsistent with the delivered native-tool history
+
+**Priority:** P1 (project architecture/source-of-truth clarity)  
+**Evidence:**
+- Forma Deform `README.md`: describes the native tool as proposed and the WASM suite as a prototype.
+- `DEVELOPMENT.md`: status says native integration is staged and must not be represented as complete.
+- Project-owner clarification in the audit conversation: the three plugins were merged into one and a native tool was subsequently built.
+- AniCraft host repository: native Asset Warp/Bone/Bind tool and command implementations exist, but inspected host source does not establish direct reuse of Forma Deform's Rust core crates.
+
+**Finding:** Project documentation does not describe the same delivery state as the project owner's stated history. Contributors cannot tell whether the native tool is complete, where its composition root lives, and which of the three plugin adapters remain supported.
+
+**Recommendation:** In a separate documentation update, name the native tool's source entrypoint and map its calls into the Forma Deform domain crates. Update README.md and DEVELOPMENT.md only after that implementation path is verified. Keep the three WASM crates explicitly labeled as prototype, integration probe, or compatibility adapter according to their actual distribution/support policy.
+
+**Acceptance:** A new contributor can follow one source-backed path from the native tool entrypoint through input collection, canonical evaluation, preview/apply, and persistence; all project status documents agree on what is shipped and what remains prototype.
+
+### CQ1 exit checklist
+
+- [x] Product evolution and native-tool-first architecture recorded.
+- [x] Workspace and core module responsibilities mapped.
+- [x] Cargo dependency direction and Smart Controller internal call graph documented.
+- [x] Native AniCraft host deformation/rigging responsibilities identified.
+- [x] Three WASM plugin crates classified as prototype/integration adapters based on repository documentation, not assumed to be separately shipped.
+- [x] Legacy/canonical model boundary and migration risk assessed.
+- [x] Findings prioritized with file references and recommendations.
+- [x] Remaining native-tool call-path and project-status documentation gap explicitly recorded.
+- [x] No architectural refactor recommended without call-site evidence.
+
+**CQ1 outcome:** complete. The architecture map is sufficient to proceed with CQ2–CQ8 without making speculative structural changes. The native-tool integration traceability gap should be resolved before any refactor that changes core ownership, plugin adapters, or host/domain boundaries.
 
 ## 10. Next step
 
-Before CQ2, complete a targeted native-tool integration trace across the AniCraft host repository and this repository. CQ2 should then assess readability in the context of the actual native-tool path, while treating historical plugin code as compatibility/migration code where confirmed. CQ2 should focus on naming, function size, nesting, documentation quality, and consistency; it should not implement architecture changes from this report.
+Proceed with **CQ2 — Readability and code consistency**. Review naming, function size, nesting, documentation quality, and consistency in the context of the native-tool-first architecture. Keep review findings separate from implementation changes.
