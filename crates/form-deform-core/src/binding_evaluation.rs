@@ -517,7 +517,7 @@ mod tests {
                 locator: feature.locator,
                 face_index: 0,
                 subface_index: 0,
-                control_point_ids: ids,
+                control_point_ids: ids.clone(),
                 coordinates: location.coordinates,
             }),
         }]);
