@@ -1,1 +1,0 @@
-Trigger for applying and verifying the previously reviewed rustfmt patch on this clean baseline branch.
