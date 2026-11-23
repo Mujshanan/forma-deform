@@ -51,13 +51,13 @@ impl IrregularCage {
 
     /// Validate identity, connectivity, manifoldness, face geometry, and boundary.
     pub fn validate_geometry(&self) -> Result<(), IrregularCageError> {
-        self.topology.validate_structure().map_err(IrregularCageError::Topology)?;
         if self.topology.control_point_ids.len() > MAX_IRREGULAR_CAGE_POINTS {
             return Err(IrregularCageError::TooManyPoints(self.topology.control_point_ids.len()));
         }
         if self.topology.faces.len() > MAX_IRREGULAR_CAGE_FACES {
             return Err(IrregularCageError::TooManyFaces(self.topology.faces.len()));
         }
+        self.topology.validate_structure().map_err(IrregularCageError::Topology)?;
         self.control_state.validate_against(&self.topology)
             .map_err(IrregularCageError::Topology)?;
 
@@ -91,6 +91,13 @@ impl IrregularCage {
 
     /// Return the single outer boundary in deterministic directed-edge order.
     pub fn boundary_control_point_ids(&self) -> Result<Vec<ControlPointId>, IrregularCageError> {
+        if self.topology.control_point_ids.len() > MAX_IRREGULAR_CAGE_POINTS {
+            return Err(IrregularCageError::TooManyPoints(self.topology.control_point_ids.len()));
+        }
+        if self.topology.faces.len() > MAX_IRREGULAR_CAGE_FACES {
+            return Err(IrregularCageError::TooManyFaces(self.topology.faces.len()));
+        }
+        self.topology.validate_structure().map_err(IrregularCageError::Topology)?;
         let edge_map = self.build_edge_map()?;
         self.extract_boundary(&edge_map)
     }
