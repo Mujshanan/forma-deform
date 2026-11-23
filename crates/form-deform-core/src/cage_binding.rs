@@ -123,6 +123,32 @@ impl CageBinding {
         &self.points
     }
 
+    pub fn cage_vertex_ids(&self) -> &[u64] { &self.cage_vertex_ids }
+    pub fn cage_triangles(&self) -> &[[u64; 3]] { &self.cage_triangles }
+
+    /// Convert the validated runtime binding into its durable document record.
+    pub fn to_persisted(
+        &self,
+        id: impl Into<String>,
+        revision: u64,
+        target: crate::host_contract::HostTargetRef,
+        reference_geometry: crate::host_contract::GeometrySnapshotStamp,
+        coordinate_space: crate::host_contract::CoordinateSpaceDescriptor,
+    ) -> Result<crate::cage_binding_persistence::PersistedCageBinding,
+        crate::cage_binding_persistence::CageBindingPersistenceError> {
+        let points = self.points.iter().map(|point| {
+            crate::cage_binding_persistence::PersistedBoundPoint {
+                point_id: point.id,
+                cage_vertex_ids: point.cage_vertex_ids,
+                barycentric: point.barycentric,
+            }
+        }).collect();
+        crate::cage_binding_persistence::PersistedCageBinding::new(
+            id, revision, target, reference_geometry, coordinate_space,
+            self.cage_vertex_ids.clone(), self.cage_triangles.clone(), points,
+        )
+    }
+
     /// Evaluate attachments against a deformed cage with the same stable
     /// vertex identity set. The current cage is passed through the same global
     /// validator used at bind time; no second topology validator is maintained.
