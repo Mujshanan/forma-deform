@@ -68,8 +68,14 @@ pub fn verify_geometry_pin(
     if actual_element != expected_element {
         return Err(format!("warp.info returned element {actual_element}, expected {expected_element}"));
     }
+    if response.get("layer").and_then(Value::as_u64).is_none() {
+        return Err("warp.info response is missing numeric layer ID".into());
+    }
     if response.get("bitmap").and_then(Value::as_bool) == Some(true) {
         return Err("bitmap artwork is not a supported geometry deformation target".into());
+    }
+    if response.get("bitmap").and_then(Value::as_bool) != Some(false) {
+        return Err("warp.info response is missing the bitmap capability flag".into());
     }
     if response.get("warped").and_then(Value::as_bool) != Some(true) {
         return Err("artwork has no live warp mesh and is not a supported geometry deformation target".into());
@@ -98,8 +104,14 @@ pub fn resolve_geometry_pin(
     if response.get("element").and_then(Value::as_u64) != Some(expected_element) {
         return TargetResolution::Unavailable("warp.info response does not match the requested element ID".into());
     }
+    if response.get("layer").and_then(Value::as_u64).is_none() {
+        return TargetResolution::Unavailable("warp.info response is missing numeric layer ID".into());
+    }
     if response.get("bitmap").and_then(Value::as_bool) == Some(true) {
         return TargetResolution::Unsupported("bitmap artwork cannot be targeted by geometry pin deformation".into());
+    }
+    if response.get("bitmap").and_then(Value::as_bool) != Some(false) {
+        return TargetResolution::Unavailable("warp.info response is missing the bitmap capability flag".into());
     }
     if response.get("warped").and_then(Value::as_bool) != Some(true) {
         return TargetResolution::Unsupported("artwork has no live warp mesh".into());
@@ -173,7 +185,8 @@ mod tests {
     #[test]
     fn malformed_geometry_identity_fails_closed() {
         assert!(verify_geometry_pin(&serde_json::json!({"pins":[]}), "17", "12").is_err());
-        assert!(verify_geometry_pin(&serde_json::json!({"element":17,"warped":true,"bitmap":false,"pins":[]}), "17", "not-a-pin").is_err());
+        assert!(verify_geometry_pin(&serde_json::json!({"element":17,"layer":4,"warped":true,"bitmap":false,"pins":[]}), "17", "not-a-pin").is_err());
+        assert!(verify_geometry_pin(&serde_json::json!({"element":17,"warped":true,"pins":[{"pin":12}]}), "17", "12").is_err());
         assert!(verify_geometry_pin(&serde_json::json!({"element":17,"warped":false,"bitmap":false}), "17", "12").is_err());
     }
 
