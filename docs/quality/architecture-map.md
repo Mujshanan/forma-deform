@@ -288,7 +288,7 @@ Maintain this direction:
 5. Cross-domain workflows coordinate at a plugin/application orchestration layer rather than coupling the two core crates.
 
 
-## 9. CQ1 resolution and architecture decisions
+## 8. CQ1 resolution and architecture decisions
 
 CQ1 is complete as an architecture audit. The following decisions are adopted for the remaining code-quality review:
 
@@ -328,6 +328,6 @@ CQ1 is complete as an architecture audit. The following decisions are adopted fo
 
 **CQ1 outcome:** complete. The architecture map is sufficient to proceed with CQ2–CQ8 without making speculative structural changes. The native-tool integration traceability gap should be resolved before any refactor that changes core ownership, plugin adapters, or host/domain boundaries.
 
-## 10. Next step
+## 9. Next step
 
 Proceed with **CQ2 — Readability and code consistency**. Review naming, function size, nesting, documentation quality, and consistency in the context of the native-tool-first architecture. Keep review findings separate from implementation changes.
