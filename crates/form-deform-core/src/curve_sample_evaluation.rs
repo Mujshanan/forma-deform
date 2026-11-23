@@ -7,7 +7,7 @@ use crate::binding::{BindingError, BindingStamp, FaceCoordinates, ValidatedCageG
 use crate::binding_persistence::ValidatedBindingRecord;
 use crate::curve_sampling::{
     map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
-    CurveSamplingError, MappedCurveSampleSet,
+    CurveSamplingError, MappedCurveSample, MappedCurveSampleSet,
 };
 use crate::host_contract::{GeometrySnapshot, GeometrySnapshotStamp};
 use crate::path2d::Point2;
@@ -143,6 +143,62 @@ pub fn evaluate_curve_samples(
         extrapolated_samples: extrapolated_count,
         unbound_samples: unbound_count,
     })
+}
+
+
+/// Evaluate one original source-space point through the exact same rest-cage
+/// point-location and outside-cage semantics used by adaptive curve samples.
+pub(crate) fn evaluate_source_point(
+    validated: &ValidatedBindingRecord,
+    rest_cage: &ValidatedCageGeometry,
+    current_cage: &ValidatedCageGeometry,
+    outside_policy: crate::binding::OutsideCagePolicy,
+    point: Point2,
+) -> Result<Point2, CurveSampleEvaluationError> {
+    use crate::outside_policy::{resolve_outside_point, OutsideCageResolution};
+    use crate::point_location::{locate_point, PointLocationOutcome};
+    use crate::curve_sampling::{CurveSampleMapping, MappedCurveSample};
+
+    if outside_policy != validated.binding().stamp().outside_policy
+        || validated.rest_cage_fingerprint() != rest_cage.geometry_fingerprint()
+    {
+        return Err(CurveSampleEvaluationError::StaleRestCageGeometry);
+    }
+    let mapping = match locate_point(point, rest_cage)
+        .map_err(|error| CurveSampleEvaluationError::Mapping(CurveMappingError::PointLocation(error)))? {
+        PointLocationOutcome::Located(face) => CurveSampleMapping::Mapped {
+            face_index: face.face_index,
+            subface_index: face.subface_index,
+            control_point_ids: face.control_point_ids,
+            coordinates: face.coordinates,
+        },
+        PointLocationOutcome::OutsideCage => match resolve_outside_point(point, rest_cage, outside_policy)
+            .map_err(|error| CurveSampleEvaluationError::Mapping(CurveMappingError::OutsideCage(error)))? {
+            OutsideCageResolution::Unbound => CurveSampleMapping::Unbound,
+            OutsideCageResolution::Clamped(boundary) => {
+                let ids = rest_cage.face(boundary.face_index as usize)
+                    .ok_or(CurveSampleEvaluationError::FaceIndexOutOfRange(boundary.face_index as usize))?
+                    .control_point_ids().to_vec();
+                CurveSampleMapping::Clamped {
+                    face_index: boundary.face_index, subface_index: 0,
+                    control_point_ids: ids, coordinates: boundary.coordinates,
+                }
+            }
+            OutsideCageResolution::Extrapolated { boundary, coordinates, offset } => {
+                let ids = rest_cage.face(boundary.face_index as usize)
+                    .ok_or(CurveSampleEvaluationError::FaceIndexOutOfRange(boundary.face_index as usize))?
+                    .control_point_ids().to_vec();
+                CurveSampleMapping::Extrapolated {
+                    face_index: boundary.face_index, subface_index: 0,
+                    control_point_ids: ids, coordinates, boundary_offset: offset,
+                }
+            }
+        },
+    };
+    let sample = MappedCurveSample {
+        command_index: 0, subpath_index: 0, sample_index: 0, t: 0.0, point, mapping,
+    };
+    evaluate_sample_mapping(&sample, current_cage)
 }
 
 fn validate_cage_topology(
