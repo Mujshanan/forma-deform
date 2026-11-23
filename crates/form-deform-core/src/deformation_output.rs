@@ -177,6 +177,164 @@ mod tests {
         }
     }
 
+
+    fn integration_fixture() -> (
+        crate::host_contract::GeometrySnapshot,
+        crate::topology::DeformationTopology,
+        crate::topology::DeformationControlState,
+        crate::binding::ValidatedCageGeometry,
+        crate::binding_persistence::ValidatedBindingRecord,
+    ) {
+        use crate::binding::{
+            enumerate_source_features, BindingRecord, BindingStamp, FeatureBindingEntry,
+            MappingPolicy, OutsideCagePolicy, SourceFeatureBinding, ValidatedCageGeometry,
+        };
+        use crate::binding_persistence::PersistedBinding;
+        use crate::embedding::validate_cage_embedding;
+        use crate::host_contract::{
+            AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
+            CoordinateSpaceKind, GeometryRevision, HostDocumentId, HostNamespace, HostTargetId,
+            HostTargetKind, HostTargetRef, TopologyRevision,
+        };
+        use crate::path2d::{PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION};
+        use crate::point_location::{locate_point, PointLocationOutcome};
+        use crate::topology::{
+            ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
+            DeformationControlState, DeformationTopology, DeformationTopologyId,
+            DeformationTopologyRevision, IrregularCageTopology, TopologyFace,
+        };
+
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.2, 0.2)),
+            PathCommand::CubicTo {
+                control1: point(0.4, 0.3),
+                control2: point(0.8, 0.9),
+                to: point(1.2, 1.0),
+            },
+        ]).unwrap();
+        let coordinate_space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("target-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let fingerprint = path.fingerprint(&coordinate_space).unwrap();
+        let source = crate::host_contract::GeometrySnapshot::new(
+            HostTargetRef {
+                namespace: HostNamespace::new("anicraft").unwrap(),
+                document_id: HostDocumentId::new("fdm05-output-test").unwrap(),
+                target_kind: HostTargetKind::new("shape").unwrap(),
+                target_id: HostTargetId::new("curve-1").unwrap(),
+                generation: 1,
+            },
+            GeometryRevision(1),
+            TopologyRevision(1),
+            fingerprint,
+            coordinate_space,
+            PATH2D_PAYLOAD_KIND,
+            PATH2D_SCHEMA_VERSION,
+            path,
+        ).unwrap();
+
+        let ids = (1..=4).map(|id| ControlPointId::new(id).unwrap()).collect::<Vec<_>>();
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: DeformationTopologyId::new(91).unwrap(),
+            revision: DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids: ids.clone(),
+            faces: vec![
+                TopologyFace::Triangle([ids[0], ids[1], ids[2]]),
+                TopologyFace::Triangle([ids[2], ids[1], ids[3]]),
+            ],
+        });
+        let positions = [(0.0, 0.0), (2.0, 0.0), (0.0, 2.0), (2.0, 2.0)];
+        let rest_state = DeformationControlState {
+            topology_id: topology.topology_id(),
+            topology_revision: topology.topology_revision(),
+            revision: ControlStateRevision::new(1).unwrap(),
+            points: ids.iter().copied().zip(positions).map(|(id, (x, y))| ControlPointState {
+                id,
+                position: ControlPointPosition::new(x, y).unwrap(),
+                pinned: false,
+            }).collect(),
+        };
+        let certificate = validate_cage_embedding(&topology, &rest_state).unwrap();
+        let rest_geometry = ValidatedCageGeometry::new(&topology, &rest_state, &certificate).unwrap();
+        let stamp = BindingStamp::from_snapshot(
+            &source,
+            &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence,
+        ).unwrap();
+        let entries = enumerate_source_features(source.payload()).unwrap().into_iter().map(|feature| {
+            let status = match locate_point(feature.point, &rest_geometry).unwrap() {
+                PointLocationOutcome::Located(location) => {
+                    let face = topology.face_at(location.face_index as usize).unwrap();
+                    SourceFeatureBinding::Mapped(crate::binding::MappingRecord {
+                        locator: feature.locator,
+                        face_index: location.face_index,
+                        subface_index: 0,
+                        control_point_ids: face.control_point_ids().to_vec(),
+                        coordinates: location.coordinates,
+                    })
+                }
+                PointLocationOutcome::OutsideCage => SourceFeatureBinding::Unbound,
+            };
+            FeatureBindingEntry { locator: feature.locator, status }
+        }).collect();
+        let persisted = PersistedBinding::new(BindingRecord::new(stamp, entries)).unwrap();
+        let validated = persisted.validate_against(&source, &topology, &rest_state).unwrap();
+        (source, topology, rest_state, rest_geometry, validated)
+    }
+
+    #[test]
+    fn pairs_structured_path_with_curve_samples_from_same_binding_and_pose() {
+        use crate::binding::ValidatedCageGeometry;
+        use crate::curve_sample_evaluation::evaluate_curve_samples;
+        use crate::curve_sampling::{map_curve_samples, sample_path_curves, CurveSamplingPolicy};
+        use crate::embedding::validate_cage_embedding;
+        use crate::binding_evaluation::evaluate_binding;
+        use crate::topology::{ControlPointPosition, ControlStateRevision};
+
+        let (source, topology, rest_state, rest_geometry, validated) = integration_fixture();
+        let samples = sample_path_curves(source.payload(), CurveSamplingPolicy::default()).unwrap();
+        let mapped = map_curve_samples(
+            &samples,
+            &rest_geometry,
+            validated.binding().stamp().outside_policy,
+        ).unwrap();
+
+        let mut current_state = rest_state.clone();
+        current_state.revision = ControlStateRevision::new(2).unwrap();
+        for point in &mut current_state.points {
+            point.position = ControlPointPosition::new(
+                point.position.x + 0.25,
+                point.position.y - 0.1,
+            ).unwrap();
+        }
+        let certificate = validate_cage_embedding(&topology, &current_state).unwrap();
+        let current_geometry = ValidatedCageGeometry::new(&topology, &current_state, &certificate).unwrap();
+
+        let structured = evaluate_binding(&validated, &source, &topology, &current_geometry).unwrap();
+        let curves = evaluate_curve_samples(
+            &validated, &source, &topology, &rest_geometry, &current_geometry, &mapped,
+        ).unwrap();
+        let output = EvaluatedDeformationOutput::new(structured, curves).unwrap();
+
+        assert_eq!(output.source_stamp(), &source.stamp());
+        assert_eq!(output.rest_cage_fingerprint(), rest_geometry.geometry_fingerprint());
+        assert_eq!(output.current_cage_fingerprint(), current_geometry.geometry_fingerprint());
+        assert_eq!(output.structured_path().commands().len(), source.payload().commands().len());
+        assert!(matches!(output.structured_path().commands()[1], PathCommand::CubicTo { .. }));
+        assert!(output.curve_samples().samples().len() >= 2);
+        assert_eq!(output.curve_samples().samples().first().unwrap().t, 0.0);
+        assert_eq!(output.curve_samples().samples().last().unwrap().t, 1.0);
+        assert_eq!(source.payload().commands().len(), 2);
+    }
+
     #[test]
     fn validates_mixed_curve_commands_and_multiple_subpaths() {
         let path = Path2D::new(vec![
