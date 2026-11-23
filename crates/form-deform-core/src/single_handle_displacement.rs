@@ -249,7 +249,10 @@ mod tests {
 
     fn definition(
         parameters: BTreeMap<String, ParameterValue>,
-    ) -> Result<(EvaluationRequest, DeformationDefinition), crate::persistence::PersistenceError> {
+    ) -> Result<
+        (EvaluationRequest, DeformationDefinition),
+        crate::persistence::PersistenceError,
+    > {
         let source_path = sample_path();
         let coordinate_space = space();
         let fingerprint = source_path.fingerprint(&coordinate_space).unwrap();
@@ -482,25 +485,10 @@ mod tests {
     }
 
     #[test]
-    fn non_finite_parameters_are_rejected() {
-        let input = sample_path();
+    fn non_finite_parameters_are_rejected_by_authored_definition_validation() {
         for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(matches!(
-                run(&input, parameters((0.0, 0.0), (invalid, 1.0), 10.0)),
-                Err(
-                    crate::composition_evaluation::OperatorInvocationError::Operator(
-                        OperatorFailure::InvalidParameters
-                    )
-                )
-            ));
-            assert!(matches!(
-                run(&input, parameters((0.0, 0.0), (1.0, 1.0), invalid)),
-                Err(
-                    crate::composition_evaluation::OperatorInvocationError::Operator(
-                        OperatorFailure::InvalidParameters
-                    )
-                )
-            ));
+            assert!(definition(parameters((0.0, 0.0), (invalid, 1.0), 10.0)).is_err());
+            assert!(definition(parameters((0.0, 0.0), (1.0, 1.0), invalid)).is_err());
         }
     }
 
