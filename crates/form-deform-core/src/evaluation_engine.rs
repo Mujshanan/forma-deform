@@ -703,7 +703,14 @@ mod tests {
     #[test]
     fn source_revision_regression_is_reported_separately_from_staleness() {
         let captured_source = snapshot(target("shape-1", 1), 3, path(0.0));
-        let captured = request("captured-1", vec![captured_source.clone()], 1, 10, 1, "stage-1");
+        let captured = request(
+            "captured-1",
+            vec![captured_source.clone()],
+            1,
+            10,
+            1,
+            "stage-1",
+        );
         let definition = definition(&captured_source);
         let input = GeometryValue::new(
             GeometryValueKind::AbsoluteGeometry,
@@ -814,7 +821,10 @@ mod tests {
             )
             .unwrap_err();
 
-        assert_eq!(failure.diagnostics()[0].code(), EvaluationDiagnosticCode::ResultRejected);
+        assert_eq!(
+            failure.diagnostics()[0].code(),
+            EvaluationDiagnosticCode::ResultRejected
+        );
         assert_eq!(
             failure.diagnostics()[0].contract_error(),
             Some(EvaluationContractError::EmptyIdentifier)
