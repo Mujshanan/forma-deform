@@ -1,6 +1,6 @@
 # PR #47.2 — Workspace Formatting, Integration Ownership, and Stale-State Audit
 
-**Status:** Audit in progress; formatting gate added, CI evidence pending.
+**Status:** Audit completed; workspace-wide format gate exposes pre-existing formatting debt; integration ownership reviewed; Path2D conditional-write race remains open.
 **Base:** PR #47.1 branch `chore/pr-47-1-clippy-audit`.
 **Scope:** Formatting coverage and review of binding persistence ownership/freshness contracts. No deformation algorithm or host integration implementation is introduced.
 
@@ -22,7 +22,7 @@ The CI gate is changed to:
 cargo fmt --all -- --check
 ```
 
-This asks Cargo/rustfmt to check every workspace member without rewriting files. Any failure must be classified as either formatting debt already present on the PR #61 base or formatting introduced by the PR #47 integration changes; unrelated mass-formatting should not be folded into this audit without review.
+This asks Cargo/rustfmt to check every workspace member without rewriting files. The first fresh run [#45167900555](https://github.com/Mujshanan/forma-deform/actions/runs/45167900555) failed at this gate and identified 71 of the 74 tracked Rust files as not rustfmt-clean. PR #47.2 contains no Rust source changes, so these failures are inherited from its PR #61 base; they are not regressions introduced by this audit. Three files passed. The job stopped at formatting, so downstream CI steps did not run. Do not mass-format all 71 files as an incidental side effect of an integration review; treat a workspace formatting sweep as a separately reviewed, formatting-only change.
 
 ## 2. Integration ownership review
 
@@ -59,7 +59,7 @@ Consequently, a source edit or competing binding write between validation and th
 
 ## 4. Review disposition
 
-- Workspace-wide formatting: CI result pending on this branch.
+- Workspace-wide formatting: failed on CI run [#45167900555](https://github.com/Mujshanan/forma-deform/actions/runs/45167900555); 71/74 Rust files need formatting, and 3/74 passed. This is baseline debt inherited from PR #61 because PR #47.2 changes no Rust source.
 - Ownership: accepted as a boundary; preserve separate payload families and host-owned transactions.
 - Stale-state: generic point-array CAS boundary is explicit; Path2D conditional-write semantics remain an unresolved review item.
 - No merge, no PR status transition, and no changes to PR #37 or PR #40.
