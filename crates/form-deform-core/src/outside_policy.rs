@@ -39,6 +39,7 @@ pub enum OutsideCageResolution {
     Clamped(BoundaryProjection),
     Extrapolated {
         boundary: BoundaryProjection,
+        coordinates: FaceCoordinates,
         /// Source-space displacement from the projected boundary point.
         /// This is retained explicitly; it is not folded into boundary
         /// coordinates or mistaken for an inside-face mapping.
@@ -121,10 +122,11 @@ pub fn resolve_outside_point(
                 point.x() - boundary.point.x(),
                 point.y() - boundary.point.y(),
             ];
+            let coordinates = extrapolated_face_coordinates(point, geometry, boundary.face_index as usize)?;
             if offset.iter().any(|value| !value.is_finite()) {
                 return Err(OutsideCageError::InvalidBoundaryGeometry);
             }
-            Ok(OutsideCageResolution::Extrapolated { boundary, offset })
+            Ok(OutsideCageResolution::Extrapolated { boundary, coordinates, offset })
         }
     }
 }
@@ -208,6 +210,113 @@ fn projection_precedes(candidate: ProjectionCandidate, current: ProjectionCandid
     if (candidate.distance - current.distance).abs() > tie_tolerance { return false; }
     (candidate.edge.face_index, candidate.edge.edge_index)
         < (current.edge.face_index, current.edge.edge_index)
+}
+
+
+/// Invert the owning face's mapping at an outside point. Triangle coordinates
+/// are affine barycentric weights. Quad coordinates solve the full bilinear
+/// inverse; no diagonal triangulation or nearest-vertex approximation is used.
+fn extrapolated_face_coordinates(
+    point: Point2,
+    geometry: &ValidatedCageGeometry,
+    face_index: usize,
+) -> Result<FaceCoordinates, OutsideCageError> {
+    let face = geometry.face(face_index).ok_or(OutsideCageError::InvalidBoundaryGeometry)?;
+    let ids = face.control_point_ids();
+    let points: Vec<[f64; 2]> = ids.iter().map(|id| {
+        geometry.position(*id).map(|p| [p.x, p.y]).ok_or(OutsideCageError::MissingControlPoint(*id))
+    }).collect::<Result<_, _>>()?;
+    let q = [point.x(), point.y()];
+    match face {
+        TopologyFace::Triangle(_) => {
+            let a=points[0]; let b=points[1]; let c=points[2];
+            let ab=[b[0]-a[0],b[1]-a[1]];
+            let ac=[c[0]-a[0],c[1]-a[1]];
+            let aq=[q[0]-a[0],q[1]-a[1]];
+            let det=ab[0]*ac[1]-ab[1]*ac[0];
+            let scale=ab[0].hypot(ab[1]).max(ac[0].hypot(ac[1])).max((c[0]-b[0]).hypot(c[1]-b[1]));
+            if !det.is_finite() || !scale.is_finite() || scale<=0.0
+                || det.abs()<=f64::EPSILON*64.0*scale*scale {
+                return Err(OutsideCageError::InvalidBoundaryGeometry);
+            }
+            let wb=(aq[0]*ac[1]-aq[1]*ac[0])/det;
+            let wc=(ab[0]*aq[1]-ab[1]*aq[0])/det;
+            let wa=1.0-wb-wc;
+            if [wa,wb,wc].iter().any(|v| !v.is_finite()) {
+                return Err(OutsideCageError::InvalidBoundaryGeometry);
+            }
+            Ok(FaceCoordinates::TriangleBarycentric { weights:[wa,wb,wc] })
+        }
+        TopologyFace::Quad(_) => inverse_bilinear_extrapolated(&points, q),
+    }
+}
+
+fn inverse_bilinear_extrapolated(
+    points: &[[f64;2]],
+    query: [f64;2],
+) -> Result<FaceCoordinates, OutsideCageError> {
+    // P(u,v) = a + b*u + c*v + d*u*v, authored order P00,P10,P11,P01.
+    let a=points[0];
+    let b=[points[1][0]-a[0],points[1][1]-a[1]];
+    let c=[points[3][0]-a[0],points[3][1]-a[1]];
+    let d=[a[0]-points[1][0]+points[2][0]-points[3][0],
+           a[1]-points[1][1]+points[2][1]-points[3][1]];
+    let q=[query[0]-a[0],query[1]-a[1]];
+    let cross=|x:[f64;2],y:[f64;2]| x[0]*y[1]-x[1]*y[0];
+    let dot=|x:[f64;2],y:[f64;2]| x[0]*y[0]+x[1]*y[1];
+    let aa=-cross(b,d);
+    let bb=cross(q,d)-cross(b,c);
+    let cc=cross(q,c);
+    let coeff=aa.abs().max(bb.abs()).max(cc.abs());
+    if !coeff.is_finite() || coeff<=f64::MIN_POSITIVE {
+        return Err(OutsideCageError::InvalidBoundaryGeometry);
+    }
+    let tol=f64::EPSILON*64.0*coeff;
+    let roots: Vec<f64>;
+    if aa.abs()<=tol {
+        if bb.abs()<=tol { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        roots=vec![-cc/bb];
+    } else {
+        let disc=bb*bb-4.0*aa*cc;
+        let disc_scale=(bb*bb).abs().max((4.0*aa*cc).abs()).max(f64::MIN_POSITIVE);
+        let disc_tol=f64::EPSILON*64.0*disc_scale;
+        if !disc.is_finite() || disc < -disc_tol { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        let root=disc.max(0.0).sqrt();
+        if root==0.0 { roots=vec![-bb/(2.0*aa)]; }
+        else {
+            let stable=-0.5*(bb+bb.signum()*root);
+            if stable==0.0 || !stable.is_finite() { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+            roots=vec![stable/aa,cc/stable];
+        }
+    }
+    let mut solutions=Vec::new();
+    let scale=points.iter().enumerate().flat_map(|(i,p)| points.iter().skip(i+1).map(move |r| {
+        (p[0]-r[0]).hypot(p[1]-r[1])
+    })).fold(0.0_f64,f64::max);
+    if !scale.is_finite() || scale<=0.0 { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+    for u in roots {
+        if !u.is_finite() { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        let axis=[c[0]+d[0]*u,c[1]+d[1]*u];
+        let denominator=dot(axis,axis);
+        if !denominator.is_finite() || denominator<=f64::EPSILON*64.0*scale*scale {
+            continue;
+        }
+        let residual=[q[0]-b[0]*u,q[1]-b[1]*u];
+        let v=dot(residual,axis)/denominator;
+        if !v.is_finite() { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        let reconstructed=[
+            a[0]+b[0]*u+c[0]*v+d[0]*u*v,
+            a[1]+b[1]*u+c[1]*v+d[1]*u*v,
+        ];
+        if !reconstructed.iter().all(|x| x.is_finite()) { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+        let error=(reconstructed[0]-query[0]).hypot(reconstructed[1]-query[1]);
+        if error<=scale*1.0e-9 && solutions.iter().all(|(old_u,old_v):&(f64,f64)| {
+            (old_u-u).abs()>1.0e-9 || (old_v-v).abs()>1.0e-9
+        }) { solutions.push((u,v)); }
+    }
+    if solutions.len()!=1 { return Err(OutsideCageError::InvalidBoundaryGeometry); }
+    let (u,v)=solutions[0];
+    Ok(FaceCoordinates::QuadBilinear { u,v })
 }
 
 fn vertex_coordinates(face: TopologyFace, index: usize) -> FaceCoordinates {
