@@ -231,6 +231,15 @@ The following external tools were evaluated as possible instruments for CQ2 and 
 
 The Mozilla CLI remains a measurement candidate, but I have not added an unverified install/build step. The currently surfaced CLI release is `0.0.25`; the project documentation describes building the CLI from its source workspace, while the repository issue tracker includes an open report that `cargo install rust-code-analysis-cli` does not compile. That is a reproducibility risk for a first audit workflow. Before wiring it, verify a supported installation path (preferably a maintained release binary or a pinned source build) on the exact Ubuntu runner and record the CLI version. The metrics command itself supports directory analysis and JSON export; the intended source scope is the workspace Rust crates, with raw output retained as an artifact.
 
-### Execution boundary
+### Execution result and manual review
 
-The workflow is committed and configured to run on the audit-branch push. The available GitHub connector does not expose workflow-dispatch or run-status retrieval for this branch, so I cannot confirm completion or inspect its artifact here. No rustqual findings or Mozilla metrics are claimed. After the run, review rustqual findings manually and compare them with the CQ2 source-review findings; do not treat its score or default architecture assumptions as a quality verdict.
+**Status:** Automated pilot completed successfully; artifact retrieved and compared with all ten manual CQ2 findings.
+
+- Workflow run: [45115723394](https://github.com/Mujshanan/forma-deform/actions/runs/45115723394), completed successfully on 2026-11-23.
+- Job: `rustqual report-only analysis`; checkout, stable Rust setup, pinned rustqual install, analysis, and artifact upload all succeeded.
+- Artifact: `cq2-rustqual-report`; rustqual version `1.8.3`.
+- Summary: 433 functions, 150 findings, tool-generated score 53.1%. This is not a quality verdict or a count of defects.
+- Manual comparison: CQ2-03, CQ2-04, CQ2-06, and CQ2-09 confirmed; CQ2-07, CQ2-08, and CQ2-10 partially confirmed; CQ2-01, CQ2-02, and CQ2-05 are outside rustqual's evidence scope. No manual finding was invalidated.
+- Full triage, limitations, prioritized hotspots, and remediation proposal: [CQ2 rustqual pilot results](cq2-rustqual-results.md).
+
+The report-only workflow remains on `quality/cq2-tool-pilot`; application source and normal CI were not modified. Remediation has not started. Mozilla rust-code-analysis was not included, and no Mozilla metrics are claimed.
