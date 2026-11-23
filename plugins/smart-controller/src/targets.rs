@@ -113,8 +113,10 @@ pub fn resolve_geometry_pin(
     if response.get("bitmap").and_then(Value::as_bool) != Some(false) {
         return TargetResolution::Unavailable("warp.info response is missing the bitmap capability flag".into());
     }
-    if response.get("warped").and_then(Value::as_bool) != Some(true) {
-        return TargetResolution::Unsupported("artwork has no live warp mesh".into());
+    match response.get("warped").and_then(Value::as_bool) {
+        Some(true) => {}
+        Some(false) => return TargetResolution::Unsupported("artwork has no live warp mesh".into()),
+        None => return TargetResolution::Unavailable("warp.info response is missing the warped capability flag".into()),
     }
     match verify_geometry_pin(response, element_id, pin_id) {
         Ok(()) => TargetResolution::Supported(TargetCapability {
