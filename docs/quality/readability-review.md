@@ -211,7 +211,7 @@ The following external tools were evaluated as possible instruments for CQ2 and 
 - A ratchet proposal defining accepted baseline, thresholds, exclusions, and update procedure.
 - A written decision for each candidate tool: adopt, limited use, or reject.
 
-**Status:** Recommendations documented. No candidate tool execution or CI integration has yet been performed.
+**Status at initial tool assessment:** Recommendations documented; no candidate tool execution or CI integration had yet been performed. The subsequent report-only pilot is recorded below.
 
 
 ## CQ2 tool pilot — CI wiring
@@ -220,7 +220,7 @@ The following external tools were evaluated as possible instruments for CQ2 and 
 
 - Workflow: `.github/workflows/cq2-tool-pilot.yml`
 - Branch: `quality/cq2-tool-pilot`
-- Trigger: manual `workflow_dispatch`; caller supplies the branch/tag/commit to audit.
+- Trigger: automatic push to `quality/cq2-tool-pilot`, plus manual `workflow_dispatch`; the manual run accepts a branch/tag/commit.
 - Analyzer: `rustqual 1.8.3`, installed with `--locked`.
 - Mode: `--no-fail --verbose`; findings are reported but do not fail the job. Installation/runtime errors still fail the job.
 - Output: `quality-reports/rustqual-report.txt` and tool version, uploaded as a 30-day Actions artifact.
@@ -233,4 +233,4 @@ The Mozilla CLI remains a measurement candidate, but I have not added an unverif
 
 ### Execution boundary
 
-The workflow has been committed but has not yet been dispatched. Therefore there are no rustqual findings or Mozilla metrics to report at this point. Once Actions runs, review rustqual findings manually and compare them with the CQ2 source-review findings; do not treat its score or default architecture assumptions as a quality verdict.
+The workflow is committed and configured to run on the audit-branch push. The available GitHub connector does not expose workflow-dispatch or run-status retrieval for this branch, so I cannot confirm completion or inspect its artifact here. No rustqual findings or Mozilla metrics are claimed. After the run, review rustqual findings manually and compare them with the CQ2 source-review findings; do not treat its score or default architecture assumptions as a quality verdict.
