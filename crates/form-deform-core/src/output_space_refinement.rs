@@ -320,19 +320,26 @@ mod numerical_tests {
 
     #[test]
     fn policy_rejects_non_finite_non_positive_and_over_limit_values() {
-        let mut policy = OutputRefinementPolicy::default();
-        policy.max_deviation = f64::NAN;
-        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
-        policy.max_deviation = f64::INFINITY;
-        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
-        policy.max_deviation = 0.0;
-        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
-        policy.max_deviation = 0.25;
-        policy.max_subdivision_depth = MAX_DEPTH + 1;
-        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
-        policy.max_subdivision_depth = 1;
-        policy.max_total_evaluations = 4;
-        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+        assert_eq!(
+            OutputRefinementPolicy { max_deviation: f64::NAN, ..OutputRefinementPolicy::default() }.validate(),
+            Err(OutputRefinementError::InvalidPolicy),
+        );
+        assert_eq!(
+            OutputRefinementPolicy { max_deviation: f64::INFINITY, ..OutputRefinementPolicy::default() }.validate(),
+            Err(OutputRefinementError::InvalidPolicy),
+        );
+        assert_eq!(
+            OutputRefinementPolicy { max_deviation: 0.0, ..OutputRefinementPolicy::default() }.validate(),
+            Err(OutputRefinementError::InvalidPolicy),
+        );
+        assert_eq!(
+            OutputRefinementPolicy { max_subdivision_depth: MAX_DEPTH + 1, ..OutputRefinementPolicy::default() }.validate(),
+            Err(OutputRefinementError::InvalidPolicy),
+        );
+        assert_eq!(
+            OutputRefinementPolicy { max_total_evaluations: 4, ..OutputRefinementPolicy::default() }.validate(),
+            Err(OutputRefinementError::InvalidPolicy),
+        );
     }
 
     #[test]
