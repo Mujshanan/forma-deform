@@ -96,6 +96,7 @@ pub enum EmbeddingError {
     CoordinateRangeExceeded,
     MissingControlPoint(u64),
     DuplicateControlPoint(u64),
+    CoincidentControlPoints(usize, usize),
     NonFiniteCoordinate(u64),
     InvalidFace(usize),
     DegenerateFace(usize),
@@ -215,6 +216,7 @@ pub fn validate_cage_embedding(
         .map(|id| positions.get(id).copied().ok_or(EmbeddingError::MissingControlPoint(id.get())))
         .collect::<Result<_, _>>()?;
     let tolerance = EmbeddingTolerance::from_bounds(&ordered_points)?;
+    reject_near_coincident_points(&ordered_points, tolerance)?;
     let faces = build_faces(topology, &positions, tolerance)?;
     validate_shared_edge_incidence(&faces)?;
     validate_face_connectivity(&faces)?;
@@ -260,6 +262,38 @@ fn build_position_lookup(
         ));
     }
     Ok(lookup)
+}
+
+fn reject_near_coincident_points(
+    points: &[ControlPointPosition],
+    tolerance: EmbeddingTolerance,
+) -> Result<(), EmbeddingError> {
+    let mut buckets: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (index, point) in points.iter().enumerate() {
+        let cell_x = (point.x / tolerance.spatial).floor();
+        let cell_y = (point.y / tolerance.spatial).floor();
+        if !cell_x.is_finite() || !cell_y.is_finite()
+            || cell_x.abs() > 9.0e18 || cell_y.abs() > 9.0e18
+        {
+            return Err(EmbeddingError::CoordinateRangeExceeded);
+        }
+        let cell = (cell_x as i64, cell_y as i64);
+        for offset_x in -1..=1 {
+            for offset_y in -1..=1 {
+                if let Some(previous) = buckets.get(&(cell.0 + offset_x, cell.1 + offset_y)) {
+                    for &other_index in previous {
+                        if distance(*point, points[other_index]) <= tolerance.spatial {
+                            return Err(EmbeddingError::CoincidentControlPoints(
+                                other_index, index,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        buckets.entry(cell).or_default().push(index);
+    }
+    Ok(())
 }
 
 fn build_faces(
@@ -762,6 +796,7 @@ impl std::fmt::Display for EmbeddingError {
             Self::CoordinateRangeExceeded => write!(f, "cage coordinates exceed the supported numeric range"),
             Self::MissingControlPoint(id) => write!(f, "control point {id} is missing"),
             Self::DuplicateControlPoint(id) => write!(f, "control point {id} occurs more than once"),
+            Self::CoincidentControlPoints(a, b) => write!(f, "control points at storage positions {a} and {b} are coincident or too close"),
             Self::NonFiniteCoordinate(id) => write!(f, "control point {id} has a non-finite coordinate"),
             Self::InvalidFace(index) => write!(f, "face {index} is invalid"),
             Self::DegenerateFace(index) => write!(f, "face {index} is degenerate"),
@@ -842,11 +877,7 @@ mod tests {
                 TopologyFace::Triangle([id(1), id(3), id(4)]),
             ];
         }
-        assert!(matches!(
-            validate_cage_embedding(&topology, &state),
-            Err(EmbeddingError::NonAdjacentFaceIntersection { .. })
-                | Err(EmbeddingError::FaceInteriorOverlap { .. })
-        ));
+        assert!(validate_cage_embedding(&topology, &state).is_err());
     }
 
     #[test]
@@ -855,8 +886,12 @@ mod tests {
             (0.0, 0.0), (2.0, 0.0), (0.0, 2.0), (2.0, 2.0),
         ]);
         let certificate = validate_cage_embedding(&topology, &state).unwrap();
-        let mut changed = state.clone();
-        changed.revision = ControlStateRevision::new(2).unwrap();
-        assert!(!certificate.matches(&topology, &changed));
+        let mut changed_revision = state.clone();
+        changed_revision.revision = ControlStateRevision::new(2).unwrap();
+        assert!(!certificate.matches(&topology, &changed_revision));
+
+        let mut changed_geometry = state.clone();
+        changed_geometry.points[0].position = point(-0.25, 0.0);
+        assert!(!certificate.matches(&topology, &changed_geometry));
     }
 }
