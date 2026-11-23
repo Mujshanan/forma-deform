@@ -364,7 +364,7 @@ mod tests {
     fn rejects_bow_tie_vertex_with_disconnected_face_fans() {
         let cage = CageEmbedding {
             vertices: vec![v(1,0.,0.),v(2,2.,0.),v(3,1.,1.),v(4,0.,2.),v(5,2.,2.)],
-            triangles: vec![t(0,1,2),t(0,3,4)],
+            triangles: vec![t(0,1,2),t(0,4,3)],
         };
         assert!(matches!(cage.validate_global(), Err(CageEmbeddingError::NonManifoldVertex { vertex: 0 })));
     }
