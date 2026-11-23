@@ -82,42 +82,49 @@ fn validate_refined_alignment(
         || !refined.max_observed_deviation.is_finite()
         || refined.max_observed_deviation < 0.0
         || refined.max_observed_deviation > refined.policy.max_deviation
+        || refined.total_evaluations < refined.total_samples
+        || refined.total_evaluations > refined.policy.max_total_evaluations
     {
         return Err(DeformationOutputAssemblyError::InvalidRefinementMetadata);
     }
 
+    // Carry evaluated endpoints alongside stable command/subpath identities.
+    // This closes the gap where a correctly ordered sample set could still be
+    // geometrically disconnected from the authoritative structured Path2D.
     let mut expected = Vec::new();
     let mut subpath = 0u32;
     let mut saw_move = false;
-    let mut current = false;
+    let mut current = None;
     for (index, command) in path.commands().iter().enumerate() {
         match command {
-            PathCommand::MoveTo(_) => {
+            PathCommand::MoveTo(point) => {
                 if saw_move {
                     subpath = subpath.checked_add(1)
                         .ok_or(DeformationOutputAssemblyError::SubpathIndexOverflow)?;
                 }
                 saw_move = true;
-                current = true;
+                current = Some(*point);
             }
-            PathCommand::LineTo(_) => {
-                if !current {
+            PathCommand::LineTo(point) => {
+                if current.is_none() {
                     return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
                 }
+                current = Some(*point);
             }
-            PathCommand::QuadraticTo { .. } | PathCommand::CubicTo { .. } => {
-                if !current {
-                    return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
-                }
+            PathCommand::QuadraticTo { to, .. } | PathCommand::CubicTo { to, .. } => {
+                let start = current.ok_or(
+                    DeformationOutputAssemblyError::InvalidPathSequence { command_index: index },
+                )?;
                 let command_index = u32::try_from(index)
                     .map_err(|_| DeformationOutputAssemblyError::CommandIndexOverflow)?;
-                expected.push((command_index, subpath));
+                expected.push((command_index, subpath, start, *to));
+                current = Some(*to);
             }
             PathCommand::Close => {
-                if !current {
+                if current.is_none() {
                     return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
                 }
-                current = false;
+                current = None;
             }
         }
     }
@@ -130,7 +137,9 @@ fn validate_refined_alignment(
     }
 
     let mut counted_samples = 0usize;
-    for (segment, (command_index, subpath_index)) in refined.segments.iter().zip(expected) {
+    for (segment, (command_index, subpath_index, expected_start, expected_end))
+        in refined.segments.iter().zip(expected)
+    {
         if segment.command_index != command_index || segment.subpath_index != subpath_index {
             return Err(DeformationOutputAssemblyError::UnexpectedCommandIdentity {
                 expected_command: command_index,
@@ -141,9 +150,7 @@ fn validate_refined_alignment(
             || segment.samples.first().is_none_or(|sample| sample.t != 0.0)
             || segment.samples.last().is_none_or(|sample| sample.t != 1.0)
         {
-            return Err(DeformationOutputAssemblyError::IncompleteCurveSamples {
-                command_index,
-            });
+            return Err(DeformationOutputAssemblyError::IncompleteCurveSamples { command_index });
         }
         for (sample_index, sample) in segment.samples.iter().enumerate() {
             if !sample.t.is_finite()
@@ -154,10 +161,15 @@ fn validate_refined_alignment(
                 || !sample.output_point.y().is_finite()
                 || (sample_index > 0 && sample.t <= segment.samples[sample_index - 1].t)
             {
-                return Err(DeformationOutputAssemblyError::InvalidSampleOrder {
-                    command_index,
-                });
+                return Err(DeformationOutputAssemblyError::InvalidSampleOrder { command_index });
             }
+        }
+        let first = segment.samples.first().expect("endpoint count checked");
+        let last = segment.samples.last().expect("endpoint count checked");
+        if !points_match(first.output_point, expected_start)
+            || !points_match(last.output_point, expected_end)
+        {
+            return Err(DeformationOutputAssemblyError::CurveEndpointMismatch { command_index });
         }
         counted_samples = counted_samples.checked_add(segment.samples.len())
             .ok_or(DeformationOutputAssemblyError::CountOverflow)?;
@@ -169,6 +181,14 @@ fn validate_refined_alignment(
         });
     }
     Ok(())
+}
+
+fn points_match(left: crate::path2d::Point2, right: crate::path2d::Point2) -> bool {
+    let scale = 1.0_f64
+        .max(left.x().abs()).max(left.y().abs())
+        .max(right.x().abs()).max(right.y().abs());
+    (left.x() - right.x()).abs() <= 1.0e-9 * scale
+        && (left.y() - right.y()).abs() <= 1.0e-9 * scale
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -188,6 +208,7 @@ pub enum DeformationOutputAssemblyError {
     InvalidSampleOrder { command_index: u32 },
     CountOverflow,
     SampleCountMismatch { reported: usize, actual: usize },
+    CurveEndpointMismatch { command_index: u32 },
 }
 
 impl std::fmt::Display for DeformationOutputAssemblyError {
@@ -214,6 +235,23 @@ mod tests {
                 RefinedCurveSample { t: 0.0, source_point: point(0.0, 0.0), output_point: point(0.0, 0.0) },
                 RefinedCurveSample { t: 0.5, source_point: point(0.5, 0.5), output_point: point(0.5, 0.4) },
                 RefinedCurveSample { t: 1.0, source_point: point(1.0, 0.0), output_point: point(1.0, 0.0) },
+            ],
+        }
+    }
+
+    fn segment_between(
+        command_index: u32,
+        subpath_index: u32,
+        start: crate::path2d::Point2,
+        end: crate::path2d::Point2,
+    ) -> RefinedCurveSegment {
+        RefinedCurveSegment {
+            command_index,
+            subpath_index,
+            samples: vec![
+                RefinedCurveSample { t: 0.0, source_point: start, output_point: start },
+                RefinedCurveSample { t: 0.5, source_point: point(0.5, 0.5), output_point: point(0.5, 0.4) },
+                RefinedCurveSample { t: 1.0, source_point: end, output_point: end },
             ],
         }
     }
@@ -524,7 +562,10 @@ mod tests {
             PathCommand::CubicTo { control1: point(4.0, 1.0), control2: point(5.0, 1.0), to: point(6.0, 0.0) },
             PathCommand::LineTo(point(7.0, 0.0)),
         ]).unwrap();
-        let assembled = refined(vec![segment(2, 0), segment(5, 1)]);
+        let assembled = refined(vec![
+            segment_between(2, 0, point(1.0, 0.0), point(2.0, 0.0)),
+            segment_between(5, 1, point(3.0, 0.0), point(6.0, 0.0)),
+        ]);
         assert_eq!(validate_refined_alignment(&path, &assembled), Ok(()));
         assert_eq!(path.commands().len(), 7);
         assert!(matches!(path.commands()[2], PathCommand::QuadraticTo { .. }));
@@ -553,6 +594,42 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn rejects_curve_endpoints_disconnected_from_authoritative_structured_path() {
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::QuadraticTo { control: point(1.0, 1.0), to: point(2.0, 0.0) },
+        ]).unwrap();
+        let disconnected = refined(vec![segment_between(
+            1, 0, point(0.1, 0.0), point(2.0, 0.0),
+        )]);
+        assert_eq!(
+            validate_refined_alignment(&path, &disconnected),
+            Err(DeformationOutputAssemblyError::CurveEndpointMismatch { command_index: 1 }),
+        );
+    }
+
+    #[test]
+    fn rejects_inconsistent_evaluation_budget_metadata() {
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::QuadraticTo { control: point(1.0, 1.0), to: point(2.0, 0.0) },
+        ]).unwrap();
+        let mut too_few = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0))]);
+        too_few.total_evaluations = too_few.total_samples - 1;
+        assert_eq!(
+            validate_refined_alignment(&path, &too_few),
+            Err(DeformationOutputAssemblyError::InvalidRefinementMetadata),
+        );
+        let mut over_budget = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0))]);
+        over_budget.total_evaluations = over_budget.policy.max_total_evaluations + 1;
+        assert_eq!(
+            validate_refined_alignment(&path, &over_budget),
+            Err(DeformationOutputAssemblyError::InvalidRefinementMetadata),
+        );
+    }
+
     #[test]
     fn rejects_non_monotonic_parameters_and_sample_count_mismatch() {
         let path = Path2D::new(vec![
@@ -565,7 +642,7 @@ mod tests {
             validate_refined_alignment(&path, &refined(vec![invalid])),
             Err(DeformationOutputAssemblyError::InvalidSampleOrder { .. })
         ));
-        let mut wrong_count = refined(vec![segment(1, 0)]);
+        let mut wrong_count = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(3.0, 0.0))]);
         wrong_count.total_samples += 1;
         assert!(matches!(
             validate_refined_alignment(&path, &wrong_count),
