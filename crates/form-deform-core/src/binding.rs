@@ -80,14 +80,16 @@ pub fn enumerate_source_features(path: &Path2D) -> Result<Vec<SourceFeaturePoint
     let mut result = Vec::new();
     let mut subpath_index = 0u32;
     let mut has_subpath = false;
+    let mut has_seen_move_to = false;
 
     for (command_index, command) in path.commands().iter().enumerate() {
         let command_index = command_index as u32;
         match command {
             PathCommand::MoveTo(point) => {
-                if has_subpath {
+                if has_seen_move_to {
                     subpath_index = subpath_index.checked_add(1).ok_or(SourceFeatureError::TooManyFeatures)?;
                 }
+                has_seen_move_to = true;
                 has_subpath = true;
                 push_source_feature(&mut result, command_index, PathFeatureRole::MoveToEndpoint, *point, subpath_index)?;
             }
@@ -679,6 +681,22 @@ mod tests {
         };
         assert_eq!(validate_mapping(&outside, point(0.0, 0.0), &geometry),
             Err(BindingError::CoordinateOutsideDomain));
+    }
+
+    #[test]
+    fn subpath_ordinals_advance_after_close_and_new_move_to() {
+        let multi = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::LineTo(point(1.0, 0.0)),
+            PathCommand::Close,
+            PathCommand::MoveTo(point(2.0, 0.0)),
+            PathCommand::LineTo(point(3.0, 0.0)),
+        ]).unwrap();
+        let features = enumerate_source_features(&multi).unwrap();
+        assert_eq!(features[0].subpath_index, 0);
+        assert_eq!(features[1].subpath_index, 0);
+        assert_eq!(features[2].subpath_index, 1);
+        assert_eq!(features[3].subpath_index, 1);
     }
 
     #[test]
