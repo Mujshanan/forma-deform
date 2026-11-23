@@ -177,8 +177,7 @@ forma-deform
 │   ├── blend shapes/correctives
 │   └── optional mesh algorithms
 ├── preview
-│   ├── deterministic evaluation
-│   └── diagnostic output
+│   ├── deterministic evaluation│   └── diagnostic output
 └── host
     └── AniCraft command/document/evaluator adapters
 ```
@@ -284,7 +283,7 @@ Smart Controller binding evaluation and Form Deform pin-deformation evaluation r
 ### 11.2 Authoritative architecture and M0 audit
 
 - [FDM v2 Architecture and Integration Specification](docs/FDM_V2_ARCHITECTURE.md) — consolidated accepted decisions, responsibilities, invariants, lifecycle, and open implementation questions.
-- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Status: audit and ownership matrix complete; CCC-01.5 discrepancy resolved and the Smart Controller changes passed the full GitHub Actions CI workflow, including workspace tests and all three release WASM plugin builds.
+- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. The source audit, CCC-01.5 reconciliation, integration gap/ownership matrix, and host-extension list are complete. GitHub Actions run [#45149333452](https://github.com/Mujshanan/forma-deform/actions/runs/45149333452) passed workspace tests and all three release WASM plugin builds.
 
 The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior.
 
