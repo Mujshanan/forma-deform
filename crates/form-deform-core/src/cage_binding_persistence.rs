@@ -9,14 +9,12 @@ use crate::cage_binding::{
     BindingPoint, BoundPoint, CageBinding, CageBindingError,
     canonical_triangle_identities, canonical_vertex_ids, validate_topology_view,
 };
-use crate::embedding::{validate_cage_embedding, EmbeddingError};
 use crate::host_contract::{
     CoordinateSpaceDescriptor, GeometrySnapshot, GeometrySnapshotStamp,
     HostTargetRef, SnapshotFreshness,
 };
-use crate::path2d::Point2;
 use crate::topology::{
-    ControlPointId, DeformationControlState, DeformationTopology,
+    ControlPointId, DeformationTopology,
     DeformationTopologyId, DeformationTopologyRevision, TopologyView,
 };
 use crate::binding::ValidatedCageGeometry;
