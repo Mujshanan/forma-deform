@@ -861,6 +861,7 @@ impl std::fmt::Display for EmbeddingError {
             Self::DegenerateFace(index) => write!(f, "face {index} is degenerate"),
             Self::InconsistentFaceWinding(index) => write!(f, "face {index} has inconsistent winding"),
             Self::NonConvexQuad(index) => write!(f, "quad face {index} is not strictly convex"),
+            Self::InvalidVertexLink(id) => write!(f, "control point {id} has a disconnected or non-manifold face link"),
             Self::NonManifoldEdge(a, b) => write!(f, "edge ({a}, {b}) is incident to more than two faces"),
             Self::InvalidSharedEdgeWinding(a, b) => write!(f, "faces {a} and {b} traverse their shared edge in the same direction"),
             Self::DisconnectedFaces(index) => write!(f, "face {index} is disconnected from the cage"),
@@ -923,7 +924,7 @@ mod tests {
     ) -> (DeformationTopology, DeformationControlState) {
         let topology_id = DeformationTopologyId::new(topology_id_value).unwrap();
         let topology_revision = DeformationTopologyRevision::new(1).unwrap();
-        let ids = (1..=positions.len()).map(id).collect::<Vec<_>>();
+        let ids = (1..=positions.len()).map(|value| id(value as u64)).collect::<Vec<_>>();
         let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
             id: topology_id,
             revision: topology_revision,
