@@ -341,7 +341,8 @@ mod tests {
     use super::*;
     use crate::composition_evaluation::{GeometryValue, OperatorFailure};
     use crate::evaluation_contract::{
-        DependencyStamp, EvaluationTimeSample, ModelRevisionStamp, TimeSampleKind,
+        CompositionGraphStamp, DependencyStamp, EvaluationTimeSample, ModelRevisionStamp,
+        TimeSampleKind,
     };
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
