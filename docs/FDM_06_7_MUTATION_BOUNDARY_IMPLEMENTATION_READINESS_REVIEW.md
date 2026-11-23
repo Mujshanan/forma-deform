@@ -40,19 +40,19 @@ All source observations below refer to AniCraft commit `2df7775907d1458ce653e7e6
 | `crates/doc/src/lib.rs` | `59559a0b4599fd0ec34c720004b42ceda3080883` | Document/DocumentFile, ID allocator, persistent schema |
 | `crates/doc/src/eval.rs` | `53e3e7489ebbbca76a436211d822168ecab0fb2e` | Frame-dependent evaluated output and timeline sampling |
 | `crates/engine/src/cmds_timeline.rs` | `7e9191f5f9dcf467faf11e1981a161978840488f` | Frame/keyframe/tween/layer mutations |
-| `crates/engine/src/cmds_modify.rs` | `<escape>not captured in this review's pinned source manifest</escape>` | Clipboard, paste, transforms; reviewed at pinned commit |
+| `crates/engine/src/cmds_modify.rs` | `9bf988164ea0789d45222cbd65cf887661a2605a` | Clipboard, paste, transforms; reviewed at pinned commit |
 | `crates/engine/src/cmds_draw.rs` | `eb279b835e248f97a397b9611ce0b00b1672470d` | Create/delete/duplicate/convert and geometry/style edits |
 | `crates/engine/src/cmds_group.rs` | `40fec49ebaf6cf45c8e173162e601e3febd68bdd` | Group/ungroup identity behavior |
 | `crates/engine/src/cmds_scene.rs` | `f48b844e534097fc1a8c3b96c1bcd8221a43f030` | Scene duplication and ID remapping |
 | `crates/engine/src/cmds_file.rs` | `5b834a0ce1347c5f612a71a0cae56dff6915f7b0` | Open/save/import/replacement |
 | `crates/engine/src/transfer.rs` | `7bbee132c5d0b9ae96d4b96d499d550e2bd99bdf` | Cross-document library transfer and remapping |
-| `crates/engine/src/cmds_motion.rs` | `<escape>not captured in this review's pinned source manifest</escape>` | Motion tween and property sampling; reviewed at pinned commit |
+| `crates/engine/src/cmds_motion.rs` | `75a52d1a92a0babfb9753c0ab1704b6ede3819cf` | Motion tween and property sampling; reviewed at pinned commit |
 | `crates/engine/src/cmds_warp.rs` | `3d3d923b9ce1ef2d9243d1f79814f00cbba4ec36` | Native Asset Warp lifecycle |
-| `crates/engine/src/editing.rs` | `<escape>not captured in this review's pinned source manifest</escape>` | Nested symbol/group/drawing edit context; reviewed at pinned commit |
+| `crates/engine/src/editing.rs` | `43a6c919e324508db5cf8ccb5d418eeae876cbd5` | Nested symbol/group/drawing edit context; reviewed at pinned commit |
 | `crates/engine/src/render_service.rs` | `abf5c53b83a5d87ef6d6eb1811fb4b07dbabe676` | Render queue, cache, in-flight work, document picture clearing |
 | `crates/engine/src/cmds_plugin.rs` | `48cea8e7a94d01f7e9733deac6a1ddb1ef7f8440` | Plugin command execution and nested host mutations |
 
-The `<escape>not captured...</escape>` entries are a manifest limitation, not claims that the files were absent. Before implementation, regenerate a complete machine-readable source manifest from the exact host base commit and pin every audited file SHA.
+Before implementation, regenerate a complete machine-readable source manifest from the exact host base commit and pin every audited file SHA.
 
 ---
 
