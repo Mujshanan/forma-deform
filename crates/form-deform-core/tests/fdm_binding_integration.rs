@@ -4,8 +4,8 @@ use form_deform_core::binding::{
 };
 use form_deform_core::binding_persistence::{
     load_validated_binding, persist_binding, BindingDiagnostic, BindingHostAdapter,
-    BindingPayloadRevision, BindingWriteConflict, BindingWriteOutcome, HostBindingContext,
-    LoadBindingError, PersistBindingError, PersistedBinding, VersionedBindingPayload,
+    BindingPayloadRevision, BindingSlotSnapshot, BindingWriteConflict, BindingWriteOutcome,
+    HostBindingContext, LoadBindingError, PersistBindingError, PersistedBinding,
 };
 use form_deform_core::embedding::validate_cage_embedding;
 use form_deform_core::binding::ValidatedCageGeometry;
@@ -156,7 +156,7 @@ fn fixture() -> (HostBindingContext, PersistedBinding) {
 
 struct MemoryAdapter {
     context: HostBindingContext,
-    payload: Option<VersionedBindingPayload>,
+    slot: BindingSlotSnapshot,
     change_source_before_write: bool,
     change_binding_before_write: bool,
 }
@@ -175,17 +175,17 @@ impl BindingHostAdapter for MemoryAdapter {
         })
     }
 
-    fn read_binding_payload(
+    fn read_binding_slot(
         &self,
         _target: &HostTargetRef,
-    ) -> Result<Option<VersionedBindingPayload>, Self::Error> {
-        Ok(self.payload.clone())
+    ) -> Result<BindingSlotSnapshot, Self::Error> {
+        Ok(self.slot.clone())
     }
 
     fn write_binding_payload(
         &mut self,
         _target: &HostTargetRef,
-        expected_binding_revision: Option<BindingPayloadRevision>,
+        expected_binding_revision: BindingPayloadRevision,
         expected_source_stamp: &form_deform_core::host_contract::GeometrySnapshotStamp,
         payload: String,
     ) -> Result<BindingWriteOutcome, Self::Error> {
@@ -199,16 +199,15 @@ impl BindingHostAdapter for MemoryAdapter {
             self.change_source_before_write = false;
         }
         if self.change_binding_before_write {
-            self.payload = Some(VersionedBindingPayload::new(
-                BindingPayloadRevision::new(2).unwrap(),
-                "competing host write".into(),
-            ));
+            self.slot = BindingSlotSnapshot::new(
+                BindingPayloadRevision::new(2),
+                Some("competing host write".into()),
+            );
             self.change_binding_before_write = false;
         }
 
         let source_snapshot_changed = self.context.snapshot.stamp() != *expected_source_stamp;
-        let binding_revision_changed = self.payload.as_ref().map(|value| value.revision())
-            != expected_binding_revision;
+        let binding_revision_changed = self.slot.revision() != expected_binding_revision;
         if source_snapshot_changed || binding_revision_changed {
             return Ok(BindingWriteOutcome::Conflict(BindingWriteConflict {
                 source_snapshot_changed,
@@ -216,11 +215,13 @@ impl BindingHostAdapter for MemoryAdapter {
             }));
         }
 
-        let next_revision = expected_binding_revision.map_or(1, |revision| revision.value() + 1);
-        self.payload = Some(VersionedBindingPayload::new(
-            BindingPayloadRevision::new(next_revision).map_err(|_| "binding revision overflow")?,
-            payload,
-        ));
+        let next_revision = expected_binding_revision.value()
+            .checked_add(1)
+            .ok_or("binding revision overflow")?;
+        self.slot = BindingSlotSnapshot::new(
+            BindingPayloadRevision::new(next_revision),
+            Some(payload),
+        );
         Ok(BindingWriteOutcome::Written)
     }
 }
@@ -335,7 +336,7 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        payload: None,
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
         change_source_before_write: false,
         change_binding_before_write: false,
     };
@@ -376,7 +377,7 @@ fn path2d_persistence_rejects_source_edit_between_validation_and_commit() {
             binding_revision_changed: false,
         }))
     ));
-    assert!(adapter.payload.is_none(), "stale write must not replace the slot");
+    assert!(adapter.slot.payload().is_none(), "stale write must not replace the slot");
 }
 
 #[test]
@@ -398,9 +399,14 @@ fn path2d_persistence_rejects_competing_binding_write_between_read_and_commit() 
         }))
     ));
     assert_eq!(
-        adapter.payload.as_ref().unwrap().revision().value(),
+        adapter.slot.revision().value(),
         2,
         "competing host write must remain authoritative"
+    );
+    assert_eq!(
+        adapter.slot.payload(),
+        Some("competing host write"),
+        "the competing payload must not be overwritten"
     );
 }
 
