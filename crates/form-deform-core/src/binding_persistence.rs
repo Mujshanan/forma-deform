@@ -228,6 +228,9 @@ pub fn persist_binding<A: BindingHostAdapter>(
     persisted: &PersistedBinding,
 ) -> Result<(), PersistBindingError<A::Error>> {
     let context = adapter.current_binding_context(target).map_err(PersistBindingError::Host)?;
+    if context.snapshot.target() != target {
+        return Err(PersistBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
+    }
     persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map_err(PersistBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistBindingError::Persistence)?;
@@ -252,6 +255,9 @@ pub fn load_validated_binding<A: BindingHostAdapter>(
     let persisted = PersistedBinding::from_json(&payload)
         .map_err(LoadBindingError::Persistence)?;
     let context = adapter.current_binding_context(target).map_err(LoadBindingError::Host)?;
+    if context.snapshot.target() != target {
+        return Err(LoadBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
+    }
     persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map(Some)
         .map_err(LoadBindingError::Diagnostic)
