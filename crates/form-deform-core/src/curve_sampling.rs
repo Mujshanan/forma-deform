@@ -377,6 +377,7 @@ pub enum CurveMappingError {
     PointLocation(crate::point_location::PointLocationError),
     OutsideCage(crate::outside_policy::OutsideCageError),
     InvalidFaceIndex(u32),
+    InvalidSampleSet,
 }
 
 /// Map every adaptive sample using the same deterministic point locator and
@@ -390,7 +391,39 @@ pub fn map_curve_samples(
     use crate::outside_policy::{resolve_outside_point, OutsideCageResolution};
     use crate::point_location::{locate_point, PointLocationOutcome};
 
-    let mut mapped = Vec::with_capacity(sample_set.total_samples);
+    if let crate::binding::OutsideCagePolicy::BoundedExtrapolation { max_distance } = outside_policy {
+        if !max_distance.is_finite() || max_distance <= 0.0 {
+            return Err(CurveMappingError::OutsideCage(
+                crate::outside_policy::OutsideCageError::InvalidDistanceLimit,
+            ));
+        }
+    }
+
+    let mut actual_total = 0usize;
+    let mut previous_command = None;
+    for segment in &sample_set.segments {
+        if previous_command.is_some_and(|previous| previous >= segment.command_index)
+            || segment.samples.len() < 2
+            || segment.samples.first().is_none_or(|sample| sample.t != 0.0)
+            || segment.samples.last().is_none_or(|sample| sample.t != 1.0)
+            || segment.samples.windows(2).any(|pair| {
+                !pair[0].t.is_finite() || !pair[1].t.is_finite() || pair[0].t >= pair[1].t
+            })
+        {
+            return Err(CurveMappingError::InvalidSampleSet);
+        }
+        actual_total = actual_total.checked_add(segment.samples.len())
+            .ok_or(CurveMappingError::InvalidSampleSet)?;
+        if actual_total > MAX_TOTAL_SAMPLES {
+            return Err(CurveMappingError::InvalidSampleSet);
+        }
+        previous_command = Some(segment.command_index);
+    }
+    if actual_total != sample_set.total_samples {
+        return Err(CurveMappingError::InvalidSampleSet);
+    }
+
+    let mut mapped = Vec::new();
     for segment in &sample_set.segments {
         for (sample_index, sample) in segment.samples.iter().enumerate() {
             let mapping = match locate_point(sample.point, geometry)
