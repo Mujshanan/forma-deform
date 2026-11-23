@@ -181,7 +181,6 @@ fn optional_composition_config_round_trips_and_old_documents_still_deserialize()
     assert!(decoded_old.controllers[0].bindings[0].composition.is_none());
 }
 
-
 #[test]
 fn validate_local_preserves_controller_reference_error_precedence() {
     let mut controller = controller("ordered", "input", vec![], vec![]);
