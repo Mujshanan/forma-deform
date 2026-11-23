@@ -11,7 +11,7 @@ FDM-02.6 establishes whether a complete indexed triangular cage is a valid, unam
 
 The implementation is in `crates/form-deform-core/src/cage_embedding.rs`:
 
-- `CageVertex`: stable nonzero-or-zero-opaque ID plus finite `Point2` position. The validator requires IDs to be unique; it does not allocate IDs.
+- `CageVertex`: opaque stable ID (unique within the cage) plus finite `Point2` position. The validator requires IDs to be unique; it does not allocate IDs.
 - `CageTriangle`: three indices into the cage vertex array.
 - `CageEmbedding`: the complete vertex and triangle collections.
 - `CageEmbedding::validate_global`: validates the complete embedding and returns `ValidatedCageEmbedding` with vertex, face, boundary-edge, interior-edge, and connected-component counts.
