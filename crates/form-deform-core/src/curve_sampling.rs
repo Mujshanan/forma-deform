@@ -336,6 +336,117 @@ fn point_segment_distance(
     }
 }
 
+/// Transient mapping status for one adaptive curve sample. These records
+/// are derived from the exact source snapshot and are not persistent point IDs.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CurveSampleMapping {
+    Mapped {
+        face_index: u32,
+        subface_index: u8,
+        control_point_ids: Vec<crate::topology::ControlPointId>,
+        coordinates: crate::binding::FaceCoordinates,
+    },
+    Clamped {
+        face_index: u32,
+        subface_index: u8,
+        control_point_ids: Vec<crate::topology::ControlPointId>,
+        coordinates: crate::binding::FaceCoordinates,
+    },
+    Extrapolated {
+        face_index: u32,
+        subface_index: u8,
+        control_point_ids: Vec<crate::topology::ControlPointId>,
+        coordinates: crate::binding::FaceCoordinates,
+        boundary_offset: [f64; 2],
+    },
+    Unbound,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MappedCurveSample {
+    pub command_index: u32,
+    pub subpath_index: u32,
+    pub sample_index: u32,
+    pub t: f64,
+    pub point: Point2,
+    pub mapping: CurveSampleMapping,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CurveMappingError {
+    PointLocation(crate::point_location::PointLocationError),
+    OutsideCage(crate::outside_policy::OutsideCageError),
+    InvalidFaceIndex(u32),
+}
+
+/// Map every adaptive sample using the same deterministic point locator and
+/// explicit outside-cage policy used for authored source features. Failure
+/// returns no partial mapped set. Samples remain transient and snapshot-local.
+pub fn map_curve_samples(
+    sample_set: &CurveSampleSet,
+    geometry: &crate::binding::ValidatedCageGeometry,
+    outside_policy: crate::binding::OutsideCagePolicy,
+) -> Result<Vec<MappedCurveSample>, CurveMappingError> {
+    use crate::outside_policy::{resolve_outside_point, OutsideCageResolution};
+    use crate::point_location::{locate_point, PointLocationOutcome};
+
+    let mut mapped = Vec::with_capacity(sample_set.total_samples);
+    for segment in &sample_set.segments {
+        for (sample_index, sample) in segment.samples.iter().enumerate() {
+            let mapping = match locate_point(sample.point, geometry)
+                .map_err(CurveMappingError::PointLocation)? {
+                PointLocationOutcome::Located(face) => CurveSampleMapping::Mapped {
+                    face_index: face.face_index,
+                    subface_index: face.subface_index,
+                    control_point_ids: face.control_point_ids,
+                    coordinates: face.coordinates,
+                },
+                PointLocationOutcome::OutsideCage => {
+                    match resolve_outside_point(sample.point, geometry, outside_policy)
+                        .map_err(CurveMappingError::OutsideCage)? {
+                        OutsideCageResolution::Unbound => CurveSampleMapping::Unbound,
+                        OutsideCageResolution::Clamped(boundary) => {
+                            let ids = geometry.face(boundary.face_index as usize)
+                                .ok_or(CurveMappingError::InvalidFaceIndex(boundary.face_index))?
+                                .control_point_ids().to_vec();
+                            CurveSampleMapping::Clamped {
+                                face_index: boundary.face_index,
+                                subface_index: 0,
+                                control_point_ids: ids,
+                                coordinates: boundary.coordinates,
+                            }
+                        }
+                        OutsideCageResolution::Extrapolated { boundary, coordinates, offset } => {
+                            let ids = geometry.face(boundary.face_index as usize)
+                                .ok_or(CurveMappingError::InvalidFaceIndex(boundary.face_index))?
+                                .control_point_ids().to_vec();
+                            CurveSampleMapping::Extrapolated {
+                                face_index: boundary.face_index,
+                                subface_index: 0,
+                                control_point_ids: ids,
+                                coordinates,
+                                boundary_offset: offset,
+                            }
+                        }
+                    }
+                }
+            };
+            let sample_index = u32::try_from(sample_index)
+                .map_err(|_| CurveSamplingError::TooManyCommands)
+                .map_err(|_| CurveMappingError::InvalidFaceIndex(u32::MAX))?;
+            mapped.push(MappedCurveSample {
+                command_index: segment.command_index,
+                subpath_index: segment.subpath_index,
+                sample_index,
+                t: sample.t,
+                point: sample.point,
+                mapping,
+            });
+        }
+    }
+    Ok(mapped)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
