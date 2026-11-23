@@ -64,7 +64,7 @@ The context fields are public and do not share one monotonic revision with docum
 | `brush.preset_export/import` | `cmds_brush.rs:480-520` | Export writes JSON; import reads JSON and changes Session preset state: **F + S** |
 | `filter.preset_export/import` | `cmds_filter.rs:281-324` | Export writes JSON; import reads JSON and changes Session preset state: **F + S/P** |
 | `file.export_audio` | `cmds_sound::export_audio` (`cmds_sound.rs:439-465`) | Builds the requested soundtrack range and writes a WAV file: **F** |
-| `swatch.export` | `cmds_swatch` command registration and export helper | Writes the document's swatches as JSON: **F**; callback body/source sink still needs its own row-level trace |
+| `swatch.export` | `cmds_swatch.rs:15-55, 295-303` | Writes the document's swatches as JSON: **F**; callback body/source sink still needs its own row-level trace |
 | `plugin.install/remove/reload` | `cmds_plugin.rs:15-30, 231-300` | Changes the Session plug-in registry/folder; install can copy a plug-in file, remove can delete an owned file, reload reads plug-in files: **S/P + F** |
 | `file.autosave/discard_recovery/recover` | `cmds_recovery.rs:14-110` | Autosave writes a recovery document; discard deletes recovery files; recover replaces the live Document and marks it unsaved: **F** or **D + S** |
 | `file.publish` | `publish::publish_cmd` (`publish.rs:1-65, 516-540`) | Plans and runs export steps, writes output files, and extends `Session.published`: **F + S** |
@@ -75,7 +75,7 @@ The macro-management commands are external-file operations even though their `Se
 
 - `data.list/get/bindings` (`cmds_data.rs:257-285, 441-450`) traverse document tables/bindings and return data: **R** in the inspected callbacks.
 - `library.items/unused` (`cmds_library.rs:122-140, 413-415`) query library usage and unused entries: **R**.
-- `macro.history/list` (`cmds_macro.rs:274-? and 387-414`) read saved-command/history metadata: **R**; `macro.list` also lists files.
+- `macro.history/list` (`cmds_macro.rs:274-279, 387-412`) read saved-command/history metadata: **R**; `macro.list` also lists files.
 - `publish.settings_get` (`publish.rs:531-550`) reads the document publish profile and resolves output paths: **R**.
 - `control.test_movie` is more than a simple query. `cmds_actions::test_movie` creates a `ScriptRunner` and a `Movie`, then steps the movie and invokes frame scripts (`cmds_actions.rs:296-344`). The frame-script host in `player.rs:25-95, 120-145` permits reading the player view and emitting checked actions; it rejects document/element/command requests. This constrains the plug-in host surface, but the player/action execution graph and all script callbacks still require explicit review. No direct live Session/Document write is shown in this callback path.
 
