@@ -5,7 +5,7 @@
 
 use crate::embedding::{CageEmbeddingCertificate, EmbeddingError};
 use crate::host_contract::{
-    CoordinateSpaceDescriptor, GeometrySnapshot, GeometrySnapshotStamp, HostTargetRef,
+    CoordinateSpaceDescriptor, GeometrySnapshot, HostTargetRef,
 };
 use crate::path2d::{PathCommand, Path2D, Point2, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION};
 use crate::topology::{
@@ -83,41 +83,28 @@ pub fn enumerate_source_features(path: &Path2D) -> Result<Vec<SourceFeaturePoint
 
     for (command_index, command) in path.commands().iter().enumerate() {
         let command_index = command_index as u32;
-        let mut emit = |role: PathFeatureRole, point: Point2| -> Result<(), SourceFeatureError> {
-            if result.len() >= u32::MAX as usize {
-                return Err(SourceFeatureError::TooManyFeatures);
-            }
-            result.push(SourceFeaturePoint {
-                locator: SourceFeatureLocator { command_index, role },
-                point,
-                ordinal: result.len() as u32,
-                subpath_index,
-            });
-            Ok(())
-        };
-
         match command {
             PathCommand::MoveTo(point) => {
                 if has_subpath {
                     subpath_index = subpath_index.checked_add(1).ok_or(SourceFeatureError::TooManyFeatures)?;
                 }
                 has_subpath = true;
-                emit(PathFeatureRole::MoveToEndpoint, *point)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::MoveToEndpoint, *point, subpath_index)?;
             }
             PathCommand::LineTo(point) => {
                 if !has_subpath { return Err(SourceFeatureError::InvalidPathSequence { command_index: command_index as usize }); }
-                emit(PathFeatureRole::LineToEndpoint, *point)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::LineToEndpoint, *point, subpath_index)?;
             }
             PathCommand::QuadraticTo { control, to } => {
                 if !has_subpath { return Err(SourceFeatureError::InvalidPathSequence { command_index: command_index as usize }); }
-                emit(PathFeatureRole::QuadraticControl, *control)?;
-                emit(PathFeatureRole::QuadraticEndpoint, *to)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::QuadraticControl, *control, subpath_index)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::QuadraticEndpoint, *to, subpath_index)?;
             }
             PathCommand::CubicTo { control1, control2, to } => {
                 if !has_subpath { return Err(SourceFeatureError::InvalidPathSequence { command_index: command_index as usize }); }
-                emit(PathFeatureRole::CubicControl1, *control1)?;
-                emit(PathFeatureRole::CubicControl2, *control2)?;
-                emit(PathFeatureRole::CubicEndpoint, *to)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::CubicControl1, *control1, subpath_index)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::CubicControl2, *control2, subpath_index)?;
+                push_source_feature(&mut result, command_index, PathFeatureRole::CubicEndpoint, *to, subpath_index)?;
             }
             PathCommand::Close => {
                 if !has_subpath { return Err(SourceFeatureError::InvalidPathSequence { command_index: command_index as usize }); }
@@ -126,6 +113,25 @@ pub fn enumerate_source_features(path: &Path2D) -> Result<Vec<SourceFeaturePoint
         }
     }
     Ok(result)
+}
+
+fn push_source_feature(
+    result: &mut Vec<SourceFeaturePoint>,
+    command_index: u32,
+    role: PathFeatureRole,
+    point: Point2,
+    subpath_index: u32,
+) -> Result<(), SourceFeatureError> {
+    if result.len() >= u32::MAX as usize {
+        return Err(SourceFeatureError::TooManyFeatures);
+    }
+    result.push(SourceFeaturePoint {
+        locator: SourceFeatureLocator { command_index, role },
+        point,
+        ordinal: result.len() as u32,
+        subpath_index,
+    });
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,7 +149,7 @@ pub enum OutsideCagePolicy {
     Extrapolate,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BindingStamp {
     pub target: HostTargetRef,
     pub geometry_revision: u64,
