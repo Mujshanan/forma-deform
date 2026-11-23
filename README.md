@@ -1,6 +1,6 @@
-# Forma Deform
+# Form  Deform
 
-**Forma Deform** is AniCraft's deformation and rig-control product, developed as a native AniCraft tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
+**Form  Deform** is AniCraft's deformation and rig-control product, developed as a native AniCraft tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
 ## Product evolution and current implementation status
 
