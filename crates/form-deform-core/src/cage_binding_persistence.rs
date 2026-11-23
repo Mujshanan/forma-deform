@@ -129,7 +129,26 @@ impl PersistedCageBinding {
     }
 
     pub fn freshness_against(&self, current: &GeometrySnapshotStamp) -> BindingFreshness {
+        self.freshness_against_cage(current, &self.cage_vertex_ids, &self.cage_triangles)
+    }
+
+    /// Compare both the host snapshot stamp and the actual cage identity
+    /// envelope. This catches adapters that accidentally fail to advance a
+    /// topology revision when the cage's stable topology has changed.
+    pub fn freshness_against_cage(
+        &self,
+        current: &GeometrySnapshotStamp,
+        current_vertex_ids: &[u64],
+        current_triangles: &[[u64; 3]],
+    ) -> BindingFreshness {
         if self.target != *current.target() { return BindingFreshness::TargetMismatch; }
+        let mut vertex_ids = current_vertex_ids.to_vec();
+        vertex_ids.sort_unstable();
+        if vertex_ids != self.cage_vertex_ids { return BindingFreshness::CageVertexSetChanged; }
+        let mut triangles = current_triangles.to_vec();
+        for triangle in &mut triangles { triangle.sort_unstable(); }
+        triangles.sort_unstable();
+        if triangles != self.cage_triangles { return BindingFreshness::CageTopologyChanged; }
         let Ok(freshness) = SnapshotFreshness::compare(&self.reference_geometry, current) else {
             return BindingFreshness::TargetMismatch;
         };
@@ -223,6 +242,9 @@ mod tests {
     fn freshness_distinguishes_current_geometry_topology_and_fingerprint() {
         let value = record();
         assert_eq!(value.freshness_against(&stamp(1, 1, 7)), BindingFreshness::Current);
+        assert_eq!(value.freshness_against_cage(&stamp(1, 1, 7), &[10, 20, 30], &[[10, 20, 30]]), BindingFreshness::Current);
+        assert_eq!(value.freshness_against_cage(&stamp(1, 1, 7), &[10, 20, 40], &[[10, 20, 40]]), BindingFreshness::CageVertexSetChanged);
+        assert_eq!(value.freshness_against_cage(&stamp(1, 1, 7), &[10, 20, 30], &[[10, 20, 40]]), BindingFreshness::CageTopologyChanged);
         assert_eq!(value.freshness_against(&stamp(2, 1, 7)), BindingFreshness::GeometryChanged);
         assert_eq!(value.freshness_against(&stamp(1, 2, 7)), BindingFreshness::TopologyChanged);
         assert_eq!(value.freshness_against(&stamp(1, 1, 8)), BindingFreshness::FingerprintIntegrityError);
