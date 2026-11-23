@@ -28,7 +28,6 @@ fn workload(curve_count: usize, amplitude: f64) -> Path2D {
 fn measure(label: &str, path: &Path2D, policy: CurveSamplingPolicy, iterations: usize) {
     let warmup = sample_path_curves(path, policy).expect("warmup sampling succeeds");
     let expected_samples = warmup.total_samples;
-    let start = Instant::now();
     let mut elapsed = Duration::ZERO;
 
     for _ in 0..iterations {
@@ -36,18 +35,23 @@ fn measure(label: &str, path: &Path2D, policy: CurveSamplingPolicy, iterations: 
         let result = sample_path_curves(black_box(path), black_box(policy))
             .expect("benchmark sampling succeeds");
         elapsed += iteration_start.elapsed();
-        assert_eq!(result.total_samples, expected_samples, "sample count must be deterministic");
+        assert_eq!(
+            result.total_samples, expected_samples,
+            "sample count must be deterministic"
+        );
         black_box(result);
     }
 
     let nanos_per_iteration = elapsed.as_nanos() / iterations as u128;
+    let samples_per_second = if nanos_per_iteration == 0 {
+        0
+    } else {
+        (expected_samples as u128 * 1_000_000_000 / nanos_per_iteration) as u64
+    };
+
     println!(
-        "{label}: {iterations} iterations, {expected_samples} samples/run,          {nanos_per_iteration} ns/run, {} samples/s",
-        if nanos_per_iteration == 0 { 0 } else {
-            (expected_samples as u128 * 1_000_000_000 / nanos_per_iteration) as u64
-        }
+        "{label}: {iterations} iterations, {expected_samples} samples/run,          {nanos_per_iteration} ns/run, {samples_per_second} samples/s"
     );
-    black_box(start.elapsed());
 }
 
 fn main() {
