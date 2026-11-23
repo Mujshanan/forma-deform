@@ -66,7 +66,7 @@ It preserves command order, subpath structure, command kinds, and `Close` comman
 
 ## Tests
 
-The initial suite covers stable algorithm identity/version, full displacement at the handle center, half displacement at half radius, unchanged boundary/exterior points, zero-displacement identity, repeatability/non-accumulation, command topology preservation, Bézier control-point transformation, invalid parameter schema/radius, and non-finite output rejection.
+The suite covers stable algorithm identity/version, full displacement at the handle center, half displacement at half radius, unchanged boundary/exterior points, zero-displacement identity, repeatability/non-accumulation, command topology preservation, Bézier control-point transformation, invalid parameter schema/radius, NaN/infinite parameters, tiny-radius/extreme-coordinate behavior, non-finite output rejection, and a regression test demonstrating that the mapped control-point curve is not generally identical to pointwise mapping of the original curve.
 
 ## Non-goals
 
@@ -79,4 +79,4 @@ The initial suite covers stable algorithm identity/version, full displacement at
 
 ## Verification
 
-CI is required on the final branch head for formatting, Clippy, Rust workspace tests, existing TypeScript checks/tests/build, and all three release WASM plugin builds. Do not mark FDM-01.3 complete until those checks pass.
+CI is required on the final branch head for FDM-core rustfmt and Clippy gates, Rust workspace tests, existing TypeScript checks/tests/build, and all three release WASM plugin builds. Do not mark FDM-01.3 complete until those checks pass.
