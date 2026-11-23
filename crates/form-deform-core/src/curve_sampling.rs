@@ -209,6 +209,9 @@ fn sample_cubic(
     Ok(output)
 }
 
+// Recursive subdivision carries independent curve, parameter interval, depth, policy,
+// and shared output/budget state. Keep this private algorithm's recursion state explicit.
+#[allow(clippy::too_many_arguments)]
 fn subdivide_quadratic(
     command_index: usize,
     curve: [Point2; 3],
