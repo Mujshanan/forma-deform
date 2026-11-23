@@ -292,12 +292,11 @@ mod tests {
 
     #[test]
     fn pairs_structured_path_with_curve_samples_from_same_binding_and_pose() {
-        use crate::binding::ValidatedCageGeometry;
         use crate::curve_sample_evaluation::evaluate_curve_samples;
         use crate::curve_sampling::{map_curve_samples, sample_path_curves, CurveSamplingPolicy};
         use crate::embedding::validate_cage_embedding;
         use crate::binding_evaluation::evaluate_binding;
-        use crate::topology::{ControlPointPosition, ControlStateRevision};
+        use crate::topology::{ControlPointPosition, ControlStateRevision, TopologyView};
 
         let (source, topology, rest_state, rest_geometry, validated) = integration_fixture();
         let samples = sample_path_curves(source.payload(), CurveSamplingPolicy::default()).unwrap();
