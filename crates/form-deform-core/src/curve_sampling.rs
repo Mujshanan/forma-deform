@@ -4,6 +4,7 @@
 //! and their indices are not persistent source-feature identities.
 
 use crate::path2d::{Path2D, PathCommand, Point2};
+use crate::topology::TopologyView;
 
 pub const CURVE_SAMPLING_POLICY_VERSION: u32 = 1;
 const MAX_SUBDIVISION_DEPTH: u8 = 32;
