@@ -1,5 +1,7 @@
 use smart_controller_core::{
-    canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
+    canonical::{
+        BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping,
+    },
     contribution::{BaseRef, CompositionMode},
     ids::{BindingId, ControllerId, InputId, TargetId},
     input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
@@ -7,13 +9,22 @@ use smart_controller_core::{
     schema::{SchemaIdentity, CURRENT_SCHEMA_VERSION, SCHEMA_NAME},
 };
 
-fn controller(id: &str, input_id: &str, dependencies: Vec<ControllerId>, bindings: Vec<ControllerBinding>) -> Controller {
+fn controller(
+    id: &str,
+    input_id: &str,
+    dependencies: Vec<ControllerId>,
+    bindings: Vec<ControllerBinding>,
+) -> Controller {
     Controller {
         id: ControllerId::new(id).unwrap(),
         enabled: true,
         inputs: vec![InputId::new(input_id).unwrap()],
         dependencies,
-        mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+        mapping: MappingConfig::Range1D {
+            minimum: -1.0,
+            neutral: 0.0,
+            maximum: 1.0,
+        },
         bindings,
         parent_scoped: false,
     }
@@ -24,7 +35,10 @@ fn producer_binding() -> ControllerBinding {
         id: BindingId::new("source-binding").unwrap(),
         target_id: TargetId::new("source-target").unwrap(),
         target: TargetMapping::Property {
-            target_id: "arm".into(), property: "rotation".into(), scale: 1.0, additive: false,
+            target_id: "arm".into(),
+            property: "rotation".into(),
+            scale: 1.0,
+            additive: false,
         },
         mode: BindingMode::AbsolutePose,
         base_value: None,
@@ -45,16 +59,30 @@ fn document(with_dependency: bool, source_binding_exists: bool) -> CanonicalDocu
         fallback: FallbackPolicy::Reject,
     };
     let producer = controller(
-        "source-controller", "producer-input", vec![],
-        if source_binding_exists { vec![producer_binding()] } else { vec![] },
+        "source-controller",
+        "producer-input",
+        vec![],
+        if source_binding_exists {
+            vec![producer_binding()]
+        } else {
+            vec![]
+        },
     );
     let consumer = controller(
-        "consumer-controller", "derived-input",
-        if with_dependency { vec![producer_id] } else { vec![] },
+        "consumer-controller",
+        "derived-input",
+        if with_dependency {
+            vec![producer_id]
+        } else {
+            vec![]
+        },
         vec![],
     );
     CanonicalDocument {
-        schema: SchemaIdentity { name: SCHEMA_NAME.into(), version: CURRENT_SCHEMA_VERSION },
+        schema: SchemaIdentity {
+            name: SCHEMA_NAME.into(),
+            version: CURRENT_SCHEMA_VERSION,
+        },
         inputs: vec![
             InputDefinition {
                 id: InputId::new("producer-input").unwrap(),
@@ -102,7 +130,10 @@ fn explicit_binding_composition_configuration_is_validated_by_mode() {
     let mut neutral_additive = controller("additive", "input", vec![], vec![producer_binding()]);
     neutral_additive.bindings[0].mode = BindingMode::RelativeDelta;
     neutral_additive.bindings[0].target = TargetMapping::Property {
-        target_id: "arm".into(), property: "rotation".into(), scale: 1.0, additive: true,
+        target_id: "arm".into(),
+        property: "rotation".into(),
+        scale: 1.0,
+        additive: true,
     };
     neutral_additive.bindings[0].composition = Some(CompositionConfig {
         mode: CompositionMode::Additive,
@@ -118,7 +149,11 @@ fn explicit_binding_composition_configuration_is_validated_by_mode() {
     priority.bindings[0].composition.as_mut().unwrap().priority = None;
     assert!(priority.validate_local().is_err());
 
-    neutral_additive.bindings[0].composition.as_mut().unwrap().base_ref = None;
+    neutral_additive.bindings[0]
+        .composition
+        .as_mut()
+        .unwrap()
+        .base_ref = None;
     assert!(neutral_additive.validate_local().is_err());
 }
 
@@ -136,7 +171,11 @@ fn optional_composition_config_round_trips_and_old_documents_still_deserialize()
     assert_eq!(decoded, current);
 
     let mut old_json: serde_json::Value = serde_json::from_str(&json).unwrap();
-    old_json["controllers"][0]["bindings"][0].as_object_mut().unwrap().remove("composition");
-    let decoded_old = CanonicalDocument::from_json(&serde_json::to_string(&old_json).unwrap()).unwrap();
+    old_json["controllers"][0]["bindings"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("composition");
+    let decoded_old =
+        CanonicalDocument::from_json(&serde_json::to_string(&old_json).unwrap()).unwrap();
     assert!(decoded_old.controllers[0].bindings[0].composition.is_none());
 }

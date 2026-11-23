@@ -52,7 +52,9 @@ pub enum BoneTransformChannel {
 pub enum InputSource {
     Manual,
     /// Transitional scalar source for imported V1 controller IDs whose units were host-defined.
-    LegacyScalar { source_id: String },
+    LegacyScalar {
+        source_id: String,
+    },
     BoneTransform {
         bone_id: String,
         channel: BoneTransformChannel,
@@ -64,7 +66,12 @@ pub enum InputSource {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum FallbackPolicy {
     /// Do not substitute a value; the input remains unavailable.
     Unavailable,
@@ -87,7 +94,9 @@ impl InputDefinition {
     pub fn validate(&self) -> Result<(), CoreError> {
         if let InputSource::LegacyScalar { source_id } = &self.source {
             if source_id.trim().is_empty() {
-                return Err(CoreError::InvalidModel("legacy scalar input requires a non-empty source_id".into()));
+                return Err(CoreError::InvalidModel(
+                    "legacy scalar input requires a non-empty source_id".into(),
+                ));
             }
         }
         if let InputSource::BoneTransform { bone_id, channel } = &self.source {

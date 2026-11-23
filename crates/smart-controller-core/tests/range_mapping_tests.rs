@@ -1,4 +1,11 @@
-use smart_controller_core::{mapping::{easing::Easing, frame, range::{normalize_directed, ThreePointRange}}, model::EndpointPolicy};
+use smart_controller_core::{
+    mapping::{
+        easing::Easing,
+        frame,
+        range::{normalize_directed, ThreePointRange},
+    },
+    model::EndpointPolicy,
+};
 
 #[test]
 fn three_point_range_preserves_negative_neutral_positive() {
@@ -16,8 +23,14 @@ fn directed_range_supports_reversed_endpoints() {
 
 #[test]
 fn frame_mapping_preserves_endpoint_policies() {
-    assert_eq!(frame::map_to_frame(1.0, 1, 9, EndpointPolicy::Exclusive).unwrap(), 8);
-    assert_eq!(frame::map_to_frame(1.0, 1, 9, EndpointPolicy::Inclusive).unwrap(), 9);
+    assert_eq!(
+        frame::map_to_frame(1.0, 1, 9, EndpointPolicy::Exclusive).unwrap(),
+        8
+    );
+    assert_eq!(
+        frame::map_to_frame(1.0, 1, 9, EndpointPolicy::Inclusive).unwrap(),
+        9
+    );
 }
 
 #[test]
@@ -54,7 +67,8 @@ fn directed_range_mapping_matches_the_v1_rotation_mapper() {
         for step in 0..=100 {
             let input = start + (end - start) * (step as f64 / 100.0);
             let actual = normalize_directed(input, start, end).unwrap();
-            let expected = smart_controller_core::mapping::normalize_rotation(input, start, end).unwrap();
+            let expected =
+                smart_controller_core::mapping::normalize_rotation(input, start, end).unwrap();
             assert!((actual - expected).abs() <= 1e-12);
         }
     }
@@ -62,7 +76,11 @@ fn directed_range_mapping_matches_the_v1_rotation_mapper() {
 
 #[test]
 fn three_anchor_range_matches_the_v1_input_range_normalizer() {
-    let old = smart_controller_core::legacy::InputRange { minimum: -45.0, neutral: 5.0, maximum: 80.0 };
+    let old = smart_controller_core::legacy::InputRange {
+        minimum: -45.0,
+        neutral: 5.0,
+        maximum: 80.0,
+    };
     let new = ThreePointRange::new(old.minimum, old.neutral, old.maximum).unwrap();
     for step in 0..=200 {
         let input = -60.0 + step as f64 * 0.75;

@@ -15,18 +15,34 @@ pub const OUTPUT_SKIPPED: &str = "SC_OUTPUT_SKIPPED";
 
 /// Registry order is stable and is mirrored by diagnostic_codes_v1.json.
 pub const ALL_CODES: &[&str] = &[
-    INPUT_MISSING, INPUT_STALE, INPUT_INVALID, INPUT_UNAVAILABLE,
-    GRAPH_INVALID, GRAPH_CYCLE, MAPPING_DOMAIN, MAPPING_TYPE,
-    COMPOSITION_CONFLICT, COMPOSITION_WEIGHT_INVALID, COMPOSITION_NO_ELIGIBLE,
-    CONTROLLER_DISABLED, OUTPUT_SKIPPED,
+    INPUT_MISSING,
+    INPUT_STALE,
+    INPUT_INVALID,
+    INPUT_UNAVAILABLE,
+    GRAPH_INVALID,
+    GRAPH_CYCLE,
+    MAPPING_DOMAIN,
+    MAPPING_TYPE,
+    COMPOSITION_CONFLICT,
+    COMPOSITION_WEIGHT_INVALID,
+    COMPOSITION_NO_ELIGIBLE,
+    CONTROLLER_DISABLED,
+    OUTPUT_SKIPPED,
 ];
 
-use crate::{error::CoreError, ids::{ControllerId, InputId, TargetId}};
+use crate::{
+    error::CoreError,
+    ids::{ControllerId, InputId, TargetId},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DiagnosticSeverity { Info, Warning, Error }
+pub enum DiagnosticSeverity {
+    Info,
+    Warning,
+    Error,
+}
 
 /// Public structured diagnostic. The code is stable; the message is explanatory
 /// and must never be used as a machine-readable discriminator.
@@ -45,18 +61,37 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn new(code: impl Into<String>, severity: DiagnosticSeverity, message: impl Into<String>) -> Result<Self, CoreError> {
+    pub fn new(
+        code: impl Into<String>,
+        severity: DiagnosticSeverity,
+        message: impl Into<String>,
+    ) -> Result<Self, CoreError> {
         let code = code.into();
         if !ALL_CODES.contains(&code.as_str()) {
-            return Err(CoreError::InvalidModel(format!("unregistered diagnostic code: {code}")));
+            return Err(CoreError::InvalidModel(format!(
+                "unregistered diagnostic code: {code}"
+            )));
         }
         Ok(Self {
-            code, severity, message: message.into(),
-            controller_id: None, input_id: None, target_id: None,
+            code,
+            severity,
+            message: message.into(),
+            controller_id: None,
+            input_id: None,
+            target_id: None,
         })
     }
 
-    pub fn with_controller(mut self, id: ControllerId) -> Self { self.controller_id = Some(id); self }
-    pub fn with_input(mut self, id: InputId) -> Self { self.input_id = Some(id); self }
-    pub fn with_target(mut self, id: TargetId) -> Self { self.target_id = Some(id); self }
+    pub fn with_controller(mut self, id: ControllerId) -> Self {
+        self.controller_id = Some(id);
+        self
+    }
+    pub fn with_input(mut self, id: InputId) -> Self {
+        self.input_id = Some(id);
+        self
+    }
+    pub fn with_target(mut self, id: TargetId) -> Self {
+        self.target_id = Some(id);
+        self
+    }
 }

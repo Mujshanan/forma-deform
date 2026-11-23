@@ -48,7 +48,10 @@ impl Pose2D {
     }
 
     pub fn get(&self, id: &BindingId) -> Option<&TypedValue> {
-        self.values.iter().find(|(binding_id, _)| binding_id == id).map(|(_, value)| value)
+        self.values
+            .iter()
+            .find(|(binding_id, _)| binding_id == id)
+            .map(|(_, value)| value)
     }
 
     /// Verify that two poses contain the same binding IDs with compatible
@@ -67,13 +70,17 @@ impl Pose2D {
             }
             if let (TypedValue::Angle(left), TypedValue::Angle(right)) = (*value, *other_value) {
                 if left.is_wrapped() != right.is_wrapped() {
-                    return Err(CoreError::PoseAngleSemanticsMismatch { binding_id: id.to_string() });
+                    return Err(CoreError::PoseAngleSemanticsMismatch {
+                        binding_id: id.to_string(),
+                    });
                 }
             }
         }
         for (id, _) in &other.values {
             if self.get(id).is_none() {
-                return Err(CoreError::PoseBindingMissing { binding_id: id.to_string() });
+                return Err(CoreError::PoseBindingMissing {
+                    binding_id: id.to_string(),
+                });
             }
         }
         Ok(())

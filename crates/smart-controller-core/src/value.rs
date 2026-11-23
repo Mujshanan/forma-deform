@@ -107,10 +107,14 @@ impl Angle {
     /// retain authored revolutions. Mixing the two semantics is rejected.
     pub fn interpolate(self, other: Self, amount: f64) -> Result<Self, CoreError> {
         if !amount.is_finite() {
-            return Err(CoreError::NonFiniteValue { context: "angle interpolation amount" });
+            return Err(CoreError::NonFiniteValue {
+                context: "angle interpolation amount",
+            });
         }
         if self.wrapped != other.wrapped {
-            return Err(CoreError::InvalidMapping("wrapped and unwrapped angles cannot be interpolated together".into()));
+            return Err(CoreError::InvalidMapping(
+                "wrapped and unwrapped angles cannot be interpolated together".into(),
+            ));
         }
         let t = amount.clamp(0.0, 1.0);
         let radians = if self.wrapped {
@@ -118,7 +122,11 @@ impl Angle {
             let from = self.radians().rem_euclid(TAU);
             let to = other.radians().rem_euclid(TAU);
             let clockwise_delta = (to - from).rem_euclid(TAU);
-            let shortest_delta = if clockwise_delta > PI { clockwise_delta - TAU } else { clockwise_delta };
+            let shortest_delta = if clockwise_delta > PI {
+                clockwise_delta - TAU
+            } else {
+                clockwise_delta
+            };
             (from + shortest_delta * t + PI).rem_euclid(TAU) - PI
         } else {
             self.radians() * (1.0 - t) + other.radians() * t
@@ -130,7 +138,12 @@ impl Angle {
 /// The canonical finite value union. Angle remains distinct from scalar so
 /// consumers cannot accidentally apply ordinary scalar interpolation to it.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum TypedValue {
     Scalar(Scalar),
     Vector2(Vector2),
@@ -183,19 +196,24 @@ impl TypedValue {
     /// The interpolation amount is clamped to [0, 1].
     pub fn interpolate(self, other: Self, amount: f64) -> Result<Self, CoreError> {
         if !amount.is_finite() {
-            return Err(CoreError::NonFiniteValue { context: "typed-value interpolation amount" });
+            return Err(CoreError::NonFiniteValue {
+                context: "typed-value interpolation amount",
+            });
         }
         let t = amount.clamp(0.0, 1.0);
         match (self, other) {
-            (Self::Scalar(from), Self::Scalar(to)) =>
-                Self::scalar(from.get() * (1.0 - t) + to.get() * t),
-            (Self::Vector2(from), Self::Vector2(to)) =>
-                Self::vector2(from.x() * (1.0 - t) + to.x() * t, from.y() * (1.0 - t) + to.y() * t),
-            (Self::Angle(from), Self::Angle(to)) =>
-                Ok(Self::Angle(from.interpolate(to, t)?)),
+            (Self::Scalar(from), Self::Scalar(to)) => {
+                Self::scalar(from.get() * (1.0 - t) + to.get() * t)
+            }
+            (Self::Vector2(from), Self::Vector2(to)) => Self::vector2(
+                from.x() * (1.0 - t) + to.x() * t,
+                from.y() * (1.0 - t) + to.y() * t,
+            ),
+            (Self::Angle(from), Self::Angle(to)) => Ok(Self::Angle(from.interpolate(to, t)?)),
             (left, right) => Err(CoreError::InvalidMapping(format!(
                 "cannot interpolate {} with {}",
-                left.kind_name(), right.kind_name()
+                left.kind_name(),
+                right.kind_name()
             ))),
         }
     }

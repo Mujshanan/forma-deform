@@ -8,8 +8,8 @@ use smart_controller_core::{
     legacy::BindingSet,
     migration::{
         CanonicalDocument, LegacyExportOutput, MigrationOutput, ParamsExportOutput,
-        export_binding_set_v1, export_unversioned_params, migrate_binding_set_v1,
-        migrate_json, migrate_unversioned_params,
+        export_binding_set_v1, export_unversioned_params, migrate_binding_set_v1, migrate_json,
+        migrate_unversioned_params,
     },
 };
 

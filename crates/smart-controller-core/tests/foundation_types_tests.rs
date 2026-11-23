@@ -85,11 +85,7 @@ fn sample_freshness_uses_strictly_greater_than_maximum_age() {
 
 #[test]
 fn unknown_sample_age_remains_unknown() {
-    let sample = InputSample::valid(
-        input_id("manual"),
-        TypedValue::scalar(3.0).unwrap(),
-        None,
-    );
+    let sample = InputSample::valid(input_id("manual"), TypedValue::scalar(3.0).unwrap(), None);
     assert_eq!(sample.freshness(0), Freshness::Unknown);
 }
 

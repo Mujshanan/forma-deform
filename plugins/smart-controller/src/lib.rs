@@ -34,14 +34,21 @@ const MANIFEST: &str = r##"{
 ac::plugin!(MANIFEST, run);
 
 fn find_driver_bone(result: &Value, name: &str) -> Option<f64> {
-    result["armatures"].as_array()?.iter()
+    result["armatures"]
+        .as_array()?
+        .iter()
         .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
         .find(|bone| bone["name"].as_str() == Some(name))
         .and_then(|bone| bone["angle"].as_f64())
 }
 fn query_driver_bone(params: &Params) -> Result<f64, String> {
-    let layer_id = params.driver_layer_id.ok_or("driver_layer_id is required for bone input")?;
-    let name = params.driver_bone_name.as_deref().ok_or("driver_bone_name is required for bone input")?;
+    let layer_id = params
+        .driver_layer_id
+        .ok_or("driver_layer_id is required for bone input")?;
+    let name = params
+        .driver_bone_name
+        .as_deref()
+        .ok_or("driver_bone_name is required for bone input")?;
     let response = ac::command("bone.info", json!({"layer": layer_id}))?;
     find_driver_bone(&response, name)
         .ok_or_else(|| format!("driver bone '{name}' was not found or has no evaluated angle"))
@@ -51,7 +58,9 @@ fn run(p: &Value) -> Result<(), String> {
         .map_err(|error| format!("invalid parameters: {error}"))?;
     validation::validate(&params)?;
     if params.mode != Mode::Slider {
-        return Err("Transform mode is reserved for V2; the V1 plugin supports Slider preview only".into());
+        return Err(
+            "Transform mode is reserved for V2; the V1 plugin supports Slider preview only".into(),
+        );
     }
     let driver_value = match params.manual_value {
         Some(value) => value,

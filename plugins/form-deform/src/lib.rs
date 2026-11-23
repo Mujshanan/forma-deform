@@ -28,13 +28,21 @@ const MANIFEST: &str = r##"{
 ac::plugin!(MANIFEST, run);
 
 fn required_id(params: &Value, key: &str) -> Result<u64, String> {
-    let id = params[key].as_u64().ok_or_else(|| format!("'{key}' must be a positive integer"))?;
-    if id == 0 { return Err(format!("'{key}' must be greater than zero")); }
+    let id = params[key]
+        .as_u64()
+        .ok_or_else(|| format!("'{key}' must be a positive integer"))?;
+    if id == 0 {
+        return Err(format!("'{key}' must be greater than zero"));
+    }
     Ok(id)
 }
 fn number(params: &Value, key: &str) -> Result<f64, String> {
-    let value = params[key].as_f64().ok_or_else(|| format!("'{key}' must be a number"))?;
-    if !value.is_finite() { return Err(format!("'{key}' must be finite")); }
+    let value = params[key]
+        .as_f64()
+        .ok_or_else(|| format!("'{key}' must be a number"))?;
+    if !value.is_finite() {
+        return Err(format!("'{key}' must be finite"));
+    }
     Ok(value)
 }
 fn run(params: &Value) -> Result<(), String> {
@@ -51,43 +59,73 @@ fn run(params: &Value) -> Result<(), String> {
     let bone_data = ac::command("bone.info", json!({}))?;
     let bone = find_bone(&bone_data, bone_id)
         .ok_or_else(|| format!("bone {bone_id} is not present in an armature at the playhead"))?;
-    let keyed_angle = bone["angle"].as_f64()
+    let keyed_angle = bone["angle"]
+        .as_f64()
         .ok_or_else(|| format!("bone {bone_id} has no evaluated angle at the playhead"))?;
     let swing = bone["swing"].as_f64().unwrap_or(0.0);
     let input_angle = keyed_angle + if include_spring { swing } else { 0.0 };
 
     let warp = ac::command("warp.info", json!({"element": element_id}))?;
     if warp["warped"].as_bool() != Some(true) {
-        return Err(format!("element {element_id} has no usable Asset Warp mesh; add a warp and pin first"));
+        return Err(format!(
+            "element {element_id} has no usable Asset Warp mesh; add a warp and pin first"
+        ));
     }
     if !find_pin(&warp, pin_id) {
-        return Err(format!("pin {pin_id} does not belong to warped element {element_id}"));
+        return Err(format!(
+            "pin {pin_id} does not belong to warped element {element_id}"
+        ));
     }
 
-    let target = evaluate_pin_position(DeformSpec {
-        neutral_position: Vec2 { x: neutral_x, y: neutral_y },
-        neutral_angle_degrees: neutral_angle,
-        gain_per_degree: Vec2 { x: gain_x, y: gain_y },
-    }, input_angle).map_err(|error| error.to_string())?;
+    let target = evaluate_pin_position(
+        DeformSpec {
+            neutral_position: Vec2 {
+                x: neutral_x,
+                y: neutral_y,
+            },
+            neutral_angle_degrees: neutral_angle,
+            gain_per_degree: Vec2 {
+                x: gain_x,
+                y: gain_y,
+            },
+        },
+        input_angle,
+    )
+    .map_err(|error| error.to_string())?;
 
-    ac::log(&format!("Form Deform — bone {bone_id}: keyed angle {keyed_angle:.3}°, spring swing {swing:.3}°, input {input_angle:.3}°"));
-    ac::log(&format!("Pin {pin_id} on element {element_id}: neutral ({neutral_x:.2}, {neutral_y:.2}) → target ({:.2}, {:.2}) stage px", target.x, target.y));
+    ac::log(&format!(
+        "Form Deform — bone {bone_id}: keyed angle {keyed_angle:.3}°, spring swing {swing:.3}°, input {input_angle:.3}°"
+    ));
+    ac::log(&format!(
+        "Pin {pin_id} on element {element_id}: neutral ({neutral_x:.2}, {neutral_y:.2}) → target ({:.2}, {:.2}) stage px",
+        target.x, target.y
+    ));
 
     if params["apply"].as_bool().unwrap_or(false) {
-        let result = ac::command("warp.pin_move", json!({"element": element_id, "pin": pin_id, "x": target.x, "y": target.y}))?;
-        ac::log(&format!("Applied deformation at {:?}. This edit is undoable.", result["at"]));
+        let result = ac::command(
+            "warp.pin_move",
+            json!({"element": element_id, "pin": pin_id, "x": target.x, "y": target.y}),
+        )?;
+        ac::log(&format!(
+            "Applied deformation at {:?}. This edit is undoable.",
+            result["at"]
+        ));
     } else {
         ac::log("Calculation only. Enable Apply pin position to write the result to the document.");
     }
     Ok(())
 }
 fn find_bone(result: &Value, id: u64) -> Option<&Value> {
-    result["armatures"].as_array()?.iter()
+    result["armatures"]
+        .as_array()?
+        .iter()
         .flat_map(|armature| armature["bones"].as_array().into_iter().flatten())
         .find(|bone| bone["id"].as_u64() == Some(id))
 }
 fn find_pin(result: &Value, id: u64) -> bool {
-    result["pins"].as_array().is_some_and(|pins| pins.iter().any(|pin| pin["pin"].as_u64() == Some(id)))
+    result["pins"]
+        .as_array()
+        .is_some_and(|pins| pins.iter().any(|pin| pin["pin"].as_u64() == Some(id)))
 }
 
 #[cfg(test)]

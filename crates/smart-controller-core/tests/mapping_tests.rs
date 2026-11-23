@@ -1,4 +1,7 @@
-use smart_controller_core::{EndpointPolicy, mapping::{map_to_frame, normalize_rotation}};
+use smart_controller_core::{
+    mapping::{map_to_frame, normalize_rotation},
+    EndpointPolicy,
+};
 
 #[test]
 fn exclusive_endpoint_never_selects_end() {
