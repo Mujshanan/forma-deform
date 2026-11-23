@@ -336,7 +336,10 @@ The demo-retirement work is real but branch-scoped:
 
 - PR #49 records the LEG-01.4 adapter disposition and retirement gates. It is documentation-only and remains open.
 - The old Form Deform command adapter is a retirement candidate only after native FDM parity. Bone Query remains diagnostic tooling for now; the vendored ABI SDK is retired last. Smart Controller core compatibility/migration modules are not to be removed as part of command-adapter retirement.
-- PR #68 records FDM-FMT-01.1 only: a 69-file rustfmt-diff baseline, crate/ownership grouping, and six overlapping files deferred pending stable lineage. It does not format Rust files. The workspace formatting remediation remains a separate, explicitly staged maintenance task; do not fold it into unrelated correctness or documentation changes.
+- PR #68 records FDM-FMT-01.1 only: a 69-file rustfmt-diff baseline, crate/ownership grouping, and six overlapping files deferred pending stable lineage. It does not format Rust files.
+- **FDM-FMT-01.2 status: BLOCKED, 0/36 files formatted.** The scoped target is the 36-file `smart-controller-core` group. No source file was changed; the exact-file diff review, formatting-only verification, scoped formatter check, crate tests, and maintenance commit have not been completed because the available execution environment has no `cargo` or `rustfmt` toolchain.
+- **FDM-FMT-01.3 status: NOT STARTED.** Its 17 non-overlapping `form-deform-core` files remain queued until FDM-FMT-01.2 has been formatted, verified, tested, and committed separately.
+- Preserve the maintenance branch `chore/fdm-fmt-01-workspace-formatting-remediation` and the existing PR #68 lineage. Do not substitute a repository-wide formatting run, include the six deferred PR #61 overlap files, or mix formatting with behavior changes.
 
 ### 11.4 Native AniCraft integration and S0 evidence gate
 
