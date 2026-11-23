@@ -582,7 +582,7 @@ mod tests {
         ).unwrap()
     }
 
-    fn cage() -> (DeformationTopology, ValidatedCageGeometry) {
+    fn cage() -> (DeformationTopology, DeformationControlState, ValidatedCageGeometry) {
         let topology_id = DeformationTopologyId::new(80).unwrap();
         let topology_revision = DeformationTopologyRevision::new(1).unwrap();
         let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
@@ -608,12 +608,12 @@ mod tests {
         };
         let certificate = validate_cage_embedding(&topology, &state).unwrap();
         let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
-        (topology, geometry)
+        (topology, state, geometry)
     }
 
     fn record() -> (GeometrySnapshot, DeformationTopology, ValidatedCageGeometry, PersistedCageBinding) {
         let source = snapshot(1);
-        let (topology, geometry) = cage();
+        let (topology, _, geometry) = cage();
         let points = [BindingPoint { id: 7, position: point(2.0, 3.0) }];
         let runtime = CageBinding::bind(&topology, &geometry, &points).unwrap();
         let persisted = runtime.to_persisted(
@@ -652,6 +652,70 @@ mod tests {
             ),
             Err(CageBindingDiagnostic::PointReconstructionMismatch { point: 7 })
         ));
+    }
+
+    struct MockHost {
+        payload: Option<String>,
+    }
+
+    impl CageBindingHostAdapter for MockHost {
+        type Error = &'static str;
+
+        fn current_cage_binding_context(
+            &self,
+            _target: &HostTargetRef,
+        ) -> Result<CageBindingHostContext, Self::Error> {
+            let (topology, control_state, _) = cage();
+            Ok(CageBindingHostContext {
+                snapshot: snapshot(1),
+                topology,
+                control_state,
+                points: vec![BindingPoint { id: 7, position: point(2.0, 3.0) }],
+            })
+        }
+
+        fn read_cage_binding_payload(
+            &self,
+            _target: &HostTargetRef,
+        ) -> Result<Option<String>, Self::Error> {
+            Ok(self.payload.clone())
+        }
+
+        fn write_cage_binding_payload(
+            &mut self,
+            _target: &HostTargetRef,
+            payload: String,
+        ) -> Result<(), Self::Error> {
+            self.payload = Some(payload);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn host_adapter_persists_and_loads_a_validated_point_binding() {
+        let (_, _, _, persisted) = record();
+        let mut host = MockHost { payload: None };
+        persist_cage_binding(&mut host, &target(), &persisted).unwrap();
+        let loaded = load_validated_cage_binding(&host, &target()).unwrap().unwrap();
+        assert_eq!(loaded.binding().points()[0].id, 7);
+    }
+
+    #[test]
+    fn cage_topology_changes_are_detected_even_when_source_is_unchanged() {
+        let (source, topology, _, persisted) = record();
+        let changed = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: topology.topology_id(),
+            revision: topology.topology_revision(),
+            control_point_ids: vec![id(10), id(20), id(30), id(40)],
+            faces: vec![
+                TopologyFace::Triangle([id(10), id(20), id(40)]),
+                TopologyFace::Triangle([id(20), id(30), id(40)]),
+            ],
+        });
+        assert_eq!(
+            persisted.freshness_against(&source.stamp(), &changed),
+            CageBindingFreshness::CageTopologyChanged,
+        );
     }
 
     #[test]
