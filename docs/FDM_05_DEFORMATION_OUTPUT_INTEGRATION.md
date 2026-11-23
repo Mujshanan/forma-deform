@@ -88,14 +88,14 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Validate complete, ordered coverage across multiple subpaths and mixed line/quadratic/cubic/close commands.
 - Keep the original Path2D structure intact and independently inspectable.
 
-### FDM-05.4 — Numerical and Adversarial Regression
-- Add reference-curve deviation tests, nonlinear cage deformations, discontinuity/face-crossing cases, determinism, stale provenance, and no-accumulation tests. FDM-05.2 currently covers triangle-edge crossings, all outside policies, extrapolation limits, invalid policy values, degenerate chords, and overflow.
-- Strengthen finite-value and resource-budget failure coverage.
+### FDM-05.4 — Integration Readiness & Output Contract Hardening
+- Audit structured-path and refined-curve consistency, including endpoint agreement.
+- Verify command/subpath identity, provenance, outside-cage policy, deterministic ordering, and resource-budget accounting.
+- Add adversarial regressions for confirmed contract gaps without changing the deformation algorithm.
+- Document the native AniCraft consumption boundary and its responsibilities.
+- Run exact-head workspace tests, benchmark smoke tests, and all three release WASM builds.
 
-### FDM-05.5 — Performance Baseline and Quality Gates
-- Add representative output-integration workloads and benchmark reporting.
-- Run workspace tests, benchmark smoke tests, and all three release WASM builds.
-- Audit branch lineage and CI evidence before opening the final review PR.
+FDM-05.4 is an audit-and-hardening milestone, not a new deformation algorithm. It does not change the three-probe refinement method, cage mapping, or deformation operators.
 
 ## 7. FDM-05.2 v1 accuracy contract
 
