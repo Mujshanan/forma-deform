@@ -19,14 +19,14 @@ use form_deform_core::host_contract::{
     HostTargetId, HostTargetKind, HostTargetRef, TopologyRevision,
 };
 use form_deform_core::path2d::{
-    Path2D, PathCommand, Point2, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION,
+    PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION, Path2D, PathCommand, Point2,
 };
 use form_deform_core::persistence::{
     DeformationDefinition, DeformationKind, GeometryValueKind, ParameterValue,
 };
 use form_deform_core::single_handle_displacement::{
-    SingleHandleDisplacementOperator, SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID,
-    SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_VERSION,
+    SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID, SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_VERSION,
+    SingleHandleDisplacementOperator,
 };
 
 fn point(x: f64, y: f64) -> Point2 {
@@ -149,10 +149,7 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
     let captured = request(source.clone(), "captured");
     let current = request(source.clone(), "current");
     let authored_definition = definition(&source);
-    let input = GeometryValue::new(
-        GeometryValueKind::AbsoluteGeometry,
-        original_path.clone(),
-    );
+    let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, original_path.clone());
     let operator = SingleHandleDisplacementOperator;
     let engine = SingleOperatorEvaluationEngine;
 
@@ -210,11 +207,13 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
             result.payload().commands().len(),
             original_path.commands().len()
         );
-        assert!(result
-            .validate_source_freshness(&[source.clone()])
-            .unwrap()
-            .iter()
-            .all(|freshness| freshness.is_current()));
+        assert!(
+            result
+                .validate_source_freshness(&[source.clone()])
+                .unwrap()
+                .iter()
+                .all(|freshness| freshness.is_current())
+        );
     }
 
     assert_eq!(input.geometry(), &original_path);
