@@ -1,8 +1,10 @@
 # Forma Deform
 
-**Forma Deform** is AniCraft's proposed deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
+**Forma Deform** is a focused, standalone deformation authoring Studio backed by independent deformation engines. It provides authoring tools for pins and offset drivers, point arrays and binding, cages, Bézier splines, and vector tessellation. It is not a general animation editor.
 
-The repository currently contains an experimental TypeScript rectangle/timeline demo and a Rust/WASM AniCraft command-plugin suite. Treat those as separate development tracks: the long-term product is the native AniCraft tool, while the current command plugins are prototypes and integration probes.
+Forma Deform Studio must launch and operate independently. AniCraft is a future optional integration target, not a runtime dependency. The Studio should share AniCraft's intended visual language and interaction conventions through a small, independently consumable UI design kit; it must not depend on the AniCraft application or unverified host APIs.
+
+The repository currently contains a browser-based rectangle/timeline prototype and a Rust/WASM command-plugin suite. These are development artifacts, not the finished Studio UI. The rectangle/timeline prototype must not become the authoritative deformation document model.
 
 ## What Forma Deform owns
 
@@ -22,40 +24,19 @@ The repository currently contains an experimental TypeScript rectangle/timeline 
 
 Forma Deform consumes host data through explicit contracts. It must not introduce a second document model, timeline, renderer, undo stack, or plugin framework.
 
-## UI proposal
+## Studio workspace
 
-Forma Deform should appear as a native AniCraft tool/workspace, not as a separate application window.
+Forma Deform Studio uses an AniCraft-compatible visual language without copying AniCraft's full feature set.
 
-1. **Stage (center):** the selected artwork with deformation mesh, pins, handles, neutral/rest positions, selected target outlines, and preview overlays.
-2. **Tool strip (left):** Select Target, Pin, Handle, Soft Selection, Bind Controller, and Preview. Show only tools supported by the active target type.
-3. **Properties panel (right):**
-   - Target and binding inspector.
-   - Neutral input, source bone/controller, range, normalization, easing, and mapping.
-   - Per-target gains and axis constraints.
-   - Validation messages and a read-only evaluated preview.
-4. **Timeline (bottom):** use AniCraft's existing timeline and playhead. Do not create a second timeline. V1 preview is explicitly on demand; it does not claim continuous playback evaluation.
-5. **Controller preview:** show input value, normalized value, selected mapping segment/keyform, output value, and target displacement. Preview must be deterministic and must not mutate authored geometry.
-6. **Commands:** expose bind, unbind, capture neutral, preview, and apply/bake as explicit AniCraft commands. Destructive or persistent changes must participate in AniCraft undo.
+- **Top bar:** project actions, undo/redo, commands, and viewport/workspace options.
+- **Left tool rail:** Select, Pin, Point Array, Bind, Cage, Bézier, and Tessellate.
+- **Center viewport:** selected geometry, pins, offsets, arrays, cages, curve handles, and non-destructive overlays.
+- **Right inspector:** contextual target/tool properties, driver and binding state, validation, and diagnostics.
+- **Bottom status area:** selection summary, coordinates, operation status, and diagnostics.
 
-### Conceptual layout
+There is no general animation timeline in the standalone Studio. Preview controls are focused on deformation inputs and must not become a second animation editor.
 
-```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ AniCraft menu / tool context / command palette                           │
-├──────────────┬───────────────────────────────────────┬───────────────────┤
-│ Tool strip   │ Stage                                 │ Properties        │
-│              │                                       │                   │
-│ Select       │       artwork + mesh                  │ Target            │
-│ Pin          │       pins / handles                  │ Controller        │
-│ Soft select  │       neutral + preview overlay       │ Mapping           │
-│ Bind         │                                       │ Diagnostics       │
-│ Preview      │                                       │ Preview values    │
-├──────────────┴───────────────────────────────────────┴───────────────────┤
-│ Existing AniCraft timeline / layers / playhead                           │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-This is a conceptual arrangement using AniCraft's existing dockable panels and stage. It is not a commitment to new host UI infrastructure.
+See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md) and [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md).
 
 ## Current prototype status and limitations
 
