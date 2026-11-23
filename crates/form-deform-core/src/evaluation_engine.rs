@@ -443,6 +443,34 @@ mod tests {
         .unwrap()
     }
 
+    fn request_with_graph(
+        request_id: &str,
+        sources: Vec<GeometrySnapshot>,
+        graph_id: &str,
+    ) -> EvaluationRequest {
+        EvaluationRequest::new(
+            request_id,
+            sources,
+            ModelRevisionStamp::new("model-1", 1, 1, ALGORITHM_ID, ALGORITHM_VERSION).unwrap(),
+            EvaluationTimeSample::new(
+                "frames",
+                "frame-10",
+                10,
+                0.0,
+                1,
+                TimeSampleKind::EvaluatedPose,
+            )
+            .unwrap(),
+            vec![DependencyStamp::Hierarchy {
+                document_id: HostDocumentId::new("document-1").unwrap(),
+                revision: 1,
+            }],
+            "stage-1",
+            Some(CompositionGraphStamp::new(graph_id, 1, 1).unwrap()),
+        )
+        .unwrap()
+    }
+
     fn definition(source: &GeometrySnapshot) -> DeformationDefinition {
         let parameters = BTreeMap::from([
             ("handle_x".into(), ParameterValue::Number(0.0)),
@@ -669,6 +697,127 @@ mod tests {
             Some(OperatorInvocationError::Operator(
                 OperatorFailure::InvalidParameters
             ))
+        );
+    }
+
+    #[test]
+    fn source_revision_regression_is_reported_separately_from_staleness() {
+        let captured_source = snapshot(target("shape-1", 1), 3, path(0.0));
+        let captured = request("captured-1", vec![captured_source.clone()], 1, 10, 1, "stage-1");
+        let definition = definition(&captured_source);
+        let input = GeometryValue::new(
+            GeometryValueKind::AbsoluteGeometry,
+            captured_source.payload().clone(),
+        );
+        let current_source = snapshot(target("shape-1", 1), 2, path(0.0));
+        let current = request("current-2", vec![current_source], 1, 10, 1, "stage-1");
+
+        let failure = SingleOperatorEvaluationEngine
+            .evaluate(
+                &crate::single_handle_displacement::SingleHandleDisplacementOperator,
+                &definition,
+                &input,
+                &captured,
+                &current,
+                "result-1",
+                GeometryOutputOperation::ReplaceSourceGeometry,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            failure.diagnostics()[0].code(),
+            EvaluationDiagnosticCode::SourceRevisionRegressed
+        );
+    }
+
+    #[test]
+    fn missing_and_unexpected_sources_are_both_reported() {
+        let (captured, definition, input) = fixture();
+        let replacement = snapshot(target("shape-2", 1), 1, path(10.0));
+        let current = request("current-2", vec![replacement], 1, 10, 1, "stage-1");
+
+        let failure = SingleOperatorEvaluationEngine
+            .evaluate(
+                &crate::single_handle_displacement::SingleHandleDisplacementOperator,
+                &definition,
+                &input,
+                &captured,
+                &current,
+                "result-1",
+                GeometryOutputOperation::ReplaceSourceGeometry,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            failure
+                .diagnostics()
+                .iter()
+                .map(EvaluationDiagnostic::code)
+                .collect::<Vec<_>>(),
+            vec![
+                EvaluationDiagnosticCode::MissingCurrentSource,
+                EvaluationDiagnosticCode::UnexpectedCurrentSource,
+            ]
+        );
+    }
+
+    #[test]
+    fn composition_graph_revision_must_match_captured_state() {
+        let source = snapshot(target("shape-1", 1), 1, path(0.0));
+        let captured = request_with_graph("captured-1", vec![source.clone()], "graph-a");
+        let current = request_with_graph("current-2", vec![source.clone()], "graph-b");
+        let definition = definition(&source);
+        let input = GeometryValue::new(
+            GeometryValueKind::AbsoluteGeometry,
+            source.payload().clone(),
+        );
+
+        let failure = SingleOperatorEvaluationEngine
+            .evaluate(
+                &crate::single_handle_displacement::SingleHandleDisplacementOperator,
+                &definition,
+                &input,
+                &captured,
+                &current,
+                "result-1",
+                GeometryOutputOperation::ReplaceSourceGeometry,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            failure.diagnostics()[0].code(),
+            EvaluationDiagnosticCode::CompositionGraphMismatch
+        );
+    }
+
+    #[test]
+    fn invalid_result_identity_is_rejected_after_operator_evaluation() {
+        let (captured, definition, input) = fixture();
+        let current = request(
+            "current-2",
+            captured.sources().to_vec(),
+            1,
+            10,
+            1,
+            "stage-1",
+        );
+
+        let failure = SingleOperatorEvaluationEngine
+            .evaluate(
+                &crate::single_handle_displacement::SingleHandleDisplacementOperator,
+                &definition,
+                &input,
+                &captured,
+                &current,
+                "  ",
+                GeometryOutputOperation::ReplaceSourceGeometry,
+            )
+            .unwrap_err();
+
+        assert_eq!(failure.diagnostics()[0].code(), EvaluationDiagnosticCode::ResultRejected);
+        assert_eq!(
+            failure.diagnostics()[0].contract_error(),
+            Some(EvaluationContractError::EmptyIdentifier)
         );
     }
 
