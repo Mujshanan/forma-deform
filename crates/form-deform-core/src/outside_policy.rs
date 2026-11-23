@@ -7,7 +7,7 @@
 use crate::binding::{FaceCoordinates, ValidatedCageGeometry};
 pub use crate::binding::OutsideCagePolicy as OutsideCageResolutionPolicy;
 use crate::path2d::Point2;
-use crate::topology::{ControlPointId, TopologyFace, TopologyView};
+use crate::topology::{ControlPointId, TopologyFace};
 use std::collections::BTreeMap;
 
 pub const OUTSIDE_CAGE_POLICY_VERSION: u32 = 1;
@@ -370,7 +370,7 @@ mod tests {
     use super::*;
     use crate::embedding::validate_cage_embedding;
     use crate::topology::{
-        ControlPointState, ControlStateRevision, DeformationControlState,
+        TopologyView, ControlPointState, ControlStateRevision, DeformationControlState,
         DeformationTopology, DeformationTopologyId, DeformationTopologyRevision,
         IrregularCageTopology, TopologyFace,
     };
