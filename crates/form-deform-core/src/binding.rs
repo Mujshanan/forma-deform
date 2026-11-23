@@ -12,6 +12,7 @@ use crate::topology::{
     ControlPointId, ControlPointPosition, DeformationControlState, DeformationTopology,
     DeformationTopologyId, DeformationTopologyRevision, TopologyFace, TopologyView,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const BINDING_SCHEMA_NAME: &str = "forma-deform-path2d-binding";
@@ -28,13 +29,15 @@ const MIN_SPATIAL_TOLERANCE: f64 = 1.0e-12;
 
 /// Triangle barycentric and quad bilinear coordinates are intentionally
 /// distinct: a quad is never represented by an implicit diagonal split.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum FaceCoordinates {
     TriangleBarycentric { weights: [f64; 3] },
     QuadBilinear { u: f64, v: f64 },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PathFeatureRole {
     MoveToEndpoint,
     LineToEndpoint,
@@ -45,7 +48,8 @@ pub enum PathFeatureRole {
     CubicEndpoint,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceFeatureLocator {
     pub command_index: u32,
     pub role: PathFeatureRole,
@@ -143,7 +147,8 @@ fn push_source_feature(
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MappingPolicy {
     TriangleBarycentricQuadBilinearInsideV1,
 }
@@ -151,14 +156,16 @@ impl MappingPolicy {
     pub const fn version(self) -> u32 { MAPPING_POLICY_VERSION }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum OutsideCagePolicy {
     UnboundZeroInfluence,
     ClampToBoundary,
     BoundedExtrapolation { max_distance: f64 },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingStamp {
     pub target: HostTargetRef,
     pub geometry_revision: u64,
@@ -305,7 +312,8 @@ impl ValidatedCageGeometry {
     pub fn face_count(&self) -> usize { self.faces.len() }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MappingRecord {
     pub locator: SourceFeatureLocator,
     pub face_index: u32,
@@ -315,7 +323,8 @@ pub struct MappingRecord {
     pub coordinates: FaceCoordinates,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "mapping", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SourceFeatureBinding {
     Mapped(MappingRecord),
     Clamped(MappingRecord),
@@ -323,13 +332,15 @@ pub enum SourceFeatureBinding {
     Unbound,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FeatureBindingEntry {
     pub locator: SourceFeatureLocator,
     pub status: SourceFeatureBinding,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingRecord {
     stamp: BindingStamp,
     entries: Vec<FeatureBindingEntry>,
