@@ -411,3 +411,153 @@ impl std::fmt::Display for CageBindingDiagnostic {
 }
 impl std::error::Error for CageBindingDiagnostic {}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::embedding::validate_cage_embedding;
+    use crate::host_contract::{
+        AxisOrientation, CoordinateOrigin, CoordinateSpaceId, CoordinateSpaceKind,
+        GeometryFingerprint, GeometryRevision, HostDocumentId, HostNamespace,
+        HostTargetId, HostTargetKind, TopologyRevision,
+    };
+    use crate::path2d::{Path2D, PathCommand};
+    use crate::topology::{
+        ControlPointPosition, ControlPointState, ControlStateRevision,
+        DeformationControlState, IrregularCageTopology,
+    };
+
+    fn id(value: u64) -> ControlPointId { ControlPointId::new(value).unwrap() }
+    fn point(x: f64, y: f64) -> Point2 { Point2::new(x, y).unwrap() }
+
+    fn target() -> HostTargetRef {
+        HostTargetRef {
+            namespace: HostNamespace::new("anicraft").unwrap(),
+            document_id: HostDocumentId::new("doc-1").unwrap(),
+            target_kind: HostTargetKind::new("shape").unwrap(),
+            target_id: HostTargetId::new("shape-1").unwrap(),
+            generation: 1,
+        }
+    }
+
+    fn space() -> CoordinateSpaceDescriptor {
+        CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("target-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        }
+    }
+
+    fn snapshot(revision: u64) -> GeometrySnapshot {
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(2.0, 3.0)),
+            PathCommand::LineTo(point(3.0, 3.0)),
+            PathCommand::LineTo(point(3.0, 4.0)),
+            PathCommand::Close,
+        ]).unwrap();
+        let coordinate_space = space();
+        let fingerprint = path.fingerprint(&coordinate_space).unwrap();
+        GeometrySnapshot::new(
+            target(),
+            GeometryRevision(revision),
+            TopologyRevision(1),
+            fingerprint,
+            coordinate_space,
+            crate::path2d::PATH2D_PAYLOAD_KIND,
+            crate::path2d::PATH2D_SCHEMA_VERSION,
+            path,
+        ).unwrap()
+    }
+
+    fn cage() -> (DeformationTopology, ValidatedCageGeometry) {
+        let topology_id = DeformationTopologyId::new(80).unwrap();
+        let topology_revision = DeformationTopologyRevision::new(1).unwrap();
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: topology_id,
+            revision: topology_revision,
+            control_point_ids: vec![id(10), id(20), id(30), id(40)],
+            faces: vec![
+                TopologyFace::Triangle([id(10), id(20), id(30)]),
+                TopologyFace::Triangle([id(10), id(30), id(40)]),
+            ],
+        });
+        let state = DeformationControlState {
+            topology_id,
+            topology_revision,
+            revision: ControlStateRevision::new(1).unwrap(),
+            points: vec![
+                (10, 0.0, 0.0), (20, 10.0, 0.0), (30, 10.0, 10.0), (40, 0.0, 10.0),
+            ].into_iter().map(|(id_value, x, y)| ControlPointState {
+                id: id(id_value),
+                position: ControlPointPosition::new(x, y).unwrap(),
+                pinned: false,
+            }).collect(),
+        };
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        (topology, geometry)
+    }
+
+    fn record() -> (GeometrySnapshot, DeformationTopology, ValidatedCageGeometry, PersistedCageBinding) {
+        let source = snapshot(1);
+        let (topology, geometry) = cage();
+        let points = [BindingPoint { id: 7, position: point(2.0, 3.0) }];
+        let runtime = CageBinding::bind(&topology, &geometry, &points).unwrap();
+        let persisted = runtime.to_persisted(
+            "point-binding-1", 1, target(), source.stamp(), space(),
+        ).unwrap();
+        (source, topology, geometry, persisted)
+    }
+
+    #[test]
+    fn point_binding_payload_round_trips_and_validates_against_certified_rest_cage() {
+        let (source, topology, geometry, persisted) = record();
+        let json = persisted.to_json().unwrap();
+        let decoded = PersistedCageBinding::from_json(&json).unwrap();
+        assert_eq!(decoded, persisted);
+        let validated = decoded.validate_against(
+            &source,
+            &topology,
+            &geometry,
+            &[BindingPoint { id: 7, position: point(2.0, 3.0) }],
+        ).unwrap();
+        assert_eq!(validated.binding().points()[0].id, 7);
+        assert_eq!(validated.rest_cage_fingerprint(), geometry.geometry_fingerprint());
+    }
+
+    #[test]
+    fn stale_source_and_reconstruction_mismatch_fail_closed() {
+        let (source, topology, geometry, persisted) = record();
+        assert_eq!(
+            persisted.freshness_against(&snapshot(2).stamp(), &topology),
+            CageBindingFreshness::GeometryChanged,
+        );
+        assert!(matches!(
+            persisted.validate_against(
+                &source, &topology, &geometry,
+                &[BindingPoint { id: 7, position: point(8.0, 8.0) }],
+            ),
+            Err(CageBindingDiagnostic::PointReconstructionMismatch { point: 7 })
+        ));
+    }
+
+    #[test]
+    fn invalid_support_and_weights_are_rejected() {
+        let (_, _, _, mut persisted) = record();
+        persisted.points[0].barycentric = [0.2, 0.3, 0.6];
+        assert_eq!(
+            persisted.validate(),
+            Err(CageBindingPersistenceError::InvalidBarycentricWeights),
+        );
+        let (_, _, _, mut persisted) = record();
+        persisted.points[0].cage_vertex_ids = [id(10), id(20), id(99)];
+        assert_eq!(
+            persisted.validate(),
+            Err(CageBindingPersistenceError::InvalidPointSupport),
+        );
+    }
+}

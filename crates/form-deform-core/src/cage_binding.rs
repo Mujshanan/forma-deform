@@ -142,6 +142,31 @@ impl CageBinding {
     pub fn topology_id(&self) -> DeformationTopologyId { self.topology_id }
     pub fn topology_revision(&self) -> DeformationTopologyRevision { self.topology_revision }
 
+    pub fn to_persisted(
+        &self,
+        id: impl Into<String>,
+        revision: u64,
+        target: crate::host_contract::HostTargetRef,
+        reference_geometry: crate::host_contract::GeometrySnapshotStamp,
+        coordinate_space: crate::host_contract::CoordinateSpaceDescriptor,
+    ) -> Result<
+        crate::cage_binding_persistence::PersistedCageBinding,
+        crate::cage_binding_persistence::CageBindingPersistenceError,
+    > {
+        let points = self.points.iter().map(|point| {
+            crate::cage_binding_persistence::PersistedBoundPoint {
+                point_id: point.id,
+                cage_vertex_ids: point.cage_vertex_ids,
+                barycentric: point.barycentric,
+            }
+        }).collect();
+        crate::cage_binding_persistence::PersistedCageBinding::new(
+            id, revision, target, reference_geometry, coordinate_space,
+            self.topology_id, self.topology_revision,
+            self.cage_vertex_ids.clone(), self.cage_triangles.clone(), points,
+        )
+    }
+
     /// Evaluate attachments absolutely against another certified cage pose.
     /// No previous evaluated point positions are read or mutated.
     pub fn evaluate(
