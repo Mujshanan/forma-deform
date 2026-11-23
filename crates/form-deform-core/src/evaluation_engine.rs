@@ -5,7 +5,8 @@
 //! immutable evaluated result. It never reads or mutates host state.
 
 use crate::composition_evaluation::{
-    evaluate_operator, DeformerOperator, GeometryValue, OperatorInvocationError, OperatorContext,
+    evaluate_operator, DeformerOperator, EvaluationInterfaceError, GeometryValue,
+    OperatorContext, OperatorInvocationError,
 };
 use crate::evaluation_contract::{
     EvaluationContractError, EvaluationRequest, EvaluatedGeometryResult,
@@ -19,6 +20,7 @@ use crate::persistence::DeformationDefinition;
 pub enum EvaluationDiagnosticCode {
     InvalidCapturedRequest,
     InvalidCurrentState,
+    InvalidOperatorContext,
     ModelRevisionMismatch,
     TimeSampleMismatch,
     DependencyStateMismatch,
@@ -43,6 +45,7 @@ pub struct EvaluationDiagnostic {
     target: Option<HostTargetRef>,
     contract_error: Option<EvaluationContractError>,
     operator_error: Option<OperatorInvocationError>,
+    interface_error: Option<EvaluationInterfaceError>,
 }
 
 impl EvaluationDiagnostic {
@@ -52,6 +55,7 @@ impl EvaluationDiagnostic {
             target: None,
             contract_error: None,
             operator_error: None,
+            interface_error: None,
         }
     }
 
@@ -79,6 +83,17 @@ impl EvaluationDiagnostic {
             target: None,
             contract_error: None,
             operator_error: Some(error),
+            interface_error: None,
+        }
+    }
+
+    fn interface(error: EvaluationInterfaceError) -> Self {
+        Self {
+            code: EvaluationDiagnosticCode::InvalidOperatorContext,
+            target: None,
+            contract_error: None,
+            operator_error: None,
+            interface_error: Some(error),
         }
     }
 
@@ -96,6 +111,10 @@ impl EvaluationDiagnostic {
 
     pub fn operator_error(&self) -> Option<OperatorInvocationError> {
         self.operator_error
+    }
+
+    pub fn interface_error(&self) -> Option<EvaluationInterfaceError> {
+        self.interface_error
     }
 }
 
@@ -169,12 +188,7 @@ impl SingleOperatorEvaluationEngine {
         }
 
         let context = OperatorContext::new(captured).map_err(|error| {
-            EvaluationFailure::new(vec![EvaluationDiagnostic::contract(
-                EvaluationDiagnosticCode::InvalidCapturedRequest,
-                EvaluationContractError::HostContract(
-                    crate::host_contract::ContractError::EmptyIdentifier,
-                ),
-            )])
+            EvaluationFailure::new(vec![EvaluationDiagnostic::interface(error)])
         })?;
         let output = evaluate_operator(operator, definition, input, &context)
             .map_err(|error| EvaluationFailure::new(vec![EvaluationDiagnostic::operator(error)]))?;
@@ -324,11 +338,11 @@ mod tests {
     use super::*;
     use crate::composition_evaluation::{GeometryValue, OperatorFailure};
     use crate::evaluation_contract::{
-        EvaluationTimeSample, ModelRevisionStamp, TimeSampleKind,
+        DependencyStamp, EvaluationTimeSample, ModelRevisionStamp, TimeSampleKind,
     };
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
-        CoordinateSpaceKind, DependencyStamp, GeometryRevision, GeometrySnapshot,
+        CoordinateSpaceKind, GeometryRevision, GeometrySnapshot,
         HostDocumentId, HostNamespace, HostTargetId, HostTargetKind, TopologyRevision,
     };
     use crate::path2d::{Path2D, PathCommand, Point2, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION};
