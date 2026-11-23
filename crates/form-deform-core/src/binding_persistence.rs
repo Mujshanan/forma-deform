@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::binding::{BindingError, BindingRecord, ValidatedCageGeometry};
-use crate::embedding::{validate_cage_embedding, EmbeddingError};
+use crate::embedding::{EmbeddingError, validate_cage_embedding};
 use crate::host_contract::HostTargetRef;
 use crate::topology::{DeformationControlState, DeformationTopology};
 
@@ -53,8 +53,8 @@ impl PersistedBinding {
             schema_version: BINDING_DOCUMENT_SCHEMA_VERSION,
             binding: self.binding.clone(),
         };
-        let json = serde_json::to_string(&envelope)
-            .map_err(|_| BindingPersistenceError::Serialization)?;
+        let json =
+            serde_json::to_string(&envelope).map_err(|_| BindingPersistenceError::Serialization)?;
         if json.len() > MAX_BINDING_DOCUMENT_BYTES {
             return Err(BindingPersistenceError::ResourceLimitExceeded);
         }
@@ -67,14 +67,18 @@ impl PersistedBinding {
         if input.len() > MAX_BINDING_DOCUMENT_BYTES {
             return Err(BindingPersistenceError::ResourceLimitExceeded);
         }
-        let header: serde_json::Value = serde_json::from_str(input)
-            .map_err(|_| BindingPersistenceError::MalformedPayload)?;
-        if header.get("schema_name").and_then(serde_json::Value::as_str)
+        let header: serde_json::Value =
+            serde_json::from_str(input).map_err(|_| BindingPersistenceError::MalformedPayload)?;
+        if header
+            .get("schema_name")
+            .and_then(serde_json::Value::as_str)
             != Some(BINDING_DOCUMENT_SCHEMA)
         {
             return Err(BindingPersistenceError::UnsupportedSchemaName);
         }
-        if header.get("schema_version").and_then(serde_json::Value::as_u64)
+        if header
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
             != Some(u64::from(BINDING_DOCUMENT_SCHEMA_VERSION))
         {
             return Err(BindingPersistenceError::UnsupportedSchemaVersion);
@@ -82,7 +86,9 @@ impl PersistedBinding {
         let envelope: BindingEnvelope = serde_json::from_value(header)
             .map_err(|_| BindingPersistenceError::MalformedPayload)?;
         validate_payload_shape(&envelope.binding)?;
-        Ok(Self { binding: envelope.binding })
+        Ok(Self {
+            binding: envelope.binding,
+        })
     }
 
     pub fn validate_against(
@@ -91,17 +97,21 @@ impl PersistedBinding {
         topology: &DeformationTopology,
         control_state: &DeformationControlState,
     ) -> Result<ValidatedBindingRecord, BindingDiagnostic> {
-        snapshot.validate_envelope()
+        snapshot
+            .validate_envelope()
             .map_err(|_| BindingDiagnostic::InvalidCurrentSnapshot)?;
         // Reject stale rest-space dependencies before the expensive global
         // embedding pass. This also preserves the most actionable diagnostic.
-        self.binding.stamp().validate_freshness(snapshot, topology)
+        self.binding
+            .stamp()
+            .validate_freshness(snapshot, topology)
             .map_err(BindingDiagnostic::from)?;
         let certificate = validate_cage_embedding(topology, control_state)
             .map_err(BindingDiagnostic::InvalidCageEmbedding)?;
         let geometry = ValidatedCageGeometry::new(topology, control_state, &certificate)
             .map_err(BindingDiagnostic::InvalidBinding)?;
-        self.binding.validate_against(snapshot, topology, &geometry)
+        self.binding
+            .validate_against(snapshot, topology, &geometry)
             .map_err(BindingDiagnostic::from)?;
         Ok(ValidatedBindingRecord {
             binding: self.binding.clone(),
@@ -130,7 +140,10 @@ impl ValidatedBindingRecord {
 }
 
 fn validate_payload_shape(binding: &BindingRecord) -> Result<(), BindingPersistenceError> {
-    binding.stamp().validate().map_err(BindingPersistenceError::InvalidStamp)?;
+    binding
+        .stamp()
+        .validate()
+        .map_err(BindingPersistenceError::InvalidStamp)?;
     if binding.entries().len() > MAX_BINDING_ENTRIES {
         return Err(BindingPersistenceError::ResourceLimitExceeded);
     }
@@ -193,10 +206,18 @@ impl std::fmt::Display for BindingDiagnostic {
             Self::StaleSourceFingerprint => write!(f, "source geometry fingerprint changed"),
             Self::StaleCoordinateSpace => write!(f, "source coordinate-space descriptor changed"),
             Self::StalePayloadSchema => write!(f, "source payload kind or schema changed"),
-            Self::StaleCageTopology => write!(f, "deformation cage topology identity or revision changed"),
-            Self::InvalidCurrentSnapshot => write!(f, "host supplied an invalid current geometry snapshot"),
-            Self::InvalidCageEmbedding(error) => write!(f, "current cage embedding is invalid: {error}"),
-            Self::InvalidBinding(error) => write!(f, "persisted binding failed validation: {error}"),
+            Self::StaleCageTopology => {
+                write!(f, "deformation cage topology identity or revision changed")
+            }
+            Self::InvalidCurrentSnapshot => {
+                write!(f, "host supplied an invalid current geometry snapshot")
+            }
+            Self::InvalidCageEmbedding(error) => {
+                write!(f, "current cage embedding is invalid: {error}")
+            }
+            Self::InvalidBinding(error) => {
+                write!(f, "persisted binding failed validation: {error}")
+            }
         }
     }
 }
@@ -282,10 +303,8 @@ pub trait BindingHostAdapter {
         target: &HostTargetRef,
     ) -> Result<HostBindingContext, Self::Error>;
 
-    fn read_binding_slot(
-        &self,
-        target: &HostTargetRef,
-    ) -> Result<BindingSlotSnapshot, Self::Error>;
+    fn read_binding_slot(&self, target: &HostTargetRef)
+    -> Result<BindingSlotSnapshot, Self::Error>;
 
     /// Atomically replace the payload only if the target's current source stamp
     /// and this binding slot's revision still equal the values observed before
@@ -308,23 +327,34 @@ pub fn persist_binding<A: BindingHostAdapter>(
     target: &HostTargetRef,
     persisted: &PersistedBinding,
 ) -> Result<(), PersistBindingError<A::Error>> {
-    let context = adapter.current_binding_context(target).map_err(PersistBindingError::Host)?;
+    let context = adapter
+        .current_binding_context(target)
+        .map_err(PersistBindingError::Host)?;
     if context.snapshot.target() != target {
-        return Err(PersistBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
+        return Err(PersistBindingError::Diagnostic(
+            BindingDiagnostic::StaleTarget,
+        ));
     }
     let expected_source_stamp = context.snapshot.stamp();
-    let expected_binding_revision = adapter.read_binding_slot(target)
+    let expected_binding_revision = adapter
+        .read_binding_slot(target)
         .map_err(PersistBindingError::Host)?
         .revision();
-    persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
+    persisted
+        .validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map_err(PersistBindingError::Diagnostic)?;
-    let payload = persisted.to_json().map_err(PersistBindingError::Persistence)?;
-    match adapter.write_binding_payload(
-        target,
-        expected_binding_revision,
-        &expected_source_stamp,
-        payload,
-    ).map_err(PersistBindingError::Host)? {
+    let payload = persisted
+        .to_json()
+        .map_err(PersistBindingError::Persistence)?;
+    match adapter
+        .write_binding_payload(
+            target,
+            expected_binding_revision,
+            &expected_source_stamp,
+            payload,
+        )
+        .map_err(PersistBindingError::Host)?
+    {
         BindingWriteOutcome::Written => Ok(()),
         BindingWriteOutcome::Conflict(conflict) => Err(PersistBindingError::Conflict(conflict)),
     }
@@ -343,17 +373,21 @@ pub fn load_validated_binding<A: BindingHostAdapter>(
     adapter: &A,
     target: &HostTargetRef,
 ) -> Result<Option<ValidatedBindingRecord>, LoadBindingError<A::Error>> {
-    let slot = adapter.read_binding_slot(target).map_err(LoadBindingError::Host)?;
+    let slot = adapter
+        .read_binding_slot(target)
+        .map_err(LoadBindingError::Host)?;
     let Some(payload) = slot.payload() else {
         return Ok(None);
     };
-    let persisted = PersistedBinding::from_json(payload)
-        .map_err(LoadBindingError::Persistence)?;
-    let context = adapter.current_binding_context(target).map_err(LoadBindingError::Host)?;
+    let persisted = PersistedBinding::from_json(payload).map_err(LoadBindingError::Persistence)?;
+    let context = adapter
+        .current_binding_context(target)
+        .map_err(LoadBindingError::Host)?;
     if context.snapshot.target() != target {
         return Err(LoadBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
     }
-    persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
+    persisted
+        .validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map(Some)
         .map_err(LoadBindingError::Diagnostic)
 }
