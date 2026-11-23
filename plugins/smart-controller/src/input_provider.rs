@@ -83,6 +83,7 @@ pub fn collect_host_input_snapshot(
                     let response = query_bone_info(layer_id, Some(context.frame))
                         .and_then(|response| {
                             crate::adapter::verify_bone_info_frame(&response, context.frame)?;
+                            crate::adapter::verify_bone_info_layer(&response, layer_id)?;
                             Ok(response)
                         });
                     match response {
