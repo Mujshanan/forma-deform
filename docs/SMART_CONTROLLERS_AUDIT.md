@@ -624,3 +624,172 @@ The following adapter foundations are now present on `feat/smart-controller-phas
 - `plugins/smart-controller/src/lib.rs` exports these modules. Existing V1 Slider preview execution is unchanged.
 
 Canonical preview orchestration is now wired: `evaluate_document_preview` validates the document, builds the controller DAG, invokes the core evaluator/composition with an injected mapper, and returns deterministically sorted target capability entries without writing host state. Compatibility now includes legacy-format auto-detection and guarded reverse exports to V1 BindingSet / Params, preserving migration reports. Tests cover empty-document no-op, invalid schema fail-before-mapper, and lossless empty BindingSet migration/export roundtrip.\n\nPhase 5 is still in progress. The host still needs a complete per-document input collection/provider layer, the concrete Phase 2 pose/joystick mapper, target-specific preview payload generation and in-app verification. No mutating command is invoked; no playback/scrubbing, persistence or Smart Controller/Form Deform composition capability is claimed. Latest branch changes do not yet have a verified CI run. No mutating command is invoked by the new modules. No playback/scrubbing, persistence or Smart Controller/Form Deform composition capability is claimed.
+
+
+---
+
+# Current-repository Phase 0 re-audit — 2026-11-23
+
+**Audited snapshot:** `main` at `e7c7fef4e82345af311370426450146a4795523d`  
+**Snapshot date:** 2026-11-22  
+**Audit branch:** `audit/unified-smart-controllers-phase0-current`  
+**Purpose:** Reconcile the original Phase 0 discovery report above with the canonical Smart Controller implementation now present in the repository.  
+**Method:** Static source, test inventory, branch/tree and documentation review; CI evidence checked against the exact audited commit.  
+**Change scope:** Documentation only. No Rust, TypeScript, plugin, SDK or host source was changed.
+
+> This section supersedes earlier statements in this file that the current repository has no canonical DAG evaluator, composition engine or migration implementation. Those statements remain a historical record of the earlier V1 baseline, not a description of the audited `main` snapshot.
+
+## A. Executive result
+
+The current `main` branch already contains a substantial canonical Smart Controller foundation. **Do not recreate the proposed Phase 1–5 modules from the implementation plan.** The canonical model, typed inputs and values, DAG validation/evaluation, composition, schema/migration, scalar mapping, and a read-only host preview adapter are already present.
+
+The repository is not yet at the complete unified-controller target described by the plan. The most important remaining functional gap is the concrete two-dimensional pose/joystick mapping. A `JoystickFivePose` schema variant exists, but the built-in canonical mapper explicitly rejects it rather than approximating it with scalar mapping. The `Pose2D` type is a binding-to-value pose record; it is not itself a 2D input-space interpolator.
+
+The host adapter is also incomplete as a production authoring/runtime integration: input collection currently supports manual values and bone rotation, target preview is read-only, and durable AniCraft document persistence and continuous playback/scrubbing evaluation are not established by the inspected host contract.
+
+**Phase 0 outcome:** architecture discovery, current-code inventory, compatibility assessment, visible test inventory and CI verification are sufficient to establish a reliable baseline. No further implementation is authorized by this audit request.
+
+## B. Audited repository snapshot and verification
+
+The default branch is `main`, audited at commit `e7c7fef4e82345af311370426450146a4795523d` (2026-11-22).
+
+GitHub Actions CI run [45013439505](https://github.com/Mujshanan/forma-deform/actions/runs/45013439505) completed successfully on that exact commit. Its `verify` job passed:
+
+- `cargo test --workspace`
+- Release WASM builds for `anicraft-bone-query-plugin`, `anicraft-form-deform-plugin`, and `anicraft-smart-controller-plugin`
+- `bun run typecheck`
+- `bun test` (9 tests)
+- `bun run build`
+
+The project CI baseline recorded for this run contains 188 Rust tests across 26 test binaries/suites. This is CI evidence for the audited commit; it is not a claim that the commands were run locally in this audit session.
+
+The workflow does **not** run `cargo fmt --all -- --check` or Clippy. Neither should be reported as passing on the basis of this run. No AniCraft in-app smoke test is evidenced by this CI run.
+
+## C. Current core responsibility map
+
+| Existing path | Current responsibility | Phase 0 assessment |
+|---|---|---|
+| `src/canonical.rs` | Canonical controller, mapping configuration, target mapping, binding mode, composition configuration and local validation | Existing canonical model; do not create a second model |
+| `src/ids.rs`, `src/value.rs` | Strongly typed IDs; finite scalar/vector values; wrapped/unwrapped angle semantics | Foundational types already exist |
+| `src/input.rs` | Host-independent input definitions, source/dimension contracts, validity, fallback, sample age and freshness | Core input contract already exists |
+| `src/graph.rs` | Validated DAG, dependency checks, cycle detection and deterministic topological ordering | Graph infrastructure already exists |
+| `src/evaluator.rs` | Snapshot/graph preflight, dependency resolution, deterministic node evaluation, unavailable-output handling, mapper invocation and contribution collection | Phase 3 evaluator exists; file is large (1,071 lines) and merits maintenance review, not replacement |
+| `src/contribution.rs`, `src/composition.rs` | Typed contributions and target-level Replace, Additive, WeightedBlend and PriorityOverride composition | Phase 4 composition exists as a separate post-pass |
+| `src/schema.rs`, `src/migration.rs` | Schema identity/version, canonical document validation/serialization, V1 BindingSet and unversioned Params migration, loss reports and guarded reverse export | Migration and canonical persistence-format logic exist in the core |
+| `src/mapping/range.rs`, `easing.rs`, `frame.rs`, `src/mapping/canonical.rs` | Scalar range/easing/frame primitives and canonical 1D mapping | Reuse these implementations; do not add duplicate scalar mappers |
+| `src/pose.rs` | Ordered `Pose2D` binding/value records and typed interpolation compatibility | Pose value contract exists; 2D input-space interpolation does not follow from this type |
+| `src/legacy.rs`, `src/model.rs`, `src/preview.rs` | Legacy BindingSet API and unversioned Slider/Transform Params preview API | Retained compatibility surfaces; not the canonical model to extend for new features |
+
+### C.1 Canonical mapping capabilities
+
+The built-in `CanonicalControllerMapper` currently supports:
+
+- `Range1D`
+- `ThreeAnchorRange`
+- `DirectedRange1D`
+- `Discrete`
+- `PoseSet1D`
+
+It explicitly returns an unsupported-mapping error for `JoystickFivePose`. This is intentional fail-closed behavior, not a missing branch to silently coerce into a scalar mapping.
+
+The five-pose joystick and generalized 2D pose-field work therefore remain a genuine implementation gap on `main`. The separate branch `feat/smart-controller-phase6a-mapping` contains an `mapping/advanced` implementation track (triangulated/grid mapping and related tests), but that branch is not the audited `main` snapshot. Its existence is evidence of work in progress, not proof that those capabilities are available on the default branch. Review and reconcile that branch before planning new 2D mapping code.
+
+### C.2 Evaluation and composition boundary
+
+The evaluator accepts a `ControllerMapper` implementation through an explicit trait seam. It performs complete preflight before calling the mapper, evaluates the validated graph in deterministic topological order, resolves controller-output dependencies, and returns typed contributions and diagnostics.
+
+Composition is a separate deterministic target-level pass. The existing implementation includes explicit mode configuration, typed compatibility checks, deterministic identity ordering, weight validation, and typed conflict/error behavior. Do not implement a second evaluator that also composes outputs, or move composition into the mapper.
+
+Smart Controller composition is not Form Deform composition. The core comments and dependency-boundary test preserve the separation between `smart-controller-core` and `form-deform-core`.
+
+## D. Current adapter and host boundary
+
+The Smart Controller plugin has already grown beyond the original single-file V1 adapter. Its current modules include:
+
+- `adapter.rs`: canonical document preview orchestration and bone-info response adaptation.
+- `input_provider.rs`: per-invocation host input snapshot collection.
+- `preview_plan.rs`: target-specific, read-only preview plan construction.
+- `targets.rs`: target capability classification and exact geometry element/pin identity verification.
+- `compatibility.rs`: legacy format detection, migration and guarded compatibility export.
+
+Current host-input limitations visible in the provider are:
+
+- Manual values are collected explicitly.
+- BoneTransform Rotation is resolved through the documented `bone.info` response.
+- LegacyScalar and Translation/Scale channels are not fully provided by this adapter and fail closed.
+- ControllerOutput inputs are resolved by the core DAG evaluator, not queried from the host.
+- Angle wrapping and spring-swing inclusion are explicit caller choices; they are not inferred.
+
+Current target capability boundary:
+
+| Target | Current adapter status |
+|---|---|
+| GeometryDeform pin | Can query `warp.info` and verify exact element/pin identity; mutation is not issued by the canonical preview path and still requires the host preview/undo transaction |
+| SymbolFrame | Core calculation only; no verified displayed-frame setter |
+| FrameRange | Core calculation only; no verified host action/timeline setter |
+| Generic Property | Core calculation only; no verified generic property setter |
+
+The canonical preview path is descriptive/read-only. The existing V1 Slider command continues to use its original preview path. The adapter does not establish a persistent document-backed controller authoring workflow, continuous playback/scrubbing evaluator, or complete target application pipeline.
+
+The SDK audit is dated 2026-11-19 and describes the inspected ABI/command surface. It remains useful evidence, but host-dependent implementation must re-check the current AniCraft source and APIs before relying on it. In particular, do not assume that the core's `CanonicalDocument::to_json/from_json` provides durable storage inside an AniCraft document; it only provides serialization logic in the core.
+
+## E. Compatibility and reuse findings
+
+1. **Keep the legacy and canonical representations side by side for now.** `lib.rs` still publicly re-exports legacy types, and `model.rs` still exposes the old Params API. The migration module explicitly bridges BindingSet V1 and unversioned Params into the canonical document and offers guarded reverse export. Removing either compatibility surface requires consumer/call-site inventory and a separate compatibility decision.
+2. **Do not recreate foundational types.** IDs, typed values, structured errors, diagnostics, schema identity, input definitions, freshness, graph validation and contributions already exist.
+3. **Do not duplicate 1D mapping or composition.** Extend the existing mapper seam and composition contracts only where a specific uncovered behavior is approved.
+4. **Do not treat `Pose2D` as a joystick engine.** It represents per-binding output values at a pose. A 2D input domain requires a separate interpolation/region-selection algorithm and explicit boundary policy.
+5. **Do not add another host SDK wrapper.** The existing adapter uses the vendored `anicraft-plugin-sdk`; add host behavior only through verified AniCraft contracts.
+6. **Preserve Form Deform independence.** The workspace test suite contains a cross-crate mathematical example that passes a Smart Controller geometry offset into a Form Deform calculation as test data. It is not a runtime plugin composition path. Keep the explicit CCC-01.5 separation unless a distinct composition design is approved.
+
+## F. Current test inventory and remaining evidence gaps
+
+The audited core contains focused test files for:
+
+- V1 characterization and fixture round trips.
+- Legacy-to-canonical migration and reverse export.
+- Canonical document validation and mapper behavior.
+- Strongly typed IDs, finite typed values, input dimensions, fallback and freshness.
+- DAG ordering, missing dependencies, cycles, shared-node constraints and empty graphs.
+- Pose binding compatibility and wrapped/unwrapped angle interpolation.
+- Range, easing and frame endpoint parity.
+- Composition modes, conflicts, weights, angle behavior and deterministic ordering.
+- Diagnostic registry and dependency-boundary enforcement.
+
+The three V1 source fixtures are present: `legacy_binding_set_v1.json`, `legacy_params_slider_unversioned.json`, and `legacy_params_slider_manual_unversioned.json`. The current test suite loads and characterizes these formats; migration tests exercise canonical round trips and loss-aware export behavior.
+
+Remaining test/evidence gaps:
+
+- No concrete five-pose joystick/triangulated/grid mapper on audited `main`.
+- No full host provider coverage for LegacyScalar and Translation/Scale channels.
+- No AniCraft in-app verification of the complete canonical preview path.
+- No verified persistent controller storage or playback/scrubbing integration.
+- No target-application verification for SymbolFrame, FrameRange or generic Property.
+- No evidence from the current CI run for rustfmt or Clippy.
+- The older cross-crate Smart Controller/Form Deform test should be described carefully so it cannot be mistaken for a supported runtime composition pipeline.
+
+## G. Documentation and branch consistency
+
+The earlier sections of this audit accurately describe the original pre-canonical V1 baseline, but their original “no DAG / no composition / no migration” findings are stale when read as statements about current `main`. The appended Phase 1, 3, 4 and 5 progress notes partly record the later implementation, but the document has contradictory status wording and duplicated exit statements. This addendum is intended to make the current snapshot unambiguous without rewriting historical findings.
+
+The unified implementation plan remains a valid target architecture, but its phase/file checklist must now be read against the implemented modules above. In particular, its proposed Phase 1 files are largely already present; Phase 3 and Phase 4 core responsibilities are implemented; Phase 5 is partially wired; the 2D mapping and full native host workflow remain incomplete.
+
+The branch `core/characterize-consolidate-smart-controller` is not a clean substitute for `main`: at the time of this audit it is diverged (32 commits ahead, 5 behind) and removes several existing planning/audit documents. Do not use it as the implementation baseline without a separate merge-base and scope review. Likewise, treat phase-specific feature branches as unmerged work until their exact contents are compared and reviewed.
+
+## H. Phase 0 exit and implementation authorization
+
+| Deliverable | Current result |
+|---|---|
+| Current source inventory | Complete for canonical core, compatibility core, plugin adapter, SDK and Form Deform boundaries |
+| Architecture responsibility map | Complete in Sections C–D |
+| Reuse/duplication assessment | Complete in Section E |
+| Compatibility/migration assessment | Complete in Section E |
+| Test inventory and evidence | Complete in Sections B and F |
+| Host capability and integration gaps | Complete in Section D |
+| Current branch/default-branch distinction | Recorded in Sections B and G |
+| Source implementation changes | None |
+| CI verification | Passed on the exact audited `main` commit; formatting, Clippy and in-app smoke remain unverified |
+
+**Phase 0 re-audit: complete for the current `main` snapshot.** The existing canonical implementation is the baseline. No new core, graph, input, evaluator, composition, migration, schema or scalar-mapping implementation should be started as part of the next step without first identifying a specific missing behavior against these existing modules.
+
+Before authorizing additional implementation, the architecture plan should be reconciled into an implementation-status matrix and the unmerged 2D mapping branch should be reviewed against the audited `main` mapper seam. Any subsequent implementation proposal should be limited to verified gaps, preserve compatibility and remain separately testable. This Phase 0 request does not authorize source changes, host API changes, PR creation or merges.
