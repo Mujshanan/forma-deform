@@ -136,6 +136,7 @@ pub enum EvaluationInterfaceError {
     MissingSourceGeometry,
     InvalidSourceGeometry,
     CoordinateSpaceMismatch,
+    SourceSnapshotMismatch,
     InputKindMismatch,
     OutputKindMismatch,
 }
@@ -207,6 +208,11 @@ pub fn evaluate_operator(
 
     let source = context.source_geometry(definition.target())
         .map_err(OperatorInvocationError::Contract)?;
+    if source.stamp() != *definition.reference_geometry() {
+        return Err(OperatorInvocationError::Contract(
+            EvaluationInterfaceError::SourceSnapshotMismatch
+        ));
+    }
     require_compatible_coordinate_spaces(definition.coordinate_space(), source.coordinate_space())
         .map_err(|_| OperatorInvocationError::Contract(
             EvaluationInterfaceError::CoordinateSpaceMismatch
