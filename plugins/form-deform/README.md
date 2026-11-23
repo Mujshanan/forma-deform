@@ -1,6 +1,6 @@
 # Form Deform
 
-**Status:** First on-demand command-plugin implementation.
+**Status:** Legacy on-demand command adapter; retirement candidate after native FDM host integration reaches the documented parity gate.
 
 Form Deform drives one AniCraft Asset Warp pin from one armature bone angle. It is a focused deformation tool, separate from the general-purpose Smart Controller.
 
