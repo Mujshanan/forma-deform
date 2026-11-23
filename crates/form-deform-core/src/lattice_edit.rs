@@ -5,7 +5,7 @@
 //! identities are preserved. Structural batches are atomic and consume allocated
 //! IDs even when validation fails.
 
-use crate::irregular_cage::{IrregularCage, IrregularCageError};
+use crate::irregular_cage::IrregularCage;
 use crate::regular_lattice::{RegularLattice, RegularLatticeError, MAX_LATTICE_CONTROL_POINTS};
 use crate::topology::{
     ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
@@ -42,7 +42,7 @@ impl RegularLattice {
         for edit in edits {
             match *edit {
                 RegularLatticeEdit::InsertRow { after_row } => {
-                    if after_row + 1 >= candidate.topology.rows {
+                    if after_row >= candidate.topology.rows.saturating_sub(1) {
                         return Err(RegularLatticeEditError::InvalidInsertionIndex);
                     }
                     let old_rows = candidate.topology.rows as usize;
@@ -83,7 +83,7 @@ impl RegularLattice {
                     candidate.topology.rows -= 1;
                 }
                 RegularLatticeEdit::InsertColumn { after_column } => {
-                    if after_column + 1 >= candidate.topology.columns {
+                    if after_column >= candidate.topology.columns.saturating_sub(1) {
                         return Err(RegularLatticeEditError::InvalidInsertionIndex);
                     }
                     let rows = candidate.topology.rows as usize;
