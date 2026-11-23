@@ -110,3 +110,8 @@ The M1 Smart Controller UI now supports click-to-create/select and drag-to-move 
 ## Native UI progress — M2 (2026-11-23)
 
 AniCraft [PR #4](https://github.com/Mujshanan/anicraft/pull/4) is merged. The Smart Controller Properties inspector now displays the currently selected bone identity and selected artwork identity using AniCraft's existing selections. This is read-only inspection only: target compatibility, controller-input snapshots, neutral capture, bindings, persistence, evaluation, and playback remain unavailable. No automated test or native Windows CI evidence was reported for the merge. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
+
+
+## Native M2 host contracts
+
+The host/core contracts for target capability discovery and deterministic bone-input snapshots are defined in [docs/contracts/SMART_CONTROLLER_HOST_CONTRACTS.md](docs/contracts/SMART_CONTROLLER_HOST_CONTRACTS.md). The adapter now pins bone input reads to an explicit frame and validates AniCraft's actual `warp.info` pin schema (`pins[].pin`). Exact geometry-pin discovery remains preview/undo-only; stable cross-document identity is not available yet. Neutral capture, binding controls, persistence, and target mutation remain unimplemented.
