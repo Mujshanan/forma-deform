@@ -86,3 +86,91 @@ The entrypoint clearly says that V1 is a preview-only Slider workflow. The adapt
 ## Next step
 
 Complete CQ2 across the remaining core and plugin modules, then run a formatting-only proposal in a dedicated branch with CI enforcement. Keep formatting, structural refactoring, and behavior changes in separate commits.
+
+
+## Expanded inspection — core and all three historical plugin crates
+
+The review was extended beyond the initial Smart Controller adapter pass. The repository's plugin directory contains the three historical plugin tracks `bone-query`, `form-deform`, and `smart-controller`. They are assessed here as historical/prototype adapter surfaces in the product's evolution, not as three independent current products. The audit also inspected the canonical controller model, composition layer, host input provider, target preview planner, and compatibility adapter.
+
+### CQ2-06 — Canonical controller validation concentrates many rules in one method
+
+**Priority:** P1 (reviewability / change safety)  
+**Evidence:** `crates/smart-controller-core/src/canonical.rs:75-170` (the `Controller::validate_local` implementation).
+
+The method validates controller identity relationships, bindings, composition-mode combinations, target-specific constraints, and mapping-specific constraints. Several match arms combine multiple predicates and error construction on one line. The implementation is deterministic and uses explicit typed errors, but the number of distinct invariants in one method makes it difficult to review a targeted change without mentally tracking unrelated rules.
+
+**Recommendation:** Keep validation owned by the canonical model, but separate private validation phases by invariant family: controller/input references, binding/composition policy, target mapping, and controller mapping. Preserve validation order where it affects which error is returned. Avoid introducing a generic validation framework for this one type.
+
+**Acceptance:** Each phase has a narrow name and focused tests; error variants/messages and first-error behavior remain stable unless deliberately versioned.
+
+### CQ2-07 — Historical Bone Query plugin combines host query, response interpretation, and presentation
+
+**Priority:** P2 (separation of concerns)  
+**Evidence:** `plugins/bone-query/src/lib.rs:29-230`.
+
+The file owns parameter interpretation, `bone.info` invocation, response traversal, fallback formatting, and user-facing log presentation. Helper functions do provide some decomposition, but the report functions still mix extraction/defaulting with output formatting, and `format_bone` constructs a very long multi-property line. This is understandable for a compact diagnostic command, but makes response-contract changes and presentation changes harder to review independently.
+
+**Recommendation:** Keep the plugin thin and historical. If this query remains a maintained adapter, introduce a small pure response-to-report model and a separate renderer; do not move host SDK calls into core crates. If it is no longer part of the native workflow, document its support status instead of expanding its architecture.
+
+**Acceptance:** Response parsing can be tested without SDK logging; output wording can change without changing host response interpretation; no host calls are added to core.
+
+### CQ2-08 — Form Deform plugin entrypoint is a single end-to-end workflow module
+
+**Priority:** P2 (navigation / separation of concerns)  
+**Evidence:** `plugins/form-deform/src/lib.rs:1-92`.
+
+The entrypoint contains the plugin manifest, parameter parsing, host bone query, evaluated-angle selection, warp mesh/pin verification, core deformation invocation, logging, and optional mutation command. The workflow is linear and small enough to follow, and it correctly keeps the math in `form-deform-core`; however, input resolution, preview reporting, and application policy are coupled in one function.
+
+**Recommendation:** Do not split solely for line count. If this adapter remains supported, extract named private steps for resolving the bone angle, verifying the target pin, calculating the target, and applying the result. Keep the apply/preview distinction explicit and retain the host command as the only mutation boundary. If the native tool supersedes this adapter, retain it as a compatibility probe and avoid feature growth here.
+
+**Acceptance:** `run` reads as orchestration; each host interaction and the apply gate is independently testable; core remains host-independent.
+
+### CQ2-09 — Composition code has dense policy branches despite a clear top-level pipeline
+
+**Priority:** P2 (reviewability)  
+**Evidence:** `crates/smart-controller-core/src/composition.rs:46-295`.
+
+The public composition flow is concise and the policy is decomposed into named helpers (`compose_replace`, `compose_additive`, `compose_weighted_blend`, `compose_priority_override`, and compatibility helpers). That is a good structure to preserve. Within weighted angle handling and some compatibility branches, however, several semantic checks and calculations are compressed into nested expressions and long lines.
+
+**Recommendation:** Preserve the current policy-per-helper structure. Extract only named predicates/calculations where they make wrapped-angle semantics, zero-weight behavior, or conflict conditions easier to inspect. Do not merge composition back into the evaluator.
+
+**Acceptance:** Every composition mode remains independently readable and covered by its existing behavior tests; no change to deterministic ordering or conflict semantics.
+
+### CQ2-10 — Plugin adapter module boundaries are clearer than their entrypoint-to-native lifecycle documentation
+
+**Priority:** P2 (maintainer orientation)  
+**Evidence:** `plugins/smart-controller/src/adapter.rs:1-16,60-90`; `plugins/smart-controller/src/input_provider.rs:1-55`; `plugins/smart-controller/src/preview_plan.rs:1-105`; `plugins/smart-controller/src/targets.rs:1-103`.
+
+The canonical Smart Controller adapter has useful separation: input collection, pure evaluation adaptation, target preview planning, and target capability assessment are distinct modules. The input provider explicitly requires host identity mappings; the preview planner preserves typed outputs and does not mutate; target capability descriptions distinguish calculation support from verified application. This is a strong maintainability pattern. The adapter's imports are split midway through the file, and the relationship between these modules, the V1 plugin entrypoint, and the native AniCraft workflow is not yet stated consistently.
+
+**Recommendation:** Consolidate adapter imports (overlaps CQ2-02) and add a concise lifecycle/support note at the module boundary only after the native call path is verified. Preserve the existing read-only seams and the separation between core calculation and host mutation.
+
+**Acceptance:** A maintainer can follow the path from host input collection to canonical evaluation to preview planning, and can tell whether the plugin adapter is a supported integration path or a test/prototype surface without guessing.
+
+## Expanded review conclusions
+
+- The canonical Smart Controller implementation is generally better structured than the historical plugin entrypoints: model, graph, evaluator, composition, input, mapping, migration, and diagnostics have distinct modules.
+- The best existing pattern is the separation of pure core evaluation from host collection and read-only target preview. Preserve this as the native tool is integrated.
+- The most concentrated readability risk is invariant density in `Controller::validate_local`, followed by the evaluator's size and the older adapter entrypoints.
+- The three historical plugin folders should not be refactored into three independently evolving products. Any cleanup should either support the unified native tool or explicitly maintain a small compatibility/test adapter.
+- No behavior defects were established by this readability pass. These are maintainability findings, not correctness bug reports.
+- No source code was changed during CQ2. This is an audit/documentation update only.
+
+## CQ2 status and exit criteria
+
+**Status:** Expanded source review complete; remediation proposal pending.
+
+Completed:
+- [x] Inspect Form Deform core and canonical Smart Controller model.
+- [x] Inspect evaluator/composition/migration responsibilities.
+- [x] Inspect Smart Controller host adapter, input provider, preview planner, and target capability layer.
+- [x] Inspect all three historical plugin entrypoints/modules.
+- [x] Record findings with file/line references and behavior-preserving recommendations.
+- [x] Separate product lifecycle observations from code-quality findings.
+
+Still required before CQ2 can be closed:
+- [ ] Run `cargo fmt --all -- --check` against the audit branch in CI or a Rust-enabled environment.
+- [ ] Produce a formatting-only patch proposal, separately from any structural refactor.
+- [ ] Verify the native integration call path before changing adapter lifecycle labels or removing historical plugin code.
+- [ ] Re-run Rust tests and WASM builds after any remediation.
+
