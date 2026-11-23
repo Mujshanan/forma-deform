@@ -161,9 +161,18 @@ impl CageBinding {
             }
         }).collect();
         crate::cage_binding_persistence::PersistedCageBinding::new(
-            id, revision, target, reference_geometry, coordinate_space,
-            self.topology_id, self.topology_revision,
-            self.cage_vertex_ids.clone(), self.cage_triangles.clone(), points,
+            crate::cage_binding_persistence::CageBindingMetadata {
+                id: id.into(),
+                revision,
+                target,
+                reference_geometry,
+                coordinate_space,
+                topology_id: self.topology_id,
+                topology_revision: self.topology_revision,
+                cage_vertex_ids: self.cage_vertex_ids.clone(),
+                cage_triangles: self.cage_triangles.clone(),
+            },
+            points,
         )
     }
 
