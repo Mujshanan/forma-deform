@@ -30,6 +30,8 @@ pub struct FdmDocument {
     revision: u64,
     deformers: Vec<DeformationDefinition>,
     composition_graphs: Vec<CompositionGraph>,
+    #[serde(default)]
+    cage_bindings: Vec<PersistedCageBinding>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -267,7 +269,8 @@ impl FdmDocument {
     pub fn document_id(&self) -> &str { &self.document_id }
     pub fn revision(&self) -> u64 { self.revision }
     pub fn deformers(&self) -> &[DeformationDefinition] { &self.deformers }
-    pub fn composition_graphs(&self) -> &[CompositionGraph] { &self.composition_graphs }\n    pub fn cage_bindings(&self) -> &[PersistedCageBinding] { &self.cage_bindings }
+    pub fn composition_graphs(&self) -> &[CompositionGraph] { &self.composition_graphs }
+    pub fn cage_bindings(&self) -> &[PersistedCageBinding] { &self.cage_bindings }
 }
 
 fn require_id(value: &str) -> Result<(), PersistenceError> {
@@ -284,7 +287,9 @@ pub enum PersistenceError {
     ReferenceTargetMismatch,
     NonFiniteParameter,
     DuplicateDeformerId,
-    DuplicateCompositionGraphId,\n    DuplicateCageBindingId,\n    CageBinding(CageBindingPersistenceError),
+    DuplicateCompositionGraphId,
+    DuplicateCageBindingId,
+    CageBinding(CageBindingPersistenceError),
     UnsupportedSchemaName,
     UnsupportedSchemaVersion,
     MalformedDocument,
