@@ -1,6 +1,6 @@
 # LINEAGE-03 — FDM-02 Cage Contract Reconciliation
 
-**Status:** Architecture assessment; implementation of the FDM-02.6/02.7 port is not yet complete.  
+**Status:** Reconciliation implemented on the canonical integration branch; final review remains open.  
 **Canonical integration line:** `test/fdm-03-v1-integration-regressions`  
 **Related drafts:** PR #37 (FDM-02.6) and PR #40 (FDM-02.7/02.8).
 
@@ -8,7 +8,7 @@
 
 FDM-01.3 and FDM-01.4 have been integrated into the FDM-02.1/FDM-03 line. The operator engine uses the existing canonical `GeometrySnapshot`, `EvaluationRequest`, `DeformerOperator`, and `EvaluatedGeometryResult` contracts. No duplicate geometry or result abstraction was introduced.
 
-The remaining parallel line is FDM-02.6/02.7. It must be ported at the domain boundary, not merged as a second topology and binding stack.
+The FDM-02.6/02.7 semantics have been ported at the domain boundary. Their original branches remain separate drafts; they are not merged as a second topology and binding stack.
 
 ## 2. Canonical owners on the integration line
 
@@ -67,7 +67,7 @@ These are not duplicate products. The generic point-array use case should remain
 
 PR #40 adds `PersistedCageBinding` to the optional `cage_bindings` collection in `FdmDocument`. The FDM-03 Path2D path instead uses a separate `PersistedBinding` envelope and host adapter contract; the host chooses where the payload is stored and owns document transactions.
 
-The first port should preserve the validated payload semantics while avoiding a second persistence owner. Recommended direction:
+The completed port preserves the validated payload semantics while avoiding a second persistence owner:
 
 - keep authored deformer definitions and composition graphs in `FdmDocument`;
 - keep each binding family as a validated FDM-owned payload with an explicit host adapter boundary;
@@ -118,20 +118,21 @@ The PR #40 `FdmDocument.cage_bindings` field was deliberately not copied. Both P
 - Runtime point-binding tests cover stable-ID shared-edge selection, identity at rest, absolute evaluation on a changed cage pose, outside-point rejection, duplicate point IDs, and explicit rejection of quad cages.
 - Persistence tests cover exact JSON round-trip, current-source validation, source revision staleness, point reconstruction mismatch, invalid supports/weights, cage topology changes, and host adapter persist/load.
 - FDM-03 embedding tests cover triangles/quads, disconnected manifold components, multiple boundary loops, bow-tie vertex rejection, and shared-vertex collinear overlap.
-- Latest integrated CI run [#45159333217](https://github.com/Mujshanan/forma-deform/actions/runs/45159333217) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
+- Latest integrated CI run [#45160236827](https://github.com/Mujshanan/forma-deform/actions/runs/45160236827) passed. It ran the scoped rustfmt check, Clippy, workspace tests, benchmark smoke, and all three release WASM builds. The rustfmt step checks only `single_handle_displacement.rs` and `evaluation_engine.rs`; the Clippy command globally allows `clippy::too_many_arguments`, so neither gate should be described as a repository-wide formatting check or a file-scoped lint exception.
 
 ## 7. Explicit non-goals
 
 - No AniCraft host/UI integration in this phase.
 - No changes to CCC-01.5: Smart Controller and pin-deformation evaluation remain independent.
 - No graph scheduler, cache, automatic rebind, host document transaction, apply, undo/redo, or bake implementation.
-- No new deformation algorithms or authoring UI until the branch line is reconciled.
+- No new deformation algorithms or authoring UI until this final integration review is accepted.
 
 ## 8. Current branch and PR status
 
 - PR #47 remains a draft and is not merged.
-- The integration branch is 107 commits ahead and 0 behind its declared FDM-02.1 base.
-- Current integrated head: `0cbbefc758122f08224b60055a80314577deca0e`.
-- GitHub Actions run [#45160021180](https://github.com/Mujshanan/forma-deform/actions/runs/45160021180) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
+- The integration branch is 108 commits ahead and 0 behind its declared FDM-02.1 base.
+- Current integrated head: `458169f61c7eb5798010f4578473c0c5f6d433c0`.
+- GitHub Actions run [#45160236827](https://github.com/Mujshanan/forma-deform/actions/runs/45160236827) completed successfully on this exact head.
+- The rustfmt gate covers only the FDM-01.3/01.4 operator files; Clippy runs with warnings denied while globally allowing `clippy::too_many_arguments`.
 - PR #47 remains a draft and is not merged.
 - PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line. Their semantic work is ported into the integration branch, but the original PRs have not been closed or modified.
