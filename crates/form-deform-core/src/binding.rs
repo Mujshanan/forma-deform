@@ -724,6 +724,74 @@ mod tests {
         assert_eq!(record.validate_against(&source, &topology, &geometry), Ok(()));
     }
 
+    fn outside_snapshot() -> GeometrySnapshot {
+        let path = Path2D::new(vec![PathCommand::MoveTo(point(-0.5, 0.5))]).unwrap();
+        let space = coordinate_space();
+        let fingerprint = path.fingerprint(&space).unwrap();
+        GeometrySnapshot::new(target(), GeometryRevision(1), TopologyRevision(1),
+            fingerprint, space, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION, path).unwrap()
+    }
+
+    #[test]
+    fn clamped_binding_record_validates_against_recomputed_boundary_projection() {
+        use crate::outside_policy::{resolve_outside_point, OutsideCageResolution, OutsideCageResolutionPolicy};
+        let (topology, state) = cage();
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        let source = outside_snapshot();
+        let feature = enumerate_source_features(source.payload()).unwrap()[0];
+        assert_eq!(crate::point_location::locate_point(feature.point, &geometry).unwrap(),
+            crate::point_location::PointLocationOutcome::OutsideCage);
+        let OutsideCageResolution::Clamped(projection) = resolve_outside_point(
+            feature.point, &geometry, OutsideCageResolutionPolicy::ClampToBoundary).unwrap() else {
+            panic!("expected clamped projection");
+        };
+        let mapping = MappingRecord {
+            locator: feature.locator,
+            face_index: projection.face_index,
+            subface_index: 0,
+            control_point_ids: topology.face_at(projection.face_index as usize).unwrap().control_point_ids().to_vec(),
+            coordinates: projection.coordinates,
+        };
+        let stamp = BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::ClampToBoundary).unwrap();
+        let record = BindingRecord::new(stamp, vec![FeatureBindingEntry {
+            locator: feature.locator, status: SourceFeatureBinding::Clamped(mapping),
+        }]);
+        assert_eq!(record.validate_against(&source, &topology, &geometry), Ok(()));
+    }
+
+    #[test]
+    fn extrapolated_binding_record_validates_original_point_and_stamped_distance_limit() {
+        use crate::outside_policy::{resolve_outside_point, OutsideCageResolution, OutsideCageResolutionPolicy};
+        let (topology, state) = cage();
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        let source = outside_snapshot();
+        let feature = enumerate_source_features(source.payload()).unwrap()[0];
+        let OutsideCageResolution::Extrapolated { boundary, coordinates, .. } = resolve_outside_point(
+            feature.point, &geometry,
+            OutsideCageResolutionPolicy::BoundedExtrapolation { max_distance: 0.6 },
+        ).unwrap() else {
+            panic!("expected bounded extrapolation");
+        };
+        let mapping = MappingRecord {
+            locator: feature.locator,
+            face_index: boundary.face_index,
+            subface_index: 0,
+            control_point_ids: topology.face_at(boundary.face_index as usize).unwrap().control_point_ids().to_vec(),
+            coordinates,
+        };
+        let stamp = BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::BoundedExtrapolation { max_distance: 0.6 }).unwrap();
+        let record = BindingRecord::new(stamp, vec![FeatureBindingEntry {
+            locator: feature.locator, status: SourceFeatureBinding::Extrapolated(mapping),
+        }]);
+        assert_eq!(record.validate_against(&source, &topology, &geometry), Ok(()));
+    }
+
     #[test]
     fn missing_source_feature_status_is_rejected() {
         let (topology, state) = cage();
