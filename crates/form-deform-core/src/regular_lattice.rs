@@ -20,6 +20,10 @@ pub struct RegularLattice {
 impl RegularLattice {
     /// Create an axis-aligned lattice. IDs are allocated in row-major order;
     /// the caller must reserve this ID range and never reuse deleted IDs.
+    // The constructor exposes independent topology, state revision, grid dimensions,
+    // bounds, and host-reserved ID allocation inputs; collapsing these into positional
+    // tuples would make this public geometry API less clear.
+    #[allow(clippy::too_many_arguments)]
     pub fn rectangular(
         topology_id: DeformationTopologyId,
         topology_revision: DeformationTopologyRevision,
