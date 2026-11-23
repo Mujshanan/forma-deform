@@ -551,7 +551,6 @@ fn spatial_tolerance(points: &[ControlPointPosition]) -> Result<f64, BindingErro
 pub enum BindingError {
     InvalidSourceSnapshot,
     InvalidStamp,
-    UnsupportedOutsidePolicy(OutsideCagePolicy),
     InvalidOutsidePolicyParameter,
     OutsidePolicyRecordMismatch,
     UnsupportedMappingPolicy,
@@ -586,7 +585,6 @@ impl std::fmt::Display for BindingError {
         match self {
             Self::InvalidSourceSnapshot => write!(f, "source geometry snapshot is invalid"),
             Self::InvalidStamp => write!(f, "binding stamp is malformed or unsupported"),
-            Self::UnsupportedOutsidePolicy(policy) => write!(f, "outside-cage policy {policy:?} is not supported"),
             Self::InvalidOutsidePolicyParameter => write!(f, "outside-cage policy parameter is invalid"),
             Self::OutsidePolicyRecordMismatch => write!(f, "binding entry does not match its stamped outside-cage policy"),
             Self::UnsupportedMappingPolicy => write!(f, "mapping policy is not supported"),
@@ -625,7 +623,7 @@ mod tests {
     use crate::embedding::validate_cage_embedding;
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceId, CoordinateSpaceKind,
-        GeometryFingerprint, GeometryRevision, HostDocumentId, HostNamespace,
+        GeometryRevision, HostDocumentId, HostNamespace,
         HostTargetId, HostTargetKind, TopologyRevision,
     };
     use crate::path2d::{PathCommand, Point2, Path2D};
