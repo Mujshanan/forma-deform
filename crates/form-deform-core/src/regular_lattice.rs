@@ -92,13 +92,7 @@ impl RegularLattice {
             return Err(RegularLatticeError::DegenerateBounds);
         }
         let tol = (diagonal * 1.0e-9).max(MIN_TOLERANCE);
-        for i in 0..ordered.len() {
-            for j in i + 1..ordered.len() {
-                if distance(ordered[i], ordered[j]) <= tol {
-                    return Err(RegularLatticeError::CoincidentPoints(i, j));
-                }
-            }
-        }
+        reject_coincident_points(&ordered, tol)?;
 
         let mut expected_sign = 0.0_f64;
         for index in 0..self.topology.face_count() {
@@ -181,6 +175,34 @@ fn checked_count(rows: u32, cols: u32) -> Result<usize, RegularLatticeError> {
     Ok(count)
 }
 
+fn reject_coincident_points(points: &[ControlPointPosition], tol: f64) -> Result<(), RegularLatticeError> {
+    // Spatial hashing keeps duplicate detection near-linear for dense lattices.
+    let mut buckets: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (index, point) in points.iter().enumerate() {
+        let qx = (point.x / tol).floor();
+        let qy = (point.y / tol).floor();
+        if !qx.is_finite() || !qy.is_finite()
+            || qx < (i64::MIN + 1) as f64 || qx > (i64::MAX - 1) as f64
+            || qy < (i64::MIN + 1) as f64 || qy > (i64::MAX - 1) as f64 {
+            return Err(RegularLatticeError::CoordinateRangeExceeded);
+        }
+        let cell = (qx as i64, qy as i64);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if let Some(candidates) = buckets.get(&(cell.0 + dx, cell.1 + dy)) {
+                    for previous in candidates {
+                        if distance(*point, points[*previous]) <= tol {
+                            return Err(RegularLatticeError::CoincidentPoints(*previous, index));
+                        }
+                    }
+                }
+            }
+        }
+        buckets.entry(cell).or_default().push(index);
+    }
+    Ok(())
+}
+
 fn bounds(points: &[ControlPointPosition]) -> Result<(f64, f64, f64, f64), RegularLatticeError> {
     let p = points.first().ok_or(RegularLatticeError::Empty)?;
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (p.x, p.y, p.x, p.y);
@@ -232,7 +254,7 @@ fn on_segment(p: ControlPointPosition, a: ControlPointPosition, b: ControlPointP
 #[derive(Clone, Debug, PartialEq)]
 pub enum RegularLatticeError {
     Topology(TopologyContractError), DegenerateBounds, InvalidFirstId, IdOverflow,
-    TooManyPoints(usize), BoundaryTooLarge(usize), Empty, MissingPoint(u64), InvalidFace, UnexpectedTriangle,
+    TooManyPoints(usize), BoundaryTooLarge(usize), CoordinateRangeExceeded, Empty, MissingPoint(u64), InvalidFace, UnexpectedTriangle,
     InvalidBoundary, CoincidentPoints(usize,usize), ZeroLengthCellEdge(usize),
     DegenerateCell(usize), InvertedCell(usize), NonConvexCell(usize),
     ZeroLengthBoundaryEdge(usize), SelfIntersectingBoundary(usize,usize), DegenerateBoundary,
@@ -246,6 +268,7 @@ impl std::fmt::Display for RegularLatticeError {
             Self::IdOverflow => write!(f,"control-point ID range overflows u64"),
             Self::TooManyPoints(n) => write!(f,"lattice requests {n} points; maximum is {MAX_LATTICE_CONTROL_POINTS}"),
             Self::BoundaryTooLarge(n) => write!(f,"lattice boundary has {n} points; maximum for bounded intersection validation is {MAX_LATTICE_BOUNDARY_POINTS}"),
+            Self::CoordinateRangeExceeded => write!(f,"coordinates exceed the supported range for scale-aware spatial validation"),
             Self::Empty => write!(f,"lattice has no geometry"),
             Self::MissingPoint(id) => write!(f,"control point {id} is missing"),
             Self::InvalidFace => write!(f,"lattice face index is invalid"),
