@@ -19,7 +19,7 @@ The most important architecture risks are at the edges of that structure:
 3. Several high-responsibility core modules are large (evaluator, composition, legacy compatibility, migration). Their internal phases and invariants need clear sub-boundaries before adding more features.
 4. The AniCraft SDK is intentionally the only low-level ABI/unsafe boundary, which is a good design, but it should remain small and should not become a home for product-specific policy.
 
-No evidence from this pass justifies merging the Smart Controller and Form Deform domain cores. They represent different concepts and currently have clean, independent dependency roots.
+No evidence from this pass justifies merging the Smart Controller and Form Deform domain cores. They represent different concepts and currently have clean, independent dependency roots. In addition, AniCraft has native Asset Warp and bone/rigging tools in its host repository; their relationship to the Forma Deform cores must be traced before treating any overlapping algorithms as reusable or duplicated.
 
 ## 2. Product evolution and architectural interpretation
 
@@ -35,11 +35,25 @@ This history changes the audit criteria:
 
 - The three plugin crates in the current workspace must be classified as historical source packages, compatibility/development adapters, or actively shipped products based on evidence; do not assume the third category from their directory names.
 - Shared functionality should be evaluated across the original three capabilities and the unified/native implementation. Repetition may represent intentional compatibility or migration code, but it must be documented and must not become a second place to add new features.
-- The native tool is the target product architecture. Plugin entrypoints and the guest SDK should be assessed as integration/compatibility boundaries in that migration, not automatically treated as the product's permanent top-level architecture.
+- The native tool is the target product architecture. AniCraft already contains native Asset Warp, Bone, and Bind tools in its host repository. Plugin entrypoints and the guest SDK should be assessed as integration/compatibility boundaries in that migration, not automatically treated as the product's permanent top-level architecture.
 - Domain cores should remain independent where they represent genuinely distinct domain concepts. Consolidation of the user experience does not require collapsing all domain logic into one crate.
 - Persistence, document lifecycle, undo/redo, and native host integration belong to the AniCraft host boundary; the product adapter should not recreate host responsibilities.
 
 The code snapshot alone does not establish whether the original plugin entrypoints remain separately distributed. Until packaging/release evidence is checked, the audit will refer to them as workspace plugin crates rather than claiming they are independently shipped.
+
+### 2.1 Native AniCraft deformation and rigging capabilities — integration evidence
+
+Inspection of the current AniCraft host repository (Mujshanan/anicraft, branch main) confirms that deformation and rigging are not exclusively plugin concerns:
+
+- src/warp_tool.rs implements the native **Asset Warp** stage tool. It displays warp meshes and pins, supports click/drag interactions, and issues host warp.* commands.
+- crates/engine/src/cmds_warp.rs owns the native warp.add, warp.pin_add, warp.pin_move, warp.pin_remove, warp.remove, and warp.info command handlers.
+- crates/doc/src/warp.rs owns the persisted warp model and deterministic deformation representation. Its module documentation describes the MLS deformation, bounded mesh/pin limits, keyframe behavior, and stale-warp rebasing.
+- src/bone_tool.rs, src/bind_tool.rs, crates/engine/src/cmds_bone.rs, and crates/doc/src/armature.rs / skin modules implement native bone, binding, and weight-paint workflows.
+- The host still has a separate WebAssembly plugin system: docs/plugins.md and crates/engine/src/cmds_plugin.rs describe plugin install/list/run/remove/reload and the sandboxed command bridge.
+
+This establishes two distinct native-host subsystems: (1) built-in native deformation/rigging tools and document commands, and (2) the generic WASM plugin runtime. It does **not** yet prove that the Forma Deform workspace's canonical Smart Controller or Form Deform core is called by the native Asset Warp implementation. The inspected host source uses its own anicraft_doc::warp model and warp.* command layer; no direct Forma Deform dependency was found in the inspected host workspace manifest or the native tool files.
+
+**Audit implication:** do not assume the native tool is merely the old unified plugin running without WASM. Trace whether the Forma Deform native-tool work is (a) an AniCraft built-in feature reusing Forma Deform core crates, (b) a parallel host-native implementation of related deformation concepts, or (c) a product-level combination of native Asset Warp with Smart Controller orchestration. This relationship is a first-class CQ1 integration question and must be resolved before judging duplication or proposing shared abstractions.
 
 ## 3. Workspace responsibility map
 
@@ -276,6 +290,7 @@ Maintain this direction:
 Before refactoring, resolve these architecture questions through repository and host integration evidence:
 
 - Which of the three original plugin crates remain independently distributed, if any? Which are retained only as source/history, compatibility adapters, or test fixtures?
+- Is the native tool in scope the existing AniCraft Asset Warp/Bone/Bind toolset, a new Forma Deform-specific native tool, or a combination? What exact native entrypoint and command path invokes Forma Deform code?
 - Where is the native tool's actual composition root and how does it call into these workspace crates?
 - Is the current Smart Controller V1 WASM entrypoint a supported compatibility path, or is it expected to be replaced by the native tool path?
 - Which historical document/data formats must remain readable and writable, and for how long?
@@ -290,7 +305,9 @@ Before refactoring, resolve these architecture questions through repository and 
 - [x] Smart Controller module responsibility map created.
 - [x] Main architecture findings tied to source references.
 - [x] Product evolution recorded: three plugins → unified plugin → native AniCraft tool.
-- [ ] Native tool composition root and actual execution path mapped to source files.
+- [x] Existing AniCraft native Asset Warp/Bone/Bind tool and command boundaries identified.
+- [ ] Relationship between those native host implementations and the Forma Deform core crates proven from call sites/dependencies.
+- [ ] Forma Deform native-tool composition root and actual execution path mapped to source files.
 - [ ] Original plugin crates classified as shipped, compatibility, migration, or historical.
 - [ ] Persisted data and legacy format compatibility policy documented.
 - [ ] Public API compatibility policy for legacy exports is decided.
