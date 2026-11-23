@@ -7,6 +7,7 @@ pub mod evaluation_contract;
 pub mod host_contract;
 pub mod path2d;
 pub mod persistence;
+pub mod single_handle_displacement;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 { pub x: f64, pub y: f64 }
