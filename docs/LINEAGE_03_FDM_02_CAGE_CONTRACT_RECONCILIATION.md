@@ -106,8 +106,9 @@ The canonical validator remains a single implementation in `embedding.rs`. FDM-0
 - Kept generic point bindings triangle-only and fail-closed outside the cage. No implicit quad triangulation, clamping, or extrapolation was introduced.
 - Added versioned `PersistedCageBinding` JSON with typed topology identity/revision, stable cage vertex/triangle identities, source snapshot stamp, coordinate-space descriptor, and point supports.
 - Persistence validation checks source target/generation, geometry revisions/fingerprint, topology identity/revision, cage vertex/triangle identity, exact point-ID coverage, and source-point reconstruction against a freshly certified rest cage.
-- Added `CageBindingHostAdapter` with a separate point-binding payload slot. The host owns atomic document transactions, dirty state, save/load, and undo/redo; the FDM core never mutates the host document.
+- Added `CageBindingHostAdapter` with a separate point-binding payload slot. Writes use compare-and-swap on the expected binding revision and the source snapshot stamp, preventing stale or racing writes. The host owns atomic document transactions, dirty state, save/load, and undo/redo; the FDM core never mutates the host document.
 - Generic point bindings use `GeometrySnapshotStamp` plus `CoordinateSpaceDescriptor`, not a Path2D-only snapshot, so they can bind host-supplied point arrays from other geometry payloads.
+- Persisted triangle identities are canonicalized and validated; a payload cannot silently reorder its support topology.
 - Enabled serde_json's `float_roundtrip` feature so persisted barycentric `f64` values survive JSON round-trips without changing their binary values.
 
 The PR #40 `FdmDocument.cage_bindings` field was deliberately not copied. Both Path2D and generic point-binding families use separate FDM-owned payload envelopes and host adapter slots, leaving the host free to choose document storage without creating two competing persistence owners.
@@ -129,8 +130,8 @@ The PR #40 `FdmDocument.cage_bindings` field was deliberately not copied. Both P
 ## 8. Current branch and PR status
 
 - PR #47 remains a draft and is not merged.
-- The integration branch is 103 commits ahead and 0 behind its declared FDM-02.1 base.
-- Integrated head: `9621275c6290201abcc841413883a90db48a681f`.
-- GitHub Actions run [#45159333217](https://github.com/Mujshanan/forma-deform/actions/runs/45159333217) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
+- The integration branch is 106 commits ahead and 0 behind its declared FDM-02.1 base.
+- Current code head: `b4ae0fde9bf92f1a8a84871abbb2bd4fa7b2d111`.
+- CI is running on the current head; the preceding point-binding host-adapter head passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
 - PR #47 remains a draft and is not merged.
 - PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line. Their semantic work is ported into the integration branch, but the original PRs have not been closed or modified.
