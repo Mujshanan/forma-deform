@@ -420,7 +420,7 @@ mod tests {
         GeometryFingerprint, GeometryRevision, HostDocumentId, HostNamespace,
         HostTargetId, HostTargetKind, TopologyRevision,
     };
-    use crate::path2d::{Path2D, PathCommand};
+    use crate::path2d::{Path2D, PathCommand, Point2};
     use crate::topology::{
         ControlPointPosition, ControlPointState, ControlStateRevision,
         DeformationControlState, IrregularCageTopology,
