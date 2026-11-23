@@ -230,6 +230,257 @@ mod tests {
         }
     }
 
+
+    // End-to-end constructor fixture: the structured result and all provenance
+    // inputs are produced through the public binding/evaluation APIs.
+    mod constructor_tests {
+        use super::*;
+        use crate::binding::{
+            enumerate_source_features, BindingRecord, BindingStamp, FeatureBindingEntry,
+            MappingPolicy, SourceFeatureBinding,
+        };
+        use crate::binding_evaluation::evaluate_binding;
+        use crate::binding_persistence::PersistedBinding;
+        use crate::embedding::validate_cage_embedding;
+        use crate::host_contract::{
+            AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
+            CoordinateSpaceKind, GeometryRevision, HostDocumentId, HostNamespace, HostTargetId,
+            HostTargetKind, HostTargetRef, TopologyRevision,
+        };
+        use crate::path2d::PATH2D_PAYLOAD_KIND;
+        use crate::point_location::{locate_point, PointLocationOutcome};
+        use crate::topology::{
+            ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
+            DeformationControlState, DeformationTopologyId, DeformationTopologyRevision,
+            IrregularCageTopology, TopologyFace,
+        };
+
+        fn source_path() -> Path2D {
+            Path2D::new(vec![
+                PathCommand::MoveTo(point(0.2, 0.2)),
+                PathCommand::LineTo(point(0.8, 0.2)),
+                PathCommand::QuadraticTo { control: point(1.0, 0.8), to: point(1.2, 0.5) },
+                PathCommand::Close,
+                PathCommand::MoveTo(point(0.3, 0.3)),
+                PathCommand::CubicTo {
+                    control1: point(0.5, 0.6),
+                    control2: point(0.8, 0.7),
+                    to: point(1.0, 0.8),
+                },
+            ]).unwrap()
+        }
+
+        fn space() -> CoordinateSpaceDescriptor {
+            CoordinateSpaceDescriptor {
+                id: CoordinateSpaceId::new("target-local-rest").unwrap(),
+                kind: CoordinateSpaceKind::TargetLocalRest,
+                dimensions: 2,
+                linear_unit: "px".into(),
+                canonical_unit: "px".into(),
+                unit_scale: 1.0,
+                axes: AxisOrientation::XRightYDown,
+                origin: CoordinateOrigin::TopLeft,
+            }
+        }
+
+        fn target() -> HostTargetRef {
+            HostTargetRef {
+                namespace: HostNamespace::new("anicraft").unwrap(),
+                document_id: HostDocumentId::new("assembly-constructor-doc").unwrap(),
+                target_kind: HostTargetKind::new("shape").unwrap(),
+                target_id: HostTargetId::new("assembly-shape").unwrap(),
+                generation: 1,
+            }
+        }
+
+        fn snapshot(path: Path2D, revision: u64) -> GeometrySnapshot {
+            let coordinate_space = space();
+            let fingerprint = path.fingerprint(&coordinate_space).unwrap();
+            GeometrySnapshot::new(
+                target(), GeometryRevision(revision), TopologyRevision(1), fingerprint,
+                coordinate_space, PATH2D_PAYLOAD_KIND, 1, path,
+            ).unwrap()
+        }
+
+        fn topology_and_state(revision: u64, dx: f64) -> (DeformationTopology, DeformationControlState) {
+            let ids = (1..=4).map(|value| ControlPointId::new(value).unwrap()).collect::<Vec<_>>();
+            let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+                id: DeformationTopologyId::new(71).unwrap(),
+                revision: DeformationTopologyRevision::new(1).unwrap(),
+                control_point_ids: ids.clone(),
+                faces: vec![
+                    TopologyFace::Triangle([ids[0], ids[1], ids[2]]),
+                    TopologyFace::Triangle([ids[2], ids[1], ids[3]]),
+                ],
+            });
+            let positions = [(0.0, 0.0), (2.0, 0.0), (0.0, 2.0), (2.0, 2.0)];
+            let state = DeformationControlState {
+                topology_id: topology.topology_id(),
+                topology_revision: topology.topology_revision(),
+                revision: ControlStateRevision::new(revision).unwrap(),
+                points: ids.into_iter().zip(positions).map(|(id, (x, y))| ControlPointState {
+                    id,
+                    position: ControlPointPosition::new(x + dx, y).unwrap(),
+                    pinned: false,
+                }).collect(),
+            };
+            (topology, state)
+        }
+
+        fn validated_binding(
+            source: &GeometrySnapshot,
+            topology: &DeformationTopology,
+            rest_state: &DeformationControlState,
+            rest_geometry: &ValidatedCageGeometry,
+            outside_policy: OutsideCagePolicy,
+        ) -> ValidatedBindingRecord {
+            let stamp = BindingStamp::from_snapshot(
+                source, topology,
+                MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+                outside_policy,
+            ).unwrap();
+            let entries = enumerate_source_features(source.payload()).unwrap().into_iter().map(|feature| {
+                let status = match locate_point(feature.point, rest_geometry).unwrap() {
+                    PointLocationOutcome::Located(location) => {
+                        let face = topology.face_at(location.face_index as usize).unwrap();
+                        SourceFeatureBinding::Mapped(crate::binding::MappingRecord {
+                            locator: feature.locator,
+                            face_index: location.face_index,
+                            subface_index: 0,
+                            control_point_ids: face.control_point_ids().to_vec(),
+                            coordinates: location.coordinates,
+                        })
+                    }
+                    PointLocationOutcome::OutsideCage => SourceFeatureBinding::Unbound,
+                };
+                FeatureBindingEntry { locator: feature.locator, status }
+            }).collect();
+            PersistedBinding::new(BindingRecord::new(stamp, entries)).unwrap()
+                .validate_against(source, topology, rest_state).unwrap()
+        }
+
+        struct Fixture {
+            source: GeometrySnapshot,
+            topology: DeformationTopology,
+            rest_state: DeformationControlState,
+            rest_geometry: ValidatedCageGeometry,
+            validated: ValidatedBindingRecord,
+            current_geometry: ValidatedCageGeometry,
+            structured: EvaluatedBindingGeometry,
+        }
+
+        fn fixture() -> Fixture {
+            let source = snapshot(source_path(), 1);
+            let (topology, rest_state) = topology_and_state(1, 0.0);
+            let rest_certificate = validate_cage_embedding(&topology, &rest_state).unwrap();
+            let rest_geometry = ValidatedCageGeometry::new(&topology, &rest_state, &rest_certificate).unwrap();
+            let validated = validated_binding(
+                &source, &topology, &rest_state, &rest_geometry,
+                OutsideCagePolicy::UnboundZeroInfluence,
+            );
+            let (_, current_state) = topology_and_state(2, 0.25);
+            let current_certificate = validate_cage_embedding(&topology, &current_state).unwrap();
+            let current_geometry = ValidatedCageGeometry::new(&topology, &current_state, &current_certificate).unwrap();
+            let structured = evaluate_binding(&validated, &source, &topology, &current_geometry).unwrap();
+            Fixture { source, topology, rest_state, rest_geometry, validated, current_geometry, structured }
+        }
+
+        #[test]
+        fn public_constructor_assembles_matching_evaluated_inputs_and_preserves_authored_path() {
+            let f = fixture();
+            let original = f.source.payload().clone();
+            let assembled = AssembledDeformationOutput::build(
+                f.structured, &f.validated, &f.source, &f.topology,
+                &f.rest_geometry, &f.current_geometry,
+                OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
+            ).unwrap();
+
+            assert_eq!(assembled.structured_path().commands(), original.commands());
+            assert_eq!(assembled.refined_curves().segments.len(), 2);
+            assert_eq!(assembled.refined_curves().segments[0].command_index, 2);
+            assert_eq!(assembled.refined_curves().segments[0].subpath_index, 0);
+            assert_eq!(assembled.refined_curves().segments[1].command_index, 5);
+            assert_eq!(assembled.refined_curves().segments[1].subpath_index, 1);
+            assert!(matches!(assembled.structured_path().commands()[2],
+                PathCommand::QuadraticTo { control, .. } if control == point(1.0, 0.8)));
+            assert!(matches!(assembled.structured_path().commands()[5],
+                PathCommand::CubicTo { control1, control2, .. }
+                    if control1 == point(0.5, 0.6) && control2 == point(0.8, 0.7)));
+            assert_eq!(f.source.payload(), &original);
+        }
+
+        #[test]
+        fn public_constructor_rejects_source_binding_and_cage_provenance_mismatches() {
+            let f = fixture();
+
+            let changed_source = snapshot(source_path(), 2);
+            assert_eq!(
+                AssembledDeformationOutput::build(
+                    f.structured.clone(), &f.validated, &changed_source, &f.topology,
+                    &f.rest_geometry, &f.current_geometry,
+                    OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
+                ).unwrap_err(),
+                DeformationOutputAssemblyError::SourceStampMismatch,
+            );
+
+            let alternate_validated = validated_binding(
+                &f.source, &f.topology, &f.rest_state, &f.rest_geometry,
+                OutsideCagePolicy::ClampToBoundary,
+            );
+            assert_eq!(
+                AssembledDeformationOutput::build(
+                    f.structured.clone(), &alternate_validated, &f.source, &f.topology,
+                    &f.rest_geometry, &f.current_geometry,
+                    OutsideCagePolicy::ClampToBoundary, OutputRefinementPolicy::default(),
+                ).unwrap_err(),
+                DeformationOutputAssemblyError::BindingStampMismatch,
+            );
+
+            let (_, alternate_rest_state) = topology_and_state(3, 0.1);
+            let alternate_rest_certificate = validate_cage_embedding(&f.topology, &alternate_rest_state).unwrap();
+            let alternate_rest = ValidatedCageGeometry::new(
+                &f.topology, &alternate_rest_state, &alternate_rest_certificate,
+            ).unwrap();
+            assert_eq!(
+                AssembledDeformationOutput::build(
+                    f.structured.clone(), &f.validated, &f.source, &f.topology,
+                    &alternate_rest, &f.current_geometry,
+                    OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
+                ).unwrap_err(),
+                DeformationOutputAssemblyError::RestCageMismatch,
+            );
+
+            let (_, alternate_current_state) = topology_and_state(4, 0.5);
+            let alternate_current_certificate = validate_cage_embedding(&f.topology, &alternate_current_state).unwrap();
+            let alternate_current = ValidatedCageGeometry::new(
+                &f.topology, &alternate_current_state, &alternate_current_certificate,
+            ).unwrap();
+            assert_eq!(
+                AssembledDeformationOutput::build(
+                    f.structured, &f.validated, &f.source, &f.topology,
+                    &f.rest_geometry, &alternate_current,
+                    OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
+                ).unwrap_err(),
+                DeformationOutputAssemblyError::CurrentCageMismatch,
+            );
+        }
+
+        #[test]
+        fn public_constructor_rejects_outside_policy_that_differs_from_binding_stamp() {
+            let f = fixture();
+            assert!(matches!(
+                AssembledDeformationOutput::build(
+                    f.structured, &f.validated, &f.source, &f.topology,
+                    &f.rest_geometry, &f.current_geometry,
+                    OutsideCagePolicy::ClampToBoundary, OutputRefinementPolicy::default(),
+                ),
+                Err(DeformationOutputAssemblyError::Refinement(
+                    OutputRefinementError::InvalidSourceSnapshot
+                )),
+            ));
+        }
+    }
+
     #[test]
     fn validates_mixed_commands_and_multiple_subpaths_without_flattening_path() {
         let path = Path2D::new(vec![
