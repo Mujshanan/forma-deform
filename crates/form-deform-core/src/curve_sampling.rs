@@ -168,7 +168,12 @@ pub fn sample_path_curves(
         }
     }
 
-    Ok(CurveSampleSet {\n        policy_version: CURVE_SAMPLING_POLICY_VERSION,\n        policy,\n        segments,\n        total_samples,\n    })
+    Ok(CurveSampleSet {
+        policy_version: CURVE_SAMPLING_POLICY_VERSION,
+        policy,
+        segments,
+        total_samples,
+    })
 }
 
 fn sample_quadratic(
