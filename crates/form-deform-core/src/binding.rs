@@ -453,8 +453,8 @@ fn validate_mapping_domain(
     };
 
     let tolerance = spatial_tolerance(&points)?;
-    let dx = reconstructed.x - source_point.x();
-    let dy = reconstructed.y - source_point.y();
+    let dx = reconstructed.x() - source_point.x();
+    let dy = reconstructed.y() - source_point.y();
     if !dx.is_finite() || !dy.is_finite() || dx.hypot(dy) > tolerance {
         return Err(BindingError::SourcePointReconstructionMismatch { face_index });
     }
