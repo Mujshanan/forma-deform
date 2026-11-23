@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use crate::binding::{
-    BindingError, FaceCoordinates, SourceFeatureBinding, SourceFeatureError,
+    BindingError, BindingStamp, FaceCoordinates, SourceFeatureBinding, SourceFeatureError,
     SourceFeatureLocator, ValidatedCageGeometry,
     enumerate_source_features,
 };
@@ -25,6 +25,7 @@ const WEIGHT_SUM_TOLERANCE: f64 = 1.0e-9;
 pub struct EvaluatedBindingGeometry {
     geometry: Path2D,
     source_stamp: GeometrySnapshotStamp,
+    binding_stamp: BindingStamp,
     cage_geometry_fingerprint: [u8; 32],
     fingerprint: GeometryFingerprint,
     mapped_features: usize,
@@ -37,6 +38,7 @@ impl EvaluatedBindingGeometry {
     pub fn geometry(&self) -> &Path2D { &self.geometry }
     pub fn into_geometry(self) -> Path2D { self.geometry }
     pub fn source_stamp(&self) -> &GeometrySnapshotStamp { &self.source_stamp }
+    pub fn binding_stamp(&self) -> &BindingStamp { &self.binding_stamp }
     pub fn cage_geometry_fingerprint(&self) -> &[u8; 32] { &self.cage_geometry_fingerprint }
     pub fn fingerprint(&self) -> &GeometryFingerprint { &self.fingerprint }
     pub fn mapped_features(&self) -> usize { self.mapped_features }
@@ -119,6 +121,7 @@ pub fn evaluate_binding(
     Ok(EvaluatedBindingGeometry {
         geometry,
         source_stamp: source.stamp(),
+        binding_stamp: binding.stamp().clone(),
         cage_geometry_fingerprint: *current_cage.geometry_fingerprint(),
         fingerprint,
         mapped_features,
