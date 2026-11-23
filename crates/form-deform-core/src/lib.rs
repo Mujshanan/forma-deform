@@ -17,6 +17,7 @@ pub mod lattice_edit;
 pub mod embedding;
 pub mod binding;
 pub mod cage_binding;
+pub mod cage_binding_persistence;
 pub mod binding_persistence;
 pub mod point_location;
 pub mod outside_policy;

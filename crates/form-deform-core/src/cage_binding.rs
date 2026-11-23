@@ -127,6 +127,16 @@ impl CageBinding {
     }
 
     pub fn points(&self) -> &[BoundPoint] { &self.points }
+
+    pub(crate) fn from_persisted_parts(
+        topology_id: DeformationTopologyId,
+        topology_revision: DeformationTopologyRevision,
+        cage_vertex_ids: Vec<ControlPointId>,
+        cage_triangles: Vec<[ControlPointId; 3]>,
+        points: Vec<BoundPoint>,
+    ) -> Self {
+        Self { topology_id, topology_revision, cage_vertex_ids, cage_triangles, points }
+    }
     pub fn cage_vertex_ids(&self) -> &[ControlPointId] { &self.cage_vertex_ids }
     pub fn cage_triangles(&self) -> &[[ControlPointId; 3]] { &self.cage_triangles }
     pub fn topology_id(&self) -> DeformationTopologyId { self.topology_id }
@@ -171,7 +181,7 @@ impl CageBinding {
     }
 }
 
-fn validate_topology_view(
+pub(crate) fn validate_topology_view(
     topology: &DeformationTopology,
     geometry: &ValidatedCageGeometry,
 ) -> Result<(), CageBindingError> {
@@ -192,13 +202,13 @@ fn validate_topology_view(
     Ok(())
 }
 
-fn canonical_vertex_ids(topology: &DeformationTopology) -> Vec<ControlPointId> {
+pub(crate) fn canonical_vertex_ids(topology: &DeformationTopology) -> Vec<ControlPointId> {
     let mut ids = topology.control_point_ids().to_vec();
     ids.sort_unstable();
     ids
 }
 
-fn canonical_triangle_identities(
+pub(crate) fn canonical_triangle_identities(
     topology: &DeformationTopology,
 ) -> Result<Vec<[ControlPointId; 3]>, CageBindingError> {
     let mut triangles = Vec::with_capacity(topology.face_count());
