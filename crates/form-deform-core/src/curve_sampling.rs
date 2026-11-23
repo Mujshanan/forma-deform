@@ -595,10 +595,16 @@ mod tests {
             Err(CurveSamplingError::PerCurveSampleBudgetExceeded { command_index: 1 }),
         );
 
+        let two_curves = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::QuadraticTo { control: point(0.5, 0.0), to: point(1.0, 0.0) },
+            PathCommand::QuadraticTo { control: point(2.0, 1.0), to: point(3.0, 0.0) },
+        ]).unwrap();
         let mut total_limited = policy(0.000_001);
-        total_limited.max_total_samples = 2;
+        total_limited.max_samples_per_curve = 3;
+        total_limited.max_total_samples = 3;
         assert_eq!(
-            sample_path_curves(&path, total_limited),
+            sample_path_curves(&two_curves, total_limited),
             Err(CurveSamplingError::TotalSampleBudgetExceeded),
         );
     }
