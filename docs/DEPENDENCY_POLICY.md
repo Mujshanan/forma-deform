@@ -38,7 +38,7 @@ The adapters and SDK are intentionally retained during this isolation step. This
 Run:
 
 ```sh
-./scripts/check-core-dependencies.sh
+bash scripts/check-core-dependencies.sh
 ```
 
 The check verifies that:
