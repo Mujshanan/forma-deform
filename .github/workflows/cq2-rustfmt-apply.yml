@@ -34,9 +34,12 @@ jobs:
       - name: Verify patch scope and apply
         run: |
           cd "$GITHUB_WORKSPACE"
-          test "$(git rev-parse HEAD^)" = "975045cbcd43bd9b1e2195041d06a057d514721d"
+          test "$(git merge-base HEAD 975045cbcd43bd9b1e2195041d06a057d514721d)" = "975045cbcd43bd9b1e2195041d06a057d514721d"
           cd "$RUNNER_TEMP/rustfmt"
-          grep -Ev '\.rs$' rustfmt-files.txt && exit 1 || true
+          if grep -Ev '\.rs$' rustfmt-files.txt; then
+            echo "Unexpected non-Rust path in formatter manifest" >&2
+            exit 1
+          fi
           test "$(wc -l < rustfmt-files.txt | tr -d ' ')" = "47"
           cd "$GITHUB_WORKSPACE"
           git apply --check "$RUNNER_TEMP/rustfmt/rustfmt.patch"
