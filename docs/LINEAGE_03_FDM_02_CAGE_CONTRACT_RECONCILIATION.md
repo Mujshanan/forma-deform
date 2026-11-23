@@ -130,8 +130,8 @@ The PR #40 `FdmDocument.cage_bindings` field was deliberately not copied. Both P
 ## 8. Current branch and PR status
 
 - PR #47 remains a draft and is not merged.
-- The integration branch is 106 commits ahead and 0 behind its declared FDM-02.1 base.
-- Current code head: `b4ae0fde9bf92f1a8a84871abbb2bd4fa7b2d111`.
-- CI is running on the current head; the preceding point-binding host-adapter head passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
+- The integration branch is 107 commits ahead and 0 behind its declared FDM-02.1 base.
+- Current integrated head: `0cbbefc758122f08224b60055a80314577deca0e`.
+- GitHub Actions run [#45160021180](https://github.com/Mujshanan/forma-deform/actions/runs/45160021180) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
 - PR #47 remains a draft and is not merged.
 - PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line. Their semantic work is ported into the integration branch, but the original PRs have not been closed or modified.
