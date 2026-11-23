@@ -1,10 +1,13 @@
 //! Host-neutral interfaces for deterministic FDM composition evaluation.
 //!
-//! This module defines evaluator and value contracts only. Planning and execution
-//! are implemented in later M1.3 slices. It does not schedule host work or mutate
-//! AniCraft geometry.
+//! The operator trait is the single extension point for deformation algorithms.
+//! Dispatch through `evaluate_operator` to enforce definition, source, coordinate,
+//! input-kind and output-kind contracts around a pure operator invocation. This
+//! module does not schedule host work or mutate AniCraft geometry.
 
 use crate::evaluation_contract::{DependencyStamp, EvaluationRequest};
+use crate::geometry::{require_compatible_coordinate_spaces, GeometryInput};
+use crate::host_contract::HostTargetRef;
 use crate::path2d::Path2D;
 use crate::persistence::{DeformationDefinition, DeformationKind, GeometryValueKind};
 
@@ -52,7 +55,7 @@ pub enum NodeValue {
 }
 
 /// Read-only context supplied to every operator invocation. The request carries
-/// the immutable source snapshots, time sample, model revision and dependencies.
+/// immutable source snapshots, time sample, model revision and dependencies.
 pub struct OperatorContext<'a> {
     request: &'a EvaluationRequest,
 }
@@ -65,6 +68,19 @@ impl<'a> OperatorContext<'a> {
 
     pub fn request(&self) -> &'a EvaluationRequest { self.request }
     pub fn dependencies(&self) -> &'a [DependencyStamp] { self.request.dependencies() }
+
+    /// Resolve the immutable root snapshot for an operator's authored target.
+    /// Intermediate composition values remain explicit inputs and are not
+    /// silently substituted for the host-owned source snapshot.
+    pub fn source_geometry(
+        &self,
+        target: &HostTargetRef,
+    ) -> Result<GeometryInput<'a>, EvaluationInterfaceError> {
+        let snapshot = self.request.sources().iter()
+            .find(|source| source.target() == target)
+            .ok_or(EvaluationInterfaceError::MissingSourceGeometry)?;
+        GeometryInput::new(snapshot).map_err(|_| EvaluationInterfaceError::InvalidSourceGeometry)
+    }
 }
 
 /// Plug-in implementation for one authored deformation kind.
@@ -72,6 +88,7 @@ impl<'a> OperatorContext<'a> {
 /// Implementations must be deterministic for identical definition, input,
 /// request and algorithm version. They must be pure with respect to host state:
 /// no document reads, writes, global playhead access or hidden mutable cache.
+/// Call through `evaluate_operator` so the surrounding contracts are checked.
 pub trait DeformerOperator: Send + Sync {
     fn kind(&self) -> DeformationKind;
     fn algorithm_id(&self) -> &'static str;
@@ -114,6 +131,13 @@ pub enum EvaluationInterfaceError {
     InvalidOperatorVersion,
     InvalidNodeOutputCardinality,
     IncompatibleValueKinds,
+    InvalidDefinition,
+    DefinitionKindMismatch,
+    MissingSourceGeometry,
+    InvalidSourceGeometry,
+    CoordinateSpaceMismatch,
+    InputKindMismatch,
+    OutputKindMismatch,
 }
 
 impl std::fmt::Display for EvaluationInterfaceError {
@@ -123,6 +147,20 @@ impl std::fmt::Display for EvaluationInterfaceError {
 }
 impl std::error::Error for EvaluationInterfaceError {}
 
+/// Distinguishes a rejected invocation contract from an algorithm's own failure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperatorInvocationError {
+    Contract(EvaluationInterfaceError),
+    Operator(OperatorFailure),
+}
+
+impl std::fmt::Display for OperatorInvocationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FDM operator invocation failed: {self:?}")
+    }
+}
+impl std::error::Error for OperatorInvocationError {}
+
 fn require_id(value: &str) -> Result<(), EvaluationInterfaceError> {
     if value.trim().is_empty() {
         Err(EvaluationInterfaceError::EmptyIdentifier)
@@ -131,12 +169,57 @@ fn require_id(value: &str) -> Result<(), EvaluationInterfaceError> {
     }
 }
 
-/// Validate the metadata exposed by an operator before it is admitted to a run.
+/// Validate stable operator metadata before it is admitted to a run.
 pub fn validate_operator(operator: &dyn DeformerOperator) -> Result<(), EvaluationInterfaceError> {
     if operator.algorithm_id().trim().is_empty() || operator.algorithm_version() == 0 {
         return Err(EvaluationInterfaceError::InvalidOperatorVersion);
     }
     Ok(())
+}
+
+/// Execute one operator with mandatory preflight and postflight validation.
+///
+/// This is deliberately a single-node boundary, not a graph scheduler. It
+/// validates that the authored definition, selected operator, immutable source
+/// snapshot and typed intermediate value agree. The operator remains responsible
+/// for algorithm-specific parameter and numerical validation.
+pub fn evaluate_operator(
+    operator: &dyn DeformerOperator,
+    definition: &DeformationDefinition,
+    input: &GeometryValue,
+    context: &OperatorContext<'_>,
+) -> Result<GeometryValue, OperatorInvocationError> {
+    definition.validate().map_err(|_| OperatorInvocationError::Contract(
+        EvaluationInterfaceError::InvalidDefinition
+    ))?;
+    validate_operator(operator).map_err(OperatorInvocationError::Contract)?;
+
+    if operator.kind() != definition.kind() {
+        return Err(OperatorInvocationError::Contract(
+            EvaluationInterfaceError::DefinitionKindMismatch
+        ));
+    }
+    if input.kind() != definition.input_kind() {
+        return Err(OperatorInvocationError::Contract(
+            EvaluationInterfaceError::InputKindMismatch
+        ));
+    }
+
+    let source = context.source_geometry(definition.target())
+        .map_err(OperatorInvocationError::Contract)?;
+    require_compatible_coordinate_spaces(definition.coordinate_space(), source.coordinate_space())
+        .map_err(|_| OperatorInvocationError::Contract(
+            EvaluationInterfaceError::CoordinateSpaceMismatch
+        ))?;
+
+    let output = operator.evaluate(definition, input, context)
+        .map_err(OperatorInvocationError::Operator)?;
+    if output.kind() != definition.output_kind() {
+        return Err(OperatorInvocationError::Contract(
+            EvaluationInterfaceError::OutputKindMismatch
+        ));
+    }
+    Ok(output)
 }
 
 #[cfg(test)]
