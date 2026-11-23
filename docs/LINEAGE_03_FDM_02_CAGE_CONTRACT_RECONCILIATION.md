@@ -98,20 +98,26 @@ The canonical validator remains a single implementation in `embedding.rs`. FDM-0
 
 ### LINEAGE-03.C — generic point-binding adapter port
 
-1. Replace `CageEmbedding` inputs with `DeformationTopology`, `DeformationControlState`, and the canonical certified geometry.
-2. Keep stable point IDs and deterministic shared-edge selection by sorted stable vertex-ID support.
-3. Preserve the current FDM-02.7 triangle-barycentric behavior; do not silently introduce quad support or outside extrapolation in this port.
-4. Reuse shared face-support evaluation rather than copying barycentric math into another engine.
-5. Port persistent point-binding validation onto typed topology identity/revision and the canonical source snapshot contract.
-6. Keep stale records fail-closed; no automatic rebind, geometry repair, or host document mutation.
+**Implemented on the canonical integration branch.**
+
+- Replaced the indexed `CageEmbedding` runtime input with `DeformationTopology` and `ValidatedCageGeometry`.
+- Preserved triangle-barycentric point attachments and stable point IDs.
+- Added an explicit point-location tie-break policy. Path2D binding retains lowest-face-index behavior; generic point bindings select the lexicographically lowest sorted stable vertex-ID support.
+- Kept generic point bindings triangle-only and fail-closed outside the cage. No implicit quad triangulation, clamping, or extrapolation was introduced.
+- Added versioned `PersistedCageBinding` JSON with typed topology identity/revision, stable cage vertex/triangle identities, source snapshot stamp, coordinate-space descriptor, and point supports.
+- Persistence validation checks source target/generation, geometry revisions/fingerprint, topology identity/revision, cage vertex/triangle identity, exact point-ID coverage, and source-point reconstruction against a freshly certified rest cage.
+- Added `CageBindingHostAdapter` with a separate point-binding payload slot. The host owns atomic document transactions, dirty state, save/load, and undo/redo; the FDM core never mutates the host document.
+- Generic point bindings use `GeometrySnapshotStamp` plus `CoordinateSpaceDescriptor`, not a Path2D-only snapshot, so they can bind host-supplied point arrays from other geometry payloads.
+- Enabled serde_json's `float_roundtrip` feature so persisted barycentric `f64` values survive JSON round-trips without changing their binary values.
+
+The PR #40 `FdmDocument.cage_bindings` field was deliberately not copied. Both Path2D and generic point-binding families use separate FDM-owned payload envelopes and host adapter slots, leaving the host free to choose document storage without creating two competing persistence owners.
 
 ### LINEAGE-03.D — integration verification
 
-- Test generic point binding and Path2D feature binding against the same certified topology.
-- Verify triangle and quad Path2D mappings, stable-ID shared-edge tie-breaking, disconnected components if accepted, and bow-tie rejection.
-- Verify persisted point bindings reject source target/generation, source fingerprint, vertex-set, and topology changes.
-- Verify current cage poses are validated before evaluation and that outputs are absolute and non-mutating.
-- Run rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds on the final integration head.
+- Runtime point-binding tests cover stable-ID shared-edge selection, identity at rest, absolute evaluation on a changed cage pose, outside-point rejection, duplicate point IDs, and explicit rejection of quad cages.
+- Persistence tests cover exact JSON round-trip, current-source validation, source revision staleness, point reconstruction mismatch, invalid supports/weights, cage topology changes, and host adapter persist/load.
+- FDM-03 embedding tests cover triangles/quads, disconnected manifold components, multiple boundary loops, bow-tie vertex rejection, and shared-vertex collinear overlap.
+- Latest integrated CI run [#45159333217](https://github.com/Mujshanan/forma-deform/actions/runs/45159333217) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
 
 ## 7. Explicit non-goals
 
@@ -123,8 +129,8 @@ The canonical validator remains a single implementation in `embedding.rs`. FDM-0
 ## 8. Current branch and PR status
 
 - PR #47 remains a draft and is not merged.
-- The integration branch is 86 commits ahead and 0 behind its declared FDM-02.1 base.
-- Integrated head: `aeef380d1256916df082b29202c5be5d13925daf`.
-- GitHub Actions run [#45157173045](https://github.com/Mujshanan/forma-deform/actions/runs/45157173045) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
-- PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line.
-- FDM-02.6's validation semantics have been ported into the canonical generic validator. FDM-02.7's generic point-binding adapter and persistence model remain to be ported; their original branches are unchanged.
+- The integration branch is 103 commits ahead and 0 behind its declared FDM-02.1 base.
+- Integrated head: `9621275c6290201abcc841413883a90db48a681f`.
+- GitHub Actions run [#45159333217](https://github.com/Mujshanan/forma-deform/actions/runs/45159333217) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
+- PR #47 remains a draft and is not merged.
+- PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line. Their semantic work is ported into the integration branch, but the original PRs have not been closed or modified.
