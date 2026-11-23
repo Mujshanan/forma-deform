@@ -925,6 +925,14 @@ mod tests {
             MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
             OutsideCagePolicy::BoundedExtrapolation { max_distance: 0.0 }),
             Err(BindingError::InvalidOutsidePolicyParameter)));
+
+        let mut legacy = BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence).unwrap();
+        legacy.schema_version = LEGACY_BINDING_SCHEMA_VERSION;
+        assert_eq!(legacy.validate(), Ok(()));
+        legacy.outside_policy = OutsideCagePolicy::ClampToBoundary;
+        assert_eq!(legacy.validate(), Err(BindingError::InvalidStamp));
     }
 
     #[test]
