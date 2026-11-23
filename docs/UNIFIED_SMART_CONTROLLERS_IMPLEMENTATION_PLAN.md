@@ -500,3 +500,79 @@ The V1 characterization suite covers legacy three-anchor interpolation, easing, 
 Required test files include `v1_characterization_tests.rs`, `migration_roundtrip_tests.rs`, `angle_interpolation_tests.rs`, `pose2d_tests.rs`, `composition_conflict_tests.rs`, `freshness_tests.rs`, `diagnostic_registry_tests.rs`, `graph_tests.rs` (including unchecked-cycle defence), `no_op_graph_tests.rs` and `dependency_boundary_tests.rs`.
 
 The implementation sequence is therefore: Phase 0 characterization; Phase 1 model/schema/diagnostics/migration plus pure range/frame mapping; Phase 2 pose mapping; Phase 3 graph/evaluation; Phase 4 composition; Phase 5 adapter integration; Phase 6A core mapping extensions; Phase 6B host authoring only after capability verification.
+
+
+---
+
+## 11. Phase 0.1 reconciliation — V1 plan and current architecture
+
+**Review date:** 2026-11-23  
+**Source baseline:** `docs/SMART_CONTROLLER_PLAN.md` at blob `06ccbc7d8cfa85341be903c6ef2b3133b520fed3` on `main`.  
+**Current implementation baseline:** `main` at `e7c7fef4e82345af311370426450146a4795523d`.  
+**Purpose:** preserve V1 compatibility and host constraints while correcting the proposed file/phase checklist to reflect the repository. This is a documentation reconciliation, not a source change or authorization to claim host functionality.
+
+### 11.1 V1 facts that remain normative
+
+The following constraints from `SMART_CONTROLLER_PLAN.md` remain valid and are carried forward:
+
+1. **V1 product scope is Slider plus deterministic, on-demand preview.** The plugin reads a driver angle through the verified `bone.info` command or accepts an explicit `manual_value`; it calculates and logs a preview record.
+2. **V1 does not mutate the document or timeline.** It does not apply a frame, write a bone/property, persist controller data, or run continuously during playback.
+3. **Endpoint semantics are compatibility requirements.** Exclusive `[start, end)` is the default; inclusive `[start, end]` is supported when the final pose is distinct. Reversed rotation endpoints are valid and reverse mapping direction. Slider validation rejects `end <= start`; the low-level frame helper's degenerate behavior is not permission to accept an invalid Slider configuration.
+4. **Manual input is first-class and deterministic.** When supplied, it bypasses the bone query. A failed or malformed bone query must fail closed; never silently substitute zero.
+5. **Host/API boundaries remain strict.** The verified plugin ABI is `ac::plugin!(MANIFEST, run)` with `fn run(&serde_json::Value) -> Result<(), String>`. Use only verified SDK commands and response shapes; do not infer timeline, transform-write, persistence or continuous-playback APIs.
+6. **Deferred V1 roadmap remains deferred.** Transform application, presets/durable bindings and external/MCP-driven interactive updates require separately verified host capabilities and explicit scope approval. The existence of pure calculation code does not establish host application capability.
+
+### 11.2 V1 facts that are historical rather than current architecture
+
+The following statements in the V1 document describe the earlier implementation stage and must not be used as the current source layout or architecture:
+
+- The original four-file layout (`legacy.rs`, `model.rs`, `validation.rs`, `mapping.rs`, `preview.rs`) is not the complete current architecture. The canonical core now also owns typed IDs/values, input contracts, schema/migration, mapping submodules, graph/evaluator, contributions, composition and diagnostics.
+- The phrase “new logic is split into model.rs, validation.rs, mapping.rs and preview.rs” describes the V1 split, not the present canonical module decomposition.
+- The V1 three-anchor API is retained in `legacy.rs` for compatibility. It is not the canonical model and must not be expanded into a second controller engine.
+- The V1 `Params`/Slider preview path remains a compatibility path. Its presence does not make it the persistence or authoring model for unified controllers.
+
+### 11.3 Current implementation mapping
+
+| V1 concern | Current owner/evidence | Reconciliation |
+|---|---|---|
+| Three-anchor binding behavior | `smart-controller-core/src/legacy.rs` | Preserve as compatibility API; migrate through canonical converters where supported. |
+| V1 Params/Mode configuration | `smart-controller-core/src/model.rs` | Keep as legacy preview input; do not treat as canonical controller schema. |
+| Rotation normalization and frame endpoints | `mapping.rs`, `mapping/range.rs`, `mapping/frame.rs`, `preview.rs` | Preserve V1 endpoint/reversed-range behavior with characterization tests. |
+| Pure transform calculation | `preview.rs` and canonical typed mapping/value facilities | Calculation-only; host write/apply remains unsupported until verified. |
+| Canonical controller and typed bindings | `canonical.rs`, `ids.rs`, `value.rs`, `contribution.rs` and related modules | Authoritative new model; do not recreate V1 model as a second canonical path. |
+| Inputs and freshness/fallback | `input.rs` | Core contracts exist; adapters supply snapshots and cannot fabricate freshness. |
+| DAG and deterministic evaluation | `graph.rs`, `evaluator.rs` | Already implemented in core; do not create a second evaluator under the old proposed `evaluation.rs` filename. |
+| Target composition | `composition.rs` | Already implemented as a separate deterministic post-pass. |
+| Host preview and target capability planning | `plugins/smart-controller/src/adapter.rs`, `input_provider.rs`, `preview_plan.rs`, `targets.rs`, `compatibility.rs` | Partial adapter capability only; preview planning is not target mutation or undo-aware application. |
+| AniCraft command and document surface | `anicraft-plugin-sdk/src/lib.rs` plus verified host command implementations | Command/document reads exist; no verified generic durable plug-in document extension, timeline write, or continuous lifecycle API has been established by this review. |
+
+### 11.4 Phase status and sequencing correction
+
+Use the Phase 0 current-main status matrix in `docs/SMART_CONTROLLERS_AUDIT.md` as the implementation evidence register. The authoritative status is:
+
+- **Phase 0:** complete for source/fixture/adapter audit; native in-app smoke remains separate.
+- **Phase 1:** largely implemented in the canonical core. Preserve the legacy API; do not recreate proposed files that already have equivalent owners.
+- **Phase 2:** partial on `main`. Input contracts and typed `Pose2D` records exist, but canonical five-pose joystick region dispatch, input-space interpolation and the required boundary behavior remain gaps.
+- **Phase 3:** DAG evaluation is implemented in the core.
+- **Phase 4:** typed contributions and deterministic composition are implemented in the core.
+- **Phase 5:** host adapter is partial. It does not establish complete authoring, target application, playback or persistence.
+- **Phase 6A:** generic grid/triangulated mapping primitives are an advanced core extension. Their isolated port is on `feat/unified-smart-controllers-phase2a-core-mapping`, not `main`; CI run [45125175442](https://github.com/Mujshanan/forma-deform/actions/runs/45125175442) passed on commit `675c83a5808bd8620bf89432b0d422c2c5e433d8`. Treat the branch as reviewable work, not shipped functionality.
+- **Phase 6B:** host authoring remains contingent on a new host-capability audit and verified APIs.
+- **Phase 7:** partially evidenced; full native smoke, 2D joystick acceptance, performance baseline and release sign-off remain outstanding.
+
+**Sequencing clarification:** the plan's Phase 2 is the canonical five-pose joystick contract. General arbitrary triangulated/grid mapping belongs to Phase 6A. The isolated branch name containing `phase2a` is a work-branch label only; it does not redefine the plan's phase numbering or satisfy Phase 2 acceptance. Do not count generic grid/mesh tests as proof of five-pose joystick behavior.
+
+### 11.5 Phase 0.1 exit
+
+| Check | Result |
+|---|---|
+| V1 Slider preview scope and non-mutation guarantee retained | Complete |
+| Endpoint, reversed-range and manual-input semantics retained | Complete |
+| V1 legacy API classified as compatibility surface | Complete |
+| Current canonical core owners identified | Complete |
+| V1 pure transform calculation distinguished from host application | Complete |
+| Host API and persistence/playback claims bounded by verified evidence | Complete |
+| Plan phase/file checklist reconciled with current implementation | Complete |
+| Production source or host code changed by this review | No |
+
+**Phase 0.1 reconciliation review: complete.** The original V1 plan remains a compatibility specification for Slider preview and host boundaries; the unified plan remains the target architecture. The current canonical core is the implementation baseline. The next Phase 2 work must implement only the missing canonical joystick behavior over the established mapper seam, while the Phase 6A advanced mapping port remains a separately reviewed extension. No host persistence, authoring UI, target mutation or continuous playback capability is implied.
