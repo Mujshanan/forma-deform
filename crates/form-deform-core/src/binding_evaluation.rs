@@ -9,9 +9,10 @@ use std::collections::BTreeMap;
 
 use crate::binding::{
     BindingError, FaceCoordinates, SourceFeatureBinding, SourceFeatureError,
-    SourceFeatureLocator, ValidatedBindingRecord, ValidatedCageGeometry,
+    SourceFeatureLocator, ValidatedCageGeometry,
     enumerate_source_features,
 };
+use crate::binding_persistence::ValidatedBindingRecord;
 use crate::host_contract::{
     ContractError, GeometryFingerprint, GeometrySnapshot, GeometrySnapshotStamp,
 };
@@ -378,7 +379,7 @@ mod tests {
         for feature in enumerate_source_features(source.payload()).unwrap() {
             let status = match locate_point(feature.point, &rest_geometry).unwrap() {
                 PointLocationOutcome::Located(location) => {
-                    let face = topology.face_at(location.face_index).unwrap();
+                    let face = topology.face_at(location.face_index as usize).unwrap();
                     SourceFeatureBinding::Mapped(crate::binding::MappingRecord {
                         locator: feature.locator,
                         face_index: location.face_index as u32,
