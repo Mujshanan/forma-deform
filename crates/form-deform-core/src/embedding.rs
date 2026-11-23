@@ -10,7 +10,7 @@ use crate::topology::{
     TopologyView,
 };
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub const MAX_EMBEDDING_POINTS: usize = 100_000;
 pub const MAX_EMBEDDING_FACES: usize = 100_000;
@@ -62,6 +62,8 @@ pub struct CageEmbeddingCertificate {
     control_state_revision: ControlStateRevision,
     geometry_fingerprint: [u8; 32],
     face_count: usize,
+    connected_component_count: usize,
+    boundary_loop_count: usize,
 }
 
 impl CageEmbeddingCertificate {
@@ -70,6 +72,8 @@ impl CageEmbeddingCertificate {
     pub fn control_state_revision(&self) -> ControlStateRevision { self.control_state_revision }
     pub fn geometry_fingerprint(&self) -> &[u8; 32] { &self.geometry_fingerprint }
     pub fn face_count(&self) -> usize { self.face_count }
+    pub fn connected_component_count(&self) -> usize { self.connected_component_count }
+    pub fn boundary_loop_count(&self) -> usize { self.boundary_loop_count }
 
     /// Check that the certificate still describes this exact cage state.
     pub fn matches(
@@ -102,6 +106,7 @@ pub enum EmbeddingError {
     DegenerateFace(usize),
     InconsistentFaceWinding(usize),
     NonConvexQuad(usize),
+    InvalidVertexLink(u64),
     NonManifoldEdge(u64, u64),
     InvalidSharedEdgeWinding(usize, usize),
     DisconnectedFaces(usize),
@@ -219,8 +224,9 @@ pub fn validate_cage_embedding(
     reject_near_coincident_points(&ordered_points, tolerance)?;
     let faces = build_faces(topology, &positions, tolerance)?;
     validate_shared_edge_incidence(&faces)?;
-    validate_face_connectivity(&faces)?;
-    validate_boundary_and_point_usage(&faces, point_ids)?;
+    validate_vertex_links(&faces, point_ids)?;
+    let connected_component_count = count_face_components(&faces);
+    let boundary_loop_count = validate_boundary_and_point_usage(&faces, point_ids)?;
     validate_pairwise_embedding(&faces, tolerance)?;
 
     Ok(CageEmbeddingCertificate {
@@ -229,6 +235,8 @@ pub fn validate_cage_embedding(
         control_state_revision: control_state.revision,
         geometry_fingerprint: geometry_fingerprint(topology, control_state)?,
         face_count,
+        connected_component_count,
+        boundary_loop_count,
     })
 }
 
@@ -405,10 +413,55 @@ fn validate_shared_edge_incidence(faces: &[FaceGeometry]) -> Result<(), Embeddin
     Ok(())
 }
 
-fn validate_boundary_and_point_usage(
+fn validate_vertex_links(
     faces: &[FaceGeometry],
     topology_point_ids: &[ControlPointId],
 ) -> Result<(), EmbeddingError> {
+    let mut links: HashMap<ControlPointId, BTreeMap<ControlPointId, BTreeSet<ControlPointId>>> =
+        HashMap::new();
+
+    for face in faces {
+        let ids = face.ids.as_slice();
+        for index in 0..ids.len() {
+            let center = ids[index];
+            let previous = ids[(index + ids.len() - 1) % ids.len()];
+            let next = ids[(index + 1) % ids.len()];
+            let link = links.entry(center).or_default();
+            link.entry(previous).or_default().insert(next);
+            link.entry(next).or_default().insert(previous);
+        }
+    }
+
+    for point_id in topology_point_ids {
+        let link = links.get(point_id).ok_or(EmbeddingError::InvalidVertexLink(point_id.get()))?;
+        let start = link.keys().next().copied()
+            .ok_or(EmbeddingError::InvalidVertexLink(point_id.get()))?;
+        let mut visited = BTreeSet::new();
+        let mut stack = vec![start];
+        let mut endpoints = 0usize;
+
+        while let Some(node) = stack.pop() {
+            if !visited.insert(node) { continue; }
+            let neighbors = link.get(&node)
+                .ok_or(EmbeddingError::InvalidVertexLink(point_id.get()))?;
+            if neighbors.is_empty() || neighbors.len() > 2 {
+                return Err(EmbeddingError::InvalidVertexLink(point_id.get()));
+            }
+            if neighbors.len() == 1 { endpoints += 1; }
+            stack.extend(neighbors.iter().copied());
+        }
+
+        if visited.len() != link.len() || (endpoints != 0 && endpoints != 2) {
+            return Err(EmbeddingError::InvalidVertexLink(point_id.get()));
+        }
+    }
+    Ok(())
+}
+
+fn validate_boundary_and_point_usage(
+    faces: &[FaceGeometry],
+    topology_point_ids: &[ControlPointId],
+) -> Result<usize, EmbeddingError> {
     let mut edge_faces: EdgeIncidenceMap = HashMap::new();
     let mut referenced = HashSet::new();
 
@@ -450,28 +503,34 @@ fn validate_boundary_and_point_usage(
         return Err(EmbeddingError::InvalidBoundary);
     }
 
-    let start = outgoing.keys().copied().min().ok_or(EmbeddingError::InvalidBoundary)?;
-    let mut current = start;
-    let mut visited = HashSet::with_capacity(boundary.len());
-    loop {
-        if !visited.insert(current) {
+    let mut unvisited: BTreeSet<_> = outgoing.keys().copied().collect();
+    let mut loop_count = 0usize;
+    while let Some(start) = unvisited.iter().next().copied() {
+        let mut current = start;
+        let mut loop_vertices = BTreeSet::new();
+        loop {
+            if !loop_vertices.insert(current) {
+                if current == start { break; }
+                return Err(EmbeddingError::InvalidBoundary);
+            }
+            unvisited.remove(&current);
+            current = *outgoing.get(&current).ok_or(EmbeddingError::InvalidBoundary)?;
             if current == start { break; }
+            if !unvisited.contains(&current) {
+                return Err(EmbeddingError::InvalidBoundary);
+            }
+        }
+        if loop_vertices.len() < 3 {
             return Err(EmbeddingError::InvalidBoundary);
         }
-        current = *outgoing.get(&current).ok_or(EmbeddingError::InvalidBoundary)?;
-        if current == start { break; }
-        if visited.len() >= boundary.len() {
-            return Err(EmbeddingError::InvalidBoundary);
-        }
+        loop_count += 1;
     }
-    if visited.len() != boundary.len() {
-        return Err(EmbeddingError::InvalidBoundary);
-    }
-    Ok(())
+    if loop_count == 0 { return Err(EmbeddingError::InvalidBoundary); }
+    Ok(loop_count)
 }
 
-fn validate_face_connectivity(faces: &[FaceGeometry]) -> Result<(), EmbeddingError> {
-    let mut edge_faces: HashMap<(ControlPointId, ControlPointId), Vec<usize>> = HashMap::new();
+fn count_face_components(faces: &[FaceGeometry]) -> usize {
+    let mut edge_faces: HashMap<SharedEdgeKey, Vec<usize>> = HashMap::new();
     for face in faces {
         let ids = face.ids.as_slice();
         for edge in 0..ids.len() {
@@ -481,26 +540,30 @@ fn validate_face_connectivity(faces: &[FaceGeometry]) -> Result<(), EmbeddingErr
             edge_faces.entry(key).or_default().push(face.index);
         }
     }
+
     let mut adjacency = vec![Vec::new(); faces.len()];
     for incident in edge_faces.values().filter(|incident| incident.len() == 2) {
         adjacency[incident[0]].push(incident[1]);
         adjacency[incident[1]].push(incident[0]);
     }
+
     let mut visited = vec![false; faces.len()];
-    let mut stack = vec![0usize];
-    visited[0] = true;
-    while let Some(face) = stack.pop() {
-        for &neighbor in &adjacency[face] {
-            if !visited[neighbor] {
-                visited[neighbor] = true;
-                stack.push(neighbor);
+    let mut component_count = 0usize;
+    for start in 0..faces.len() {
+        if visited[start] { continue; }
+        component_count += 1;
+        visited[start] = true;
+        let mut stack = vec![start];
+        while let Some(face) = stack.pop() {
+            for &neighbor in &adjacency[face] {
+                if !visited[neighbor] {
+                    visited[neighbor] = true;
+                    stack.push(neighbor);
+                }
             }
         }
     }
-    if let Some(index) = visited.iter().position(|visited| !visited) {
-        return Err(EmbeddingError::DisconnectedFaces(index));
-    }
-    Ok(())
+    component_count
 }
 
 fn validate_pairwise_embedding(
@@ -850,6 +913,102 @@ mod tests {
             }).collect(),
         };
         (DeformationTopology::IrregularCage(topology), state)
+    }
+
+    fn custom_cage(
+        topology_id_value: u64,
+        positions: &[(f64, f64)],
+        faces: Vec<TopologyFace>,
+    ) -> (DeformationTopology, DeformationControlState) {
+        let topology_id = DeformationTopologyId::new(topology_id_value).unwrap();
+        let topology_revision = DeformationTopologyRevision::new(1).unwrap();
+        let ids = (1..=positions.len()).map(id).collect::<Vec<_>>();
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: topology_id,
+            revision: topology_revision,
+            control_point_ids: ids,
+            faces,
+        });
+        let state = DeformationControlState {
+            topology_id,
+            topology_revision,
+            revision: ControlStateRevision::new(1).unwrap(),
+            points: positions.iter().enumerate().map(|(index, (x, y))| {
+                ControlPointState {
+                    id: id(index as u64 + 1),
+                    position: point(*x, *y),
+                    pinned: false,
+                }
+            }).collect(),
+        };
+        (topology, state)
+    }
+
+    #[test]
+    fn accepts_disconnected_manifold_components_and_reports_them() {
+        let (topology, state) = custom_cage(
+            20,
+            &[(0.0, 0.0), (2.0, 0.0), (0.0, 2.0), (5.0, 0.0), (7.0, 0.0), (5.0, 2.0)],
+            vec![
+                TopologyFace::Triangle([id(1), id(2), id(3)]),
+                TopologyFace::Triangle([id(4), id(5), id(6)]),
+            ],
+        );
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        assert_eq!(certificate.connected_component_count(), 2);
+        assert_eq!(certificate.boundary_loop_count(), 2);
+    }
+
+    #[test]
+    fn rejects_bow_tie_vertex_with_disconnected_face_links() {
+        let (topology, state) = custom_cage(
+            21,
+            &[(0.0, 0.0), (2.0, 0.0), (1.0, 1.0), (-2.0, 0.0), (-1.0, -1.0)],
+            vec![
+                TopologyFace::Triangle([id(1), id(2), id(3)]),
+                TopologyFace::Triangle([id(1), id(4), id(5)]),
+            ],
+        );
+        assert_eq!(
+            validate_cage_embedding(&topology, &state),
+            Err(EmbeddingError::InvalidVertexLink(1)),
+        );
+    }
+
+    #[test]
+    fn accepts_a_connected_cage_with_an_inner_boundary_loop() {
+        let (topology, state) = custom_cage(
+            22,
+            &[
+                (0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0),
+                (1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0),
+            ],
+            vec![
+                TopologyFace::Quad([id(1), id(2), id(6), id(5)]),
+                TopologyFace::Quad([id(2), id(3), id(7), id(6)]),
+                TopologyFace::Quad([id(3), id(4), id(8), id(7)]),
+                TopologyFace::Quad([id(4), id(1), id(5), id(8)]),
+            ],
+        );
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        assert_eq!(certificate.connected_component_count(), 1);
+        assert_eq!(certificate.boundary_loop_count(), 2);
+    }
+
+    #[test]
+    fn shared_vertex_collinear_edges_must_not_overlap() {
+        let shared = id(1);
+        let first_other = id(2);
+        let second_other = id(3);
+        let origin = point(0.0, 0.0);
+        let first = point(4.0, 0.0);
+        let second = point(2.0, 0.0);
+        assert!(!edge_only_touches_at_shared_vertex(
+            shared, first_other, origin, first,
+            shared, second_other, origin, second,
+            shared,
+            EmbeddingTolerance { spatial: 1.0e-9, area: 1.0e-9 },
+        ));
     }
 
     #[test]
