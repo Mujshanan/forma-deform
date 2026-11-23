@@ -64,10 +64,13 @@ impl PersistedCageBinding {
         target: HostTargetRef,
         reference_geometry: GeometrySnapshotStamp,
         coordinate_space: CoordinateSpaceDescriptor,
-        cage_vertex_ids: Vec<u64>,
-        cage_triangles: Vec<[u64; 3]>,
+        mut cage_vertex_ids: Vec<u64>,
+        mut cage_triangles: Vec<[u64; 3]>,
         points: Vec<PersistedBoundPoint>,
     ) -> Result<Self, CageBindingPersistenceError> {
+        cage_vertex_ids.sort_unstable();
+        for triangle in &mut cage_triangles { triangle.sort_unstable(); }
+        cage_triangles.sort_unstable();
         let value = Self {
             id: id.into(), revision, target, reference_geometry, coordinate_space,
             cage_vertex_ids, cage_triangles, points,
@@ -114,9 +117,8 @@ impl PersistedCageBinding {
             if !point_ids.insert(point.point_id) {
                 return Err(CageBindingPersistenceError::DuplicatePointId);
             }
-            let mut support = point.cage_vertex_ids;
-            support.sort_unstable();
-            if support[0] == support[1] || support[1] == support[2]
+            let support = point.cage_vertex_ids;
+            if support[0] >= support[1] || support[1] >= support[2]
                 || !triangles.contains(&support) {
                 return Err(CageBindingPersistenceError::InvalidPointSupport);
             }
