@@ -4,7 +4,7 @@ Date: 2026-11-23
 
 ## Status
 
-Implemented on `quality/cq2-d1-controller-validation` and submitted as draft PR #38. Not merged. The implementation is based on the formatting-only branch `quality/cq2-rustfmt-clean`.
+Implemented on `quality/cq2-d1-controller-validation` and submitted as PR #38 (ready for review). Not merged. The implementation is based on the formatting-only branch `quality/cq2-rustfmt-clean`.
 
 ## Scope
 
@@ -51,7 +51,7 @@ These cover multiple simultaneous invalid conditions and assert the existing fir
 
 PR #38: https://github.com/Mujshanan/forma-deform/pull/38
 
-At the time of this report, no submitted PR reviews or inline review threads were returned by GitHub. The PR remains a draft and has not been merged. Merge is intentionally gated on explicit maintainer approval.
+At the time of this report, no submitted PR reviews or inline review threads were returned by GitHub. The PR is ready for review and has not been merged. Merge is intentionally gated on explicit maintainer approval.
 
 ## Behavior-preservation constraints
 
