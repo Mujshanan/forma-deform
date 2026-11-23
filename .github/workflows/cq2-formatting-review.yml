@@ -1,0 +1,28 @@
+name: CQ2 Formatting Review
+
+on:
+  push:
+    branches: [quality/cq2-formatting-review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rustfmt:
+    name: stable rustfmt check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit revision
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Record toolchain
+        run: rustc --version && cargo --version && rustfmt --version
+
+      - name: Check workspace formatting
+        run: cargo fmt --all -- --check
