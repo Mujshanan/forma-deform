@@ -1,3 +1,4 @@
+pub mod advanced;
 pub mod canonical;
 pub mod easing;
 pub mod frame;
