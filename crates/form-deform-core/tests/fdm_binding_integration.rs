@@ -153,7 +153,6 @@ fn fixture() -> (HostBindingContext, PersistedBinding) {
     )
 }
 
-#[derive(Clone)]
 struct MemoryAdapter {
     context: HostBindingContext,
     payload: Option<String>,
