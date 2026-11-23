@@ -1,7 +1,7 @@
 # Forma Deform — Development and Architecture
 
 **Project role:** AniCraft deformation and rig-control tool/plugin.  
-**Status:** prototype and architecture definition; native tool integration is staged and must not be represented as complete.  
+**Status:** prototype and architecture definition; native tool integration is staged and must not be represented as complete. The repository status below distinguishes default-branch content from open or branch-local work.  
 **Canonical scope:** deformation, controller authoring/preview, target bindings, and deformation evaluation.  
 **Non-goal:** a second animation application or a duplicate of AniCraft host infrastructure.
 
@@ -308,3 +308,66 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
+
+
+## 11. Repository status and current evidence (23 November 2026)
+
+This section records the state of the active repository work as distinct from the default-branch source baseline. A PR being open, merged into another feature branch, or green on a parent commit does not mean its work is present on `main`.
+
+### 11.1 Default branch and legacy demo retirement
+
+The latest recorded default-branch commit at this snapshot is `e182e447a9e6b320507982b98069dc90e5b6e323` (`docs: add Flare source-level reuse audit`). The default-branch README previously described the experimental Bun/TypeScript rectangle/timeline demo.
+
+The demo-retirement work is real but branch-scoped:
+
+- PR #52 retired the obsolete TypeScript rectangle/timeline demo, its tests and HTML/CSS shell, package/TypeScript configuration, and Bun CI steps; it also repaired Rust compilation errors and reported workspace tests plus all three release WASM builds passing on its exact head.
+- PR #52 merged into the LEG-01.4 branch, not directly into default `main`.
+- PR #54 carried the retirement into the FDM-04 branch chain and added the adaptive Path2D sampling benchmark/quality gate. Its reported CI passed on exact head `7aba19b31dbd030d7cd32b83832aed5ee32002cc`.
+- Therefore, do not claim that the default branch has completed the retirement until the relevant branch chain is integrated into `main`. The three historical Rust/WASM adapters remain separate from the demo retirement and are not deleted by it.
+
+### 11.2 FDM core and output-contract work
+
+- PR #60 (FDM-05.4) is an open integration-readiness/output-contract hardening change. Its reported exact-head CI covers workspace tests, the adaptive-sampling benchmark smoke test and all three release WASM builds. It is not merged.
+- PR #47 remains the FDM-03 integration/regression branch. Its description records V1 persistent-binding tests, V2 operator-engine integration and V3 cage-contract reconciliation; branch lineage and required follow-up verification must be checked before treating FDM-03 as complete.
+- PR #54 is the canonical FDM-04.4 benchmark/quality-gate candidate in its branch chain; superseded PR #53 must not be substituted.
+- Do not infer that any open FDM branch is part of the default branch or that a green parent commit validates a later PR head.
+
+### 11.3 Adapter retirement and formatting
+
+- PR #49 records the LEG-01.4 adapter disposition and retirement gates. It is documentation-only and remains open.
+- The old Form Deform command adapter is a retirement candidate only after native FDM parity. Bone Query remains diagnostic tooling for now; the vendored ABI SDK is retired last. Smart Controller core compatibility/migration modules are not to be removed as part of command-adapter retirement.
+- PR #68 records FDM-FMT-01.1 only: a 69-file rustfmt-diff baseline, crate/ownership grouping, and six overlapping files deferred pending stable lineage. It does not format Rust files. The workspace formatting remediation remains a separate, explicitly staged maintenance task; do not fold it into unrelated correctness or documentation changes.
+
+### 11.4 Native AniCraft integration and S0 evidence gate
+
+The current FDM-06.x work is a sequence of open documentation, source-audit, specification and planning PRs. The AniCraft source baseline is pinned to `2df7775907d1458ce653e7e6314ec8a5d7d565f5`; re-pin and re-audit if the host changes.
+
+The sequence has established or proposed:
+
+- Host-owned document/target identity, versioned extension persistence, immutable evaluation snapshots, mutation ownership, invalidation and stale-result acceptance contracts.
+- A source-pinned host conformance plan and target-identity/revision lifecycle audit.
+- A readiness finding that runtime implementation is **not ready** while public mutable `Session.doc`/`Document` APIs, settlement side effects, identity-ledger/history gaps and atomic publication evidence remain unresolved.
+- A mutation-boundary/state-ownership specification and a file-by-file host transaction/persistent-state implementation plan.
+- A command registry and workspace-consumer audit, including 395 unique command IDs, 52 command-spec sources, and the identified consumer families.
+
+The latest S0 addendum is PR #80, stacked after PR #79. It records additional source-located evidence, including all 36 inline callback entries missed by the first locator, first-order effect classes, a first-pass effect graph for the 131 `mutates=false` command entries, and the independently verified uploaded AniCraft archive/source baseline. The addendum also records that a `mutates=false` outer `Session::execute` path can still settle persistent cut/floating state without the normal snapshot/history path, and that nested execution and Publisher callbacks have different execution contexts.
+
+**S0 remains OPEN and is not ready for closure.** The current evidence does not establish the complete transitive callback/effect graph, compiler-backed verification of all relevant workspace consumers, or successful host CI on the pinned source baseline. The command inventory and planned test IDs are not substitutes for implemented tests. Do not state that S0 is closed, do not begin runtime implementation on the basis of these audit documents, and do not treat any PR as implementation or merge authorization.
+
+### 11.5 Non-negotiable semantic and change-control invariants
+
+1. Smart Controller binding evaluation and Form Deform pin evaluation remain independent under CCC-01.5; no implicit multi-source composition.
+2. Native Asset Warp remains host-owned and unchanged by the current FDM scope.
+3. Preview remains on demand and non-mutating; continuous playback evaluation is not established.
+4. AniCraft owns document state, mutation transactions, identity, persistence, history, scheduling and result publication.
+5. FDM runtime implementation remains gated on closure of the required evidence/design blockers and separate explicit authorization.
+6. Existing PR branches and their lineage must not be rewritten or merged without explicit authorization.
+7. A CI result is valid only for the exact commit SHA and workflow run it names; do not transfer it to a later head or a different branch.
+
+### 11.6 Immediate evidence sequence
+
+1. Finish the callback-level transitive effect graph and record unresolved edges explicitly.
+2. Reconcile the original 36-row callback manifest with the current source-located entries.
+3. Complete compiler-backed consumer verification across the relevant AniCraft workspace surfaces.
+4. Obtain successful host CI evidence on the pinned baseline (or re-pin and repeat the audit if the baseline changes).
+5. Submit the complete package for formal S0 closure review. Until that review accepts the evidence, S0 remains OPEN.
