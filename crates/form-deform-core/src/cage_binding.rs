@@ -284,4 +284,43 @@ mod tests {
         changed.vertices[0].id = 99;
         assert_eq!(binding.evaluate(&changed), Err(CageBindingError::InconsistentCageVertexSet));
     }
+    #[test]
+    fn runtime_binding_converts_to_a_valid_persistent_record() {
+        use crate::host_contract::{
+            AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
+            CoordinateSpaceKind, GeometryFingerprint, GeometryRevision, GeometrySnapshotStamp,
+            HostDocumentId, HostNamespace, HostTargetId, HostTargetKind, HostTargetRef,
+            TopologyRevision,
+        };
+        let cage = square(0.0);
+        let binding = CageBinding::bind(
+            &cage,
+            &[BindingPoint { id: 7, position: point(2.0, 3.0) }],
+        ).unwrap();
+        let target = HostTargetRef {
+            namespace: HostNamespace::new("anicraft").unwrap(),
+            document_id: HostDocumentId::new("doc").unwrap(),
+            target_kind: HostTargetKind::new("shape").unwrap(),
+            target_id: HostTargetId::new("shape-1").unwrap(),
+            generation: 1,
+        };
+        let space = CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        };
+        let stamp = GeometrySnapshotStamp::new(
+            target.clone(), GeometryRevision(1), TopologyRevision(1),
+            GeometryFingerprint { algorithm: "sha256-test".into(), digest: vec![1; 32] },
+        ).unwrap();
+        let persisted = binding.to_persisted("binding-1", 1, target, stamp, space).unwrap();
+        assert_eq!(persisted.points().len(), 1);
+        assert_eq!(persisted.cage_vertex_ids(), &[10, 20, 30, 40]);
+    }
+
 }
