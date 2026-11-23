@@ -289,7 +289,8 @@ pub trait BindingHostAdapter {
 
     /// Atomically replace the payload only if the target's current source stamp
     /// and this binding slot's revision still equal the values observed before
-    /// validation. An absent expected revision means the slot was absent.
+    /// validation. The slot revision must advance on every write and delete,
+    /// including transitions to an empty slot, and must never be reused.
     /// The host must perform both comparisons and the replacement in one transaction.
     fn write_binding_payload(
         &mut self,
