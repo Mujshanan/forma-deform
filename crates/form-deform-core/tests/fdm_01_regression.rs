@@ -196,7 +196,7 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
                 .payload()
                 .commands()
                 .iter()
-                .map(|command| std::mem::discriminant(command))
+                .map(std::mem::discriminant)
                 .collect::<Vec<_>>(),
             original_path
                 .commands()
@@ -210,7 +210,7 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
         );
         assert!(
             result
-                .validate_source_freshness(&[source.clone()])
+                .validate_source_freshness(std::slice::from_ref(&source))
                 .unwrap()
                 .iter()
                 .all(|freshness| freshness.is_current())
