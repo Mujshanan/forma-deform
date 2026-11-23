@@ -136,6 +136,7 @@ The coordinate descriptor is part of the source fingerprint and binding stamp.
 - Face traversal/tie-breaking must be deterministic and documented.
 - No NaN or infinite coordinates/weights are accepted.
 - Degenerate or invalid cage geometry is rejected before mapping.
+- Important prerequisite: FDM-02.3 explicitly deferred global overlap detection between non-adjacent interior faces. Until that check exists, the current cage validator does not prove a globally non-overlapping embedding. FDM-03.2 must not claim that stronger guarantee; either add the missing validation prerequisite or explicitly gate binding to the validated subset.
 - Tolerances are scale-aware and centralized per mapping policy.
 - Any adaptive curve subdivision must preserve the original Path2D command stream and state its error bound, maximum depth, and resource budget.
 - A budget exhaustion must return an explicit error or documented partial status; it must not silently claim a complete binding.
