@@ -191,6 +191,12 @@ pub fn validate_cage_embedding(
     {
         return Err(EmbeddingError::TopologyMismatch);
     }
+    match topology {
+        DeformationTopology::RegularLattice(value) => value.validate_structure(),
+        DeformationTopology::IrregularCage(value) => value.validate_structure(),
+    }.map_err(|error| EmbeddingError::InvalidTopology(error.to_string()))?;
+    control_state.validate_against(topology)
+        .map_err(|error| EmbeddingError::InvalidTopology(error.to_string()))?;
 
     let point_ids = topology.control_point_ids();
     let face_count = topology.face_count();
@@ -212,6 +218,7 @@ pub fn validate_cage_embedding(
     let faces = build_faces(topology, &positions, tolerance)?;
     validate_shared_edge_incidence(&faces)?;
     validate_face_connectivity(&faces)?;
+    validate_boundary_and_point_usage(&faces, point_ids)?;
     validate_pairwise_embedding(&faces, tolerance)?;
 
     Ok(CageEmbeddingCertificate {
@@ -357,6 +364,74 @@ fn validate_shared_edge_incidence(faces: &[FaceGeometry]) -> Result<(), Embeddin
                 incidences[0].0, incidences[1].0,
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_boundary_and_point_usage(
+    faces: &[FaceGeometry],
+    topology_point_ids: &[ControlPointId],
+) -> Result<(), EmbeddingError> {
+    let mut edge_faces: HashMap<
+        (ControlPointId, ControlPointId),
+        Vec<(usize, ControlPointId, ControlPointId)>,
+    > = HashMap::new();
+    let mut referenced = HashSet::new();
+
+    for face in faces {
+        let ids = face.ids.as_slice();
+        for index in 0..ids.len() {
+            let from = ids[index];
+            let to = ids[(index + 1) % ids.len()];
+            referenced.insert(from);
+            let key = if from < to { (from, to) } else { (to, from) };
+            edge_faces.entry(key).or_default().push((face.index, from, to));
+        }
+    }
+    if let Some(unused) = topology_point_ids.iter().find(|id| !referenced.contains(id)) {
+        return Err(EmbeddingError::InvalidTopology(format!(
+            "control point {} is not referenced by any face", unused.get()
+        )));
+    }
+
+    let boundary: Vec<_> = edge_faces.values()
+        .filter(|incidences| incidences.len() == 1)
+        .map(|incidences| (incidences[0].1, incidences[0].2))
+        .collect();
+    if boundary.len() < 3 {
+        return Err(EmbeddingError::InvalidBoundary);
+    }
+
+    let mut outgoing = HashMap::with_capacity(boundary.len());
+    let mut incoming = HashSet::with_capacity(boundary.len());
+    for (from, to) in &boundary {
+        if outgoing.insert(*from, *to).is_some() || !incoming.insert(*to) {
+            return Err(EmbeddingError::InvalidBoundary);
+        }
+    }
+    if outgoing.len() != boundary.len()
+        || incoming.len() != boundary.len()
+        || outgoing.keys().any(|id| !incoming.contains(id))
+    {
+        return Err(EmbeddingError::InvalidBoundary);
+    }
+
+    let start = outgoing.keys().copied().min().ok_or(EmbeddingError::InvalidBoundary)?;
+    let mut current = start;
+    let mut visited = HashSet::with_capacity(boundary.len());
+    loop {
+        if !visited.insert(current) {
+            if current == start { break; }
+            return Err(EmbeddingError::InvalidBoundary);
+        }
+        current = *outgoing.get(&current).ok_or(EmbeddingError::InvalidBoundary)?;
+        if current == start { break; }
+        if visited.len() >= boundary.len() {
+            return Err(EmbeddingError::InvalidBoundary);
+        }
+    }
+    if visited.len() != boundary.len() {
+        return Err(EmbeddingError::InvalidBoundary);
     }
     Ok(())
 }
