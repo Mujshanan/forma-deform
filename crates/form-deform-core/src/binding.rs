@@ -15,7 +15,8 @@ use crate::topology::{
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const BINDING_SCHEMA_NAME: &str = "forma-deform-path2d-binding";
-pub const BINDING_SCHEMA_VERSION: u32 = 1;
+pub const BINDING_SCHEMA_VERSION: u32 = 2;
+pub const LEGACY_BINDING_SCHEMA_VERSION: u32 = 1;
 pub const MAPPING_POLICY_VERSION: u32 = 1;
 pub const MAPPING_NUMERICAL_POLICY_VERSION: u32 = 1;
 pub const OUTSIDE_CAGE_POLICY_VERSION: u32 = 1;
@@ -216,7 +217,9 @@ impl BindingStamp {
             || self.payload_kind != PATH2D_PAYLOAD_KIND
             || self.payload_schema_version != PATH2D_SCHEMA_VERSION
             || self.schema_name != BINDING_SCHEMA_NAME
-            || self.schema_version != BINDING_SCHEMA_VERSION
+            || !(self.schema_version == BINDING_SCHEMA_VERSION
+                || (self.schema_version == LEGACY_BINDING_SCHEMA_VERSION
+                    && self.outside_policy == OutsideCagePolicy::UnboundZeroInfluence))
             || self.numerical_policy_version != MAPPING_NUMERICAL_POLICY_VERSION
             || self.outside_policy_version != OUTSIDE_CAGE_POLICY_VERSION
         {
@@ -448,6 +451,15 @@ fn validate_mapping_domain(
 }
 
  
+fn coordinates_are_extrapolated(coordinates: FaceCoordinates) -> bool {
+    match coordinates {
+        FaceCoordinates::TriangleBarycentric { weights } =>
+            weights.iter().any(|weight| *weight < 0.0 || *weight > 1.0),
+        FaceCoordinates::QuadBilinear { u, v } =>
+            !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v),
+    }
+}
+
 fn validate_outside_policy(policy: OutsideCagePolicy) -> Result<(), BindingError> {
     if let OutsideCagePolicy::BoundedExtrapolation { max_distance } = policy {
         if !max_distance.is_finite() || max_distance <= 0.0 {
@@ -463,8 +475,9 @@ fn validate_clamped_mapping(
     geometry: &ValidatedCageGeometry,
 ) -> Result<(), BindingError> {
     use crate::outside_policy::{resolve_outside_point, OutsideCageResolution, OutsideCageResolutionPolicy};
-    if matches!(crate::point_location::locate_point(source_point, geometry), Ok(crate::point_location::PointLocationOutcome::Located(_))) {
-        return Err(BindingError::OutsidePolicyRecordMismatch);
+    match crate::point_location::locate_point(source_point, geometry) {
+        Ok(crate::point_location::PointLocationOutcome::OutsideCage) => {}
+        _ => return Err(BindingError::OutsidePolicyRecordMismatch),
     }
     let OutsideCageResolution::Clamped(projection) = resolve_outside_point(
         source_point, geometry, OutsideCageResolutionPolicy::ClampToBoundary,
@@ -487,15 +500,17 @@ fn validate_extrapolated_mapping(
     if !max_distance.is_finite() || max_distance <= 0.0 {
         return Err(BindingError::InvalidOutsidePolicyParameter);
     }
-    if matches!(crate::point_location::locate_point(source_point, geometry), Ok(crate::point_location::PointLocationOutcome::Located(_))) {
-        return Err(BindingError::OutsidePolicyRecordMismatch);
+    match crate::point_location::locate_point(source_point, geometry) {
+        Ok(crate::point_location::PointLocationOutcome::OutsideCage) => {}
+        _ => return Err(BindingError::OutsidePolicyRecordMismatch),
     }
     let OutsideCageResolution::Extrapolated { boundary, coordinates, .. } = resolve_outside_point(
         source_point, geometry, OutsideCageResolutionPolicy::BoundedExtrapolation { max_distance },
     ).map_err(|_| BindingError::OutsidePolicyRecordMismatch)? else {
         return Err(BindingError::OutsidePolicyRecordMismatch);
     };
-    if mapping.face_index != boundary.face_index || mapping.coordinates != coordinates {
+    if mapping.face_index != boundary.face_index || mapping.coordinates != coordinates
+        || !coordinates_are_extrapolated(mapping.coordinates) {
         return Err(BindingError::OutsidePolicyRecordMismatch);
     }
     validate_mapping_domain(mapping, source_point, geometry, true)
