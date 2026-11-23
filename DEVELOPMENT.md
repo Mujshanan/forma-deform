@@ -318,3 +318,22 @@ M1 native Smart Controller UI foundation is merged into AniCraft through [PR #2]
 ## Native UI progress — 2026-11-23
 
 AniCraft PR #3 is merged: transient Smart Controller handles can now be created, selected, dragged, removed and cleared, with live Properties coordinates. This does not add durable binding data or controller evaluation. The native Windows smoke test and build/CI evidence remain outstanding. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
+
+
+## Native UI progress — M2 (2026-11-23)
+
+AniCraft [PR #4](https://github.com/Mujshanan/anicraft/pull/4) merged as `387857f2aaea4f415e74f279f9f9ddc6edfbeb44`.
+
+Implemented:
+- Read-only source inspection from AniCraft's selected bone: name, ID, armature layer, and containing shape ID when present.
+- Read-only target context from AniCraft's selected artwork: name, element ID, element type, and layer.
+- Existing host Bone and Select tools remain the only selection mechanisms.
+
+Not implemented:
+- Target-capability discovery or an approved target adapter contract.
+- Controller input snapshot/query, including keyed-angle versus spring-swing semantics.
+- Neutral capture, binding creation, binding validation, persistence, mapping, preview, apply, or live playback.
+
+The M2 inspector deliberately does not claim that a selected element is a supported deformation target. The next implementation increment requires host/core contracts for stable target addressing/capability discovery and deterministic read-only source-input snapshots. No test run, native Windows build, workflow/status evidence, accessibility-tree validation, or manual Windows smoke test is claimed for PR #4.
+
+CCC-01.5 remains unchanged: Smart Controller evaluation and Form Deform pin evaluation are independent; no implicit output composition is permitted.

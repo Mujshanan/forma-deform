@@ -105,3 +105,8 @@ The first M1 Smart Controller UI foundation is merged in [AniCraft PR #2](https:
 ## Native UI progress (2026-11-23)
 
 The M1 Smart Controller UI now supports click-to-create/select and drag-to-move transient Stage handles, with live coordinates in Properties. This is merged into AniCraft in [PR #3](https://github.com/Mujshanan/anicraft/pull/3). It remains draft-only editor state; persistent bindings, mapping/evaluation, target application, undo integration and live playback are not implemented. Native CI and manual Windows smoke-test evidence remain outstanding. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
+
+
+## Native UI progress — M2 (2026-11-23)
+
+AniCraft [PR #4](https://github.com/Mujshanan/anicraft/pull/4) is merged. The Smart Controller Properties inspector now displays the currently selected bone identity and selected artwork identity using AniCraft's existing selections. This is read-only inspection only: target compatibility, controller-input snapshots, neutral capture, bindings, persistence, evaluation, and playback remain unavailable. No automated test or native Windows CI evidence was reported for the merge. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).

@@ -350,3 +350,21 @@ AniCraft [PR #3](https://github.com/Mujshanan/anicraft/pull/3) is merged (commit
 - Hit-testing and movement tests, including invalid coordinates and indices.
 
 These handles remain editor-only view state: no document persistence, dirty-state changes, undo command, source/target binding, mapping evaluation, target application, or live playback is introduced. CI has not reported any runs/status checks for the merged commit, and the manual Windows smoke test remains outstanding. This is progress within M1, not completion of the full native authoring UI.
+
+
+---
+
+## Native M2 progress — 2026-11-23
+
+AniCraft [PR #4](https://github.com/Mujshanan/anicraft/pull/4) is merged (merge commit `387857f2aaea4f415e74f279f9f9ddc6edfbeb44`). The existing Smart Controller Properties section now reads AniCraft's current selections:
+
+- Source context: selected bone name, stable bone ID, armature layer, and containing shape ID when applicable.
+- Target context: selected artwork name, element ID, type, and layer.
+- Selection remains owned by AniCraft: use its Bone tool to choose a source and Select tool to choose artwork, then return to the Smart Controller tool.
+- The inspector is read-only and explicitly reports that compatibility is not verified.
+
+This is only the identity-inspection slice of M2. It does **not** establish a supported deformation target, read a controller input value, capture a neutral value, create a binding, or persist anything. AniCraft currently exposes the selected bone and artwork identity but no verified controller target-capability or input-snapshot contract. No Save, Bind, or Capture Neutral action is exposed.
+
+No automated tests, native Windows build, workflow runs, commit statuses, accessibility-tree check, or Windows UI Automation check were available for the merged PR. The merge must not be treated as verification of those checks.
+
+The next M2 work is blocked on explicit host/core contracts for (1) target capability discovery and stable target addressing and (2) a deterministic, read-only controller-input snapshot with clearly defined keyed-angle versus spring-swing semantics. CCC-01.5 remains in force: Smart Controller and Form Deform pin evaluation stay independent.
