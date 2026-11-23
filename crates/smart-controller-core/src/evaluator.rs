@@ -257,7 +257,10 @@ fn prepare_preflight(
         );
     }
 
-    Ok(EvaluationPreflight { inputs, diagnostics })
+    Ok(EvaluationPreflight {
+        inputs,
+        diagnostics,
+    })
 }
 
 fn evaluate_in_topological_order<M: ControllerMapper>(
@@ -303,8 +306,13 @@ fn evaluate_in_topological_order<M: ControllerMapper>(
             continue;
         }
 
-        let (resolved_inputs, unavailable_required) =
-            resolve_controller_inputs(controller, &controller_id, preflight, &outputs, &mut result)?;
+        let (resolved_inputs, unavailable_required) = resolve_controller_inputs(
+            controller,
+            &controller_id,
+            preflight,
+            &outputs,
+            &mut result,
+        )?;
         if let Some(input_id) = unavailable_required {
             result.diagnostics.push(diagnostic(
                 INPUT_UNAVAILABLE,
@@ -328,7 +336,8 @@ fn evaluate_in_topological_order<M: ControllerMapper>(
             &resolved_inputs,
             mapper,
             &mut result,
-        )? else {
+        )?
+        else {
             continue;
         };
 
@@ -368,25 +377,27 @@ fn resolve_controller_inputs(
                 .copied()
             {
                 Some(value) => Some(value),
-                None => match &item.definition.fallback {
-                    FallbackPolicy::UseValue(value) => {
-                        result.diagnostics.push(diagnostic(
-                            INPUT_UNAVAILABLE,
-                            DiagnosticSeverity::Warning,
-                            format!("controller output {}:{} is unavailable; explicit fallback used", producer, binding_id),
-                            Some(controller_id.clone()),
-                            Some(input_id.clone()),
-                        )?);
-                        Some(*value)
+                None => {
+                    match &item.definition.fallback {
+                        FallbackPolicy::UseValue(value) => {
+                            result.diagnostics.push(diagnostic(
+                                INPUT_UNAVAILABLE,
+                                DiagnosticSeverity::Warning,
+                                format!("controller output {}:{} is unavailable; explicit fallback used", producer, binding_id),
+                                Some(controller_id.clone()),
+                                Some(input_id.clone()),
+                            )?);
+                            Some(*value)
+                        }
+                        FallbackPolicy::Unavailable => None,
+                        FallbackPolicy::Reject => {
+                            return Err(CoreError::MissingInput(format!(
+                                "controller output {}:{} for input {}",
+                                producer, binding_id, input_id
+                            )));
+                        }
                     }
-                    FallbackPolicy::Unavailable => None,
-                    FallbackPolicy::Reject => {
-                        return Err(CoreError::MissingInput(format!(
-                            "controller output {}:{} for input {}",
-                            producer, binding_id, input_id
-                        )));
-                    }
-                },
+                }
             }
         } else {
             item.resolved
