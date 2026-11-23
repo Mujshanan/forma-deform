@@ -1,8 +1,8 @@
 # Forma Deform
 
-**Forma Deform** is AniCraft's proposed deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
+**Forma Deform** is AniCraft's deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
-The repository currently contains an experimental TypeScript rectangle/timeline demo and a Rust/WASM AniCraft command-plugin suite. Treat those as separate development tracks: the long-term product is the native AniCraft tool, while the current command plugins are prototypes and integration probes.
+The long-term product is a native AniCraft tool backed by reusable, host-independent Rust cores. The repository still contains three historical WASM command adapters used as development, diagnostic, and integration probes. Their presence does not mean the native product integration is complete or that the adapters are separate production products.
 
 ## What Forma Deform owns
 
@@ -57,17 +57,19 @@ Forma Deform should appear as a native AniCraft tool/workspace, not as a separat
 
 This is a conceptual arrangement using AniCraft's existing dockable panels and stage. It is not a commitment to new host UI infrastructure.
 
-## Current prototype status and limitations
+## Current implementation status
 
-The current command-plugin suite contains:
+The Rust cores and the historical WASM adapters have distinct responsibilities:
 
-- **Bone Query:** read-only inspection of armatures, bones, poses, spring state, joint translation, and skin weights.
-- **Form Deform:** deterministic bone-angle-driven Asset Warp pin positioning from an authored neutral position and per-degree gains.
-- **Smart Controller:** neutral-centered input mapping, easing, and preview output.
+- **Form Deform core:** reusable host-independent deformation logic and contracts. The legacy Form Deform adapter is a narrow on-demand one-bone/one-Asset-Warp-pin command; it is not the FDM topology/binding/evaluation engine.
+- **Smart Controller core:** host-independent controller models, validation, mapping, migration, and deterministic evaluation. The Smart Controller adapter's active command entry point remains the V1 Slider preview. Additional canonical preview modules are read-only foundations, not a complete native authoring or playback workflow.
+- **Bone Query adapter:** read-only development diagnostics for AniCraft armature, bone, pose, spring, and optional skin-weight data.
 
-The current command-plugin API supports on-demand queries and explicit undoable pin edits. It does not currently establish arbitrary durable plugin metadata or a continuous custom playback evaluator. Do not describe the prototype as providing live Smart Controller playback. Persistent bindings and native evaluation require explicit AniCraft host support.
+The adapters are not a substitute for native AniCraft document persistence, undoable authoring workflows, or a continuous custom playback evaluator. Durable bindings and native evaluation require verified AniCraft host support.
 
 Smart Controller evaluation and Form Deform pin evaluation remain independent. Do not implicitly combine their outputs. Multi-source composition requires a separately approved semantic design.
+
+See [Legacy Adapter Status and Retirement Plan](docs/LEGACY_ADAPTER_RETIREMENT.md) for the current disposition and retirement gates.
 
 ## Development
 
@@ -80,10 +82,13 @@ Additional technical references:
 - [AniCraft SDK audit](docs/ANICRAFT_SDK_AUDIT.md)
 - [Smart Controller plan](docs/SMART_CONTROLLER_PLAN.md)
 - [Capability limits](docs/CAPABILITIES.md)
+- [Legacy adapter status and retirement plan](docs/LEGACY_ADAPTER_RETIREMENT.md)
 
 ## Verification
 
-For the Rust workspace and WASM plugins:
+The current CI workflow runs the Rust workspace tests and builds the three historical WASM adapter crates. These checks establish build/test coverage only; they do not establish successful in-app integration or native playback evaluation.
+
+For the Rust workspace and WASM adapters:
 
 ```sh
 rustup target add wasm32-unknown-unknown
