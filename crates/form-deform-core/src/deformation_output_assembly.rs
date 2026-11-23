@@ -615,11 +615,11 @@ mod tests {
             Err(DeformationOutputAssemblyError::IncompleteCommandCoverage { .. })
         ));
         assert!(matches!(
-            validate_refined_alignment(&path, &refined(vec![segment(3, 1), segment(1, 0)])),
+            validate_refined_alignment(&path, &path, &refined(vec![segment(3, 1), segment(1, 0)])),
             Err(DeformationOutputAssemblyError::UnexpectedCommandIdentity { .. })
         ));
         assert!(matches!(
-            validate_refined_alignment(&path, &refined(vec![
+            validate_refined_alignment(&path, &path, &refined(vec![
                 segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0)),
                 segment(99, 1),
             ])),
