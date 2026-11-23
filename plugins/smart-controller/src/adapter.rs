@@ -7,13 +7,13 @@
 use anicraft_plugin_sdk as ac;
 
 use smart_controller_core::{
-    composition::{evaluate_and_compose, CompositionContext, ComposedEvaluationResult},
+    CoreError,
+    composition::{ComposedEvaluationResult, CompositionContext, evaluate_and_compose},
     evaluator::ControllerMapper,
     graph::ControllerGraph,
-    mapping::{CanonicalControllerMapper, PoseLibrary},
     ids::TargetId,
+    mapping::{CanonicalControllerMapper, PoseLibrary},
     migration::CanonicalDocument,
-    CoreError,
 };
 
 /// Pure preview plan produced by the host adapter. It contains calculated
@@ -60,14 +60,15 @@ pub fn evaluate_document_preview<M: ControllerMapper>(
         }
     }
     targets.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(HostPreviewPlan { evaluation, targets })
+    Ok(HostPreviewPlan {
+        evaluation,
+        targets,
+    })
 }
-
 
 use serde_json::Value;
 use smart_controller_core::{
-    BoneTransformChannel, InputDefinition, InputSample, InputSnapshot, InputSource,
-    TypedValue,
+    BoneTransformChannel, InputDefinition, InputSample, InputSnapshot, InputSource, TypedValue,
 };
 
 /// Collect host inputs, evaluate the canonical DAG, compose its outputs, and
@@ -79,22 +80,16 @@ pub fn evaluate_host_document_preview<M: ControllerMapper>(
     mapper: &M,
     composition_context: &CompositionContext,
 ) -> Result<HostPreviewSession, String> {
-    let snapshot = crate::input_provider::collect_document_input_snapshot(
-        document,
-        host_context,
-    )?;
+    let snapshot = crate::input_provider::collect_document_input_snapshot(document, host_context)?;
     let plan = evaluate_document_preview(document, &snapshot, mapper, composition_context)
         .map_err(|error| error.to_string())?;
-    let target_preview = crate::preview_plan::build_host_target_preview_plan(
-        document,
-        &plan.evaluation,
-    )?;
+    let target_preview =
+        crate::preview_plan::build_host_target_preview_plan(document, &plan.evaluation)?;
     Ok(HostPreviewSession {
         evaluation: plan.evaluation,
         target_preview,
     })
 }
-
 
 /// Evaluate a canonical document using the first-party one-dimensional mapper.
 /// The supplied pose library resolves PoseSet1D references for this invocation;
@@ -108,7 +103,6 @@ pub fn evaluate_document_preview_with_canonical_mapper(
     let mapper = CanonicalControllerMapper::with_pose_library(pose_library.clone());
     evaluate_document_preview(document, snapshot, &mapper, composition_context)
 }
-
 
 /// Host-preview entry point using the first-party canonical one-dimensional
 /// mapper. PoseSet1D data is supplied by the caller for this invocation.
@@ -153,7 +147,12 @@ pub fn sample_bone_rotation(
 ) -> Result<InputSample, String> {
     let (bone_id, channel) = match &definition.source {
         InputSource::BoneTransform { bone_id, channel } => (bone_id, channel),
-        _ => return Err(format!("input {} is not a bone-transform input", definition.id)),
+        _ => {
+            return Err(format!(
+                "input {} is not a bone-transform input",
+                definition.id
+            ));
+        }
     };
     if *channel != BoneTransformChannel::Rotation {
         return Err(format!("input {} is not a rotation input", definition.id));
@@ -161,24 +160,31 @@ pub fn sample_bone_rotation(
     if definition.dimension != smart_controller_core::InputDimension::Angle {
         return Err(format!("input {} must have Angle dimension", definition.id));
     }
-    let expected_id = bone_id.parse::<u64>()
+    let expected_id = bone_id
+        .parse::<u64>()
         .map_err(|_| format!("bone ID '{bone_id}' is not a numeric host bone ID"))?;
 
-    let bones = response.get("armatures")
+    let bones = response
+        .get("armatures")
         .and_then(Value::as_array)
         .ok_or("bone.info response is missing armatures")?;
-    let bone = bones.iter()
+    let bone = bones
+        .iter()
         .filter_map(|armature| armature.get("bones").and_then(Value::as_array))
         .flatten()
         .find(|bone| host_bone_id(bone.get("id")) == Some(expected_id))
         .ok_or_else(|| format!("bone ID {expected_id} was not found in bone.info response"))?;
 
-    let keyed_degrees = bone.get("angle").and_then(Value::as_f64)
+    let keyed_degrees = bone
+        .get("angle")
+        .and_then(Value::as_f64)
         .ok_or_else(|| format!("bone ID {expected_id} has no numeric keyed angle"))?;
     let degrees = match policy {
         BoneAnglePolicy::KeyedPoseOnly => keyed_degrees,
         BoneAnglePolicy::KeyedPosePlusSpringSwing => {
-            let swing = bone.get("swing").and_then(Value::as_f64)
+            let swing = bone
+                .get("swing")
+                .and_then(Value::as_f64)
                 .ok_or_else(|| format!("bone ID {expected_id} has no numeric spring swing"))?;
             keyed_degrees + swing
         }
@@ -202,7 +208,8 @@ pub fn snapshot_from_bone_info(
     policy: BoneAnglePolicy,
     wrapped: bool,
 ) -> Result<InputSnapshot, String> {
-    let samples = definitions.iter()
+    let samples = definitions
+        .iter()
         .map(|definition| sample_bone_rotation(definition, response, policy, wrapped))
         .collect::<Result<Vec<_>, _>>()?;
     InputSnapshot::new(0, samples).map_err(|error| error.to_string())
@@ -230,16 +237,19 @@ mod tests {
         }
     }
 
-
     #[test]
     fn canonical_preview_orchestration_accepts_empty_document_as_noop() {
         let document = smart_controller_core::migration::CanonicalDocument::from_json(
             r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
-        ).unwrap();
+        )
+        .unwrap();
         let snapshot = InputSnapshot::new(0, vec![]).unwrap();
         let mapper = |_controller: &smart_controller_core::canonical::Controller,
                       _inputs: &smart_controller_core::evaluator::ResolvedInputs|
-         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+         -> Result<
+            std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>,
+            smart_controller_core::CoreError,
+        > {
             panic!("mapper must not run for an empty document");
         };
         let plan = evaluate_document_preview(
@@ -247,7 +257,8 @@ mod tests {
             &snapshot,
             &mapper,
             &smart_controller_core::composition::CompositionContext::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert!(plan.evaluation.evaluation.contributions.is_empty());
         assert!(plan.evaluation.composition.outputs.is_empty());
         assert!(plan.targets.is_empty());
@@ -257,28 +268,36 @@ mod tests {
     fn canonical_preview_orchestration_rejects_invalid_document_before_mapping() {
         let document = smart_controller_core::migration::CanonicalDocument::from_json(
             r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
-        ).unwrap();
+        )
+        .unwrap();
         let snapshot = InputSnapshot::new(0, vec![]).unwrap();
         let mapper = |_controller: &smart_controller_core::canonical::Controller,
                       _inputs: &smart_controller_core::evaluator::ResolvedInputs|
-         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+         -> Result<
+            std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>,
+            smart_controller_core::CoreError,
+        > {
             panic!("mapper must not run for an invalid document");
         };
         let mut invalid = document;
         invalid.schema.version = 99;
-        assert!(evaluate_document_preview(
-            &invalid,
-            &snapshot,
-            &mapper,
-            &smart_controller_core::composition::CompositionContext::default(),
-        ).is_err());
+        assert!(
+            evaluate_document_preview(
+                &invalid,
+                &snapshot,
+                &mapper,
+                &smart_controller_core::composition::CompositionContext::default(),
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn host_preview_session_orchestrates_empty_document_without_host_mutation() {
         let document = smart_controller_core::migration::CanonicalDocument::from_json(
             r#"{"schema":{"name":"smart-controller","version":1},"inputs":[],"controllers":[]}"#,
-        ).unwrap();
+        )
+        .unwrap();
         let context = crate::input_provider::HostInputContext {
             manual_values: std::collections::BTreeMap::new(),
             bone_layers: std::collections::BTreeMap::new(),
@@ -287,7 +306,10 @@ mod tests {
         };
         let mapper = |_controller: &smart_controller_core::canonical::Controller,
                       _inputs: &smart_controller_core::evaluator::ResolvedInputs|
-         -> Result<std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>, smart_controller_core::CoreError> {
+         -> Result<
+            std::collections::BTreeMap<smart_controller_core::BindingId, TypedValue>,
+            smart_controller_core::CoreError,
+        > {
             panic!("mapper must not run for an empty document");
         };
         let session = evaluate_host_document_preview(
@@ -295,15 +317,23 @@ mod tests {
             &context,
             &mapper,
             &CompositionContext::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert!(session.evaluation.composition.outputs.is_empty());
         assert!(session.target_preview.items.is_empty());
     }
 
     #[test]
     fn parses_keyed_pose_angle_in_degrees_as_unwrapped_radians() {
-        let response = json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
-        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly, false).unwrap();
+        let response =
+            json!({"armatures":[{"bones":[{"id":42,"name":"Head","angle":90.0,"swing":5.0}]}]});
+        let sample = sample_bone_rotation(
+            &definition(),
+            &response,
+            BoneAnglePolicy::KeyedPoseOnly,
+            false,
+        )
+        .unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
         assert!((angle.radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
         assert!(!angle.is_wrapped());
@@ -313,7 +343,13 @@ mod tests {
     #[test]
     fn spring_swing_is_added_only_when_explicitly_selected() {
         let response = json!({"armatures":[{"bones":[{"id":"42","angle":30.0,"swing":-10.0}]}]});
-        let sample = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing, false).unwrap();
+        let sample = sample_bone_rotation(
+            &definition(),
+            &response,
+            BoneAnglePolicy::KeyedPosePlusSpringSwing,
+            false,
+        )
+        .unwrap();
         let angle = sample.value.unwrap().as_angle().unwrap();
         assert!((angle.radians() - 20.0_f64.to_radians()).abs() < 1e-12);
     }
@@ -321,14 +357,27 @@ mod tests {
     #[test]
     fn missing_spring_swing_does_not_default_to_zero() {
         let response = json!({"armatures":[{"bones":[{"id":42,"angle":30.0}]}]});
-        assert!(sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPosePlusSpringSwing, false).is_err());
+        assert!(
+            sample_bone_rotation(
+                &definition(),
+                &response,
+                BoneAnglePolicy::KeyedPosePlusSpringSwing,
+                false
+            )
+            .is_err()
+        );
     }
-
 
     #[test]
     fn caller_selects_wrapped_angle_semantics_and_snapshot_is_invocation_scoped() {
         let response = json!({"armatures":[{"bones":[{"id":42,"angle":270.0}]}]});
-        let wrapped = sample_bone_rotation(&definition(), &response, BoneAnglePolicy::KeyedPoseOnly, true).unwrap();
+        let wrapped = sample_bone_rotation(
+            &definition(),
+            &response,
+            BoneAnglePolicy::KeyedPoseOnly,
+            true,
+        )
+        .unwrap();
         assert!(wrapped.value.unwrap().as_angle().unwrap().is_wrapped());
 
         let snapshot = snapshot_from_bone_info(
@@ -336,31 +385,51 @@ mod tests {
             &response,
             BoneAnglePolicy::KeyedPoseOnly,
             false,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(snapshot.max_age_ticks(), 0);
         assert_eq!(snapshot.get(&definition().id).unwrap().age_ticks, Some(0));
     }
 
     #[test]
     fn missing_bone_and_malformed_response_fail_closed() {
-        assert!(sample_bone_rotation(&definition(), &json!({"armatures":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
-        assert!(sample_bone_rotation(&definition(), &json!({"bones":[]}), BoneAnglePolicy::KeyedPoseOnly, false).is_err());
+        assert!(
+            sample_bone_rotation(
+                &definition(),
+                &json!({"armatures":[]}),
+                BoneAnglePolicy::KeyedPoseOnly,
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            sample_bone_rotation(
+                &definition(),
+                &json!({"bones":[]}),
+                BoneAnglePolicy::KeyedPoseOnly,
+                false
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn canonical_mapper_is_wired_to_document_and_host_preview_entry_points() {
         use smart_controller_core::{
+            InputId, TargetId,
             canonical::{BindingMode, Controller, ControllerBinding, MappingConfig, TargetMapping},
             input::{FallbackPolicy, InputDefinition, InputDimension, InputSource},
             migration::CanonicalDocument,
             schema::SchemaIdentity,
-            InputId, TargetId,
         };
 
         let input_id = InputId::new("manual-driver").unwrap();
         let target_id = TargetId::new("property:arm:rotation").unwrap();
         let document = CanonicalDocument {
-            schema: SchemaIdentity { name: "smart-controller".into(), version: 1 },
+            schema: SchemaIdentity {
+                name: "smart-controller".into(),
+                version: 1,
+            },
             inputs: vec![InputDefinition {
                 id: input_id.clone(),
                 source: InputSource::Manual,
@@ -395,22 +464,33 @@ mod tests {
         };
         let pose_library = PoseLibrary::new();
         let expected = TypedValue::scalar(1.0).unwrap();
-        let snapshot = InputSnapshot::new(0, vec![
-            InputSample::valid(input_id.clone(), TypedValue::scalar(0.5).unwrap(), Some(0)),
-        ]).unwrap();
+        let snapshot = InputSnapshot::new(
+            0,
+            vec![InputSample::valid(
+                input_id.clone(),
+                TypedValue::scalar(0.5).unwrap(),
+                Some(0),
+            )],
+        )
+        .unwrap();
 
         let plan = evaluate_document_preview_with_canonical_mapper(
             &document,
             &snapshot,
             &pose_library,
             &CompositionContext::default(),
-        ).unwrap();
-        assert_eq!(plan.evaluation.composition.outputs.get(&target_id), Some(&expected));
+        )
+        .unwrap();
+        assert_eq!(
+            plan.evaluation.composition.outputs.get(&target_id),
+            Some(&expected)
+        );
 
         let host_context = crate::input_provider::HostInputContext {
-            manual_values: std::collections::BTreeMap::from([
-                (input_id, TypedValue::scalar(0.5).unwrap()),
-            ]),
+            manual_values: std::collections::BTreeMap::from([(
+                input_id,
+                TypedValue::scalar(0.5).unwrap(),
+            )]),
             bone_layers: std::collections::BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
             wrapped_angles: false,
@@ -420,10 +500,9 @@ mod tests {
             &host_context,
             &pose_library,
             &CompositionContext::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(session.target_preview.items.len(), 1);
         assert_eq!(session.target_preview.items[0].value, expected);
     }
-
-
 }

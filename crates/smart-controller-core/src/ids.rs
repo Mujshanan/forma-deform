@@ -16,7 +16,9 @@ macro_rules! string_id {
             pub fn new(value: impl Into<String>) -> Result<Self, CoreError> {
                 let value = value.into();
                 if value.trim().is_empty() {
-                    return Err(CoreError::InvalidIdentifier { kind: stringify!($name) });
+                    return Err(CoreError::InvalidIdentifier {
+                        kind: stringify!($name),
+                    });
                 }
                 Ok(Self(value))
             }

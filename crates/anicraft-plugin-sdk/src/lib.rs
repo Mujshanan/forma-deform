@@ -45,7 +45,14 @@ pub fn request(req: &Value) -> Result<Value, String> {
     let got = unsafe { host_response(buf.as_mut_ptr(), buf.len()) };
     buf.truncate(got.max(0) as usize);
     let v: Value = serde_json::from_slice(&buf).map_err(|e| format!("unreadable response: {e}"))?;
-    if v["ok"] == true { Ok(v["result"].clone()) } else { Err(v["error"].as_str().unwrap_or("the host refused the request").to_string()) }
+    if v["ok"] == true {
+        Ok(v["result"].clone())
+    } else {
+        Err(v["error"]
+            .as_str()
+            .unwrap_or("the host refused the request")
+            .to_string())
+    }
 }
 
 /// Runs an AniCraft command by id (`draw.star`, `element.translate`, …; see
@@ -183,7 +190,8 @@ macro_rules! ease {
 #[doc(hidden)]
 pub fn export(ptr: i32, len: i32, f: fn(&Value) -> Result<Vec<u8>, String>) -> i64 {
     // SAFETY: the host wrote `len` bytes of options into the block it got from `ac_alloc`.
-    let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len.max(0) as usize) };
+    let bytes =
+        unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len.max(0) as usize) };
     let options: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
     match f(&options) {
         Ok(out) => {
@@ -213,7 +221,8 @@ pub fn alloc(size: i32) -> i32 {
 #[doc(hidden)]
 pub fn run(ptr: i32, len: i32, f: fn(&Value) -> Result<(), String>) -> i32 {
     // SAFETY: the host wrote `len` bytes of parameters into the block it got from `ac_alloc`.
-    let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len.max(0) as usize) };
+    let bytes =
+        unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len.max(0) as usize) };
     let params: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
     match f(&params) {
         Ok(()) => 0,

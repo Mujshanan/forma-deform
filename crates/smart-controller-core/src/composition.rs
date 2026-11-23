@@ -3,6 +3,7 @@
 //! Composition is a pure post-pass over Phase 3 contributions. It never reads
 //! or mutates host state and never combines Smart Controller results with
 //! Form Deform pin-deformation evaluation.
+pub use crate::evaluator::EvaluationResult;
 use crate::{
     contribution::{BaseRef, CompositionMode, Contribution},
     diagnostic_codes::{Diagnostic, DiagnosticSeverity, COMPOSITION_NO_ELIGIBLE},
@@ -13,7 +14,6 @@ use crate::{
     input::{InputDefinition, InputSnapshot},
     value::{Angle, TypedValue},
 };
-pub use crate::evaluator::EvaluationResult;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Explicit values needed to resolve non-authored additive bases.
@@ -52,7 +52,10 @@ pub fn evaluate_and_compose<M: ControllerMapper>(
 ) -> Result<ComposedEvaluationResult, CoreError> {
     let evaluation = evaluate(graph, definitions, snapshot, mapper)?;
     let composition = compose(&evaluation.contributions, context)?;
-    Ok(ComposedEvaluationResult { evaluation, composition })
+    Ok(ComposedEvaluationResult {
+        evaluation,
+        composition,
+    })
 }
 
 /// Compose all contributions for each target in canonical target order.
@@ -67,7 +70,10 @@ pub fn compose(
     let mut grouped: BTreeMap<TargetId, Vec<&Contribution>> = BTreeMap::new();
     for contribution in contributions {
         contribution.validate()?;
-        grouped.entry(contribution.target_id.clone()).or_default().push(contribution);
+        grouped
+            .entry(contribution.target_id.clone())
+            .or_default()
+            .push(contribution);
     }
 
     let mut result = CompositionResult::default();
@@ -78,13 +84,18 @@ pub fn compose(
 
         let mode = items[0].mode;
         if items.iter().any(|item| item.mode != mode) {
-            return Err(conflict(&target_id, "contributions for one target declare different composition modes"));
+            return Err(conflict(
+                &target_id,
+                "contributions for one target declare different composition modes",
+            ));
         }
 
         let value = match mode {
             CompositionMode::Replace => compose_replace(&target_id, &items)?,
             CompositionMode::Additive => compose_additive(&target_id, &items, context)?,
-            CompositionMode::WeightedBlend => compose_weighted_blend(&target_id, &items, &mut result)?,
+            CompositionMode::WeightedBlend => {
+                compose_weighted_blend(&target_id, &items, &mut result)?
+            }
             CompositionMode::PriorityOverride => compose_priority_override(&items),
         };
 
@@ -100,7 +111,10 @@ fn compose_replace(
     items: &[&Contribution],
 ) -> Result<Option<TypedValue>, CoreError> {
     if items.len() != 1 {
-        return Err(conflict(target_id, "multiple Replace contributions are ambiguous"));
+        return Err(conflict(
+            target_id,
+            "multiple Replace contributions are ambiguous",
+        ));
     }
     Ok(Some(items[0].value))
 }
@@ -110,11 +124,18 @@ fn compose_additive(
     items: &[&Contribution],
     context: &CompositionContext,
 ) -> Result<Option<TypedValue>, CoreError> {
-    let base_ref = items[0].base_ref.as_ref().ok_or_else(|| {
-        conflict(target_id, "Additive contribution has no base reference")
-    })?;
-    if items.iter().any(|item| item.base_ref.as_ref() != Some(base_ref)) {
-        return Err(conflict(target_id, "Additive contributions use different base references"));
+    let base_ref = items[0]
+        .base_ref
+        .as_ref()
+        .ok_or_else(|| conflict(target_id, "Additive contribution has no base reference"))?;
+    if items
+        .iter()
+        .any(|item| item.base_ref.as_ref() != Some(base_ref))
+    {
+        return Err(conflict(
+            target_id,
+            "Additive contributions use different base references",
+        ));
     }
 
     let base = match base_ref {
@@ -122,18 +143,27 @@ fn compose_additive(
         BaseRef::Authored => {
             let first = items[0].base_value;
             if items.iter().any(|item| item.base_value != first) {
-                return Err(conflict(target_id, "Additive contributions disagree on authored base value"));
+                return Err(conflict(
+                    target_id,
+                    "Additive contributions disagree on authored base value",
+                ));
             }
             first
         }
         BaseRef::Input(input_id) => context.input_values.get(input_id).copied(),
-    }.ok_or_else(|| conflict(target_id, "the explicitly referenced Additive base value is unavailable"))?;
+    }
+    .ok_or_else(|| {
+        conflict(
+            target_id,
+            "the explicitly referenced Additive base value is unavailable",
+        )
+    })?;
 
     let mut accumulated = base;
     for item in items {
         ensure_compatible(target_id, accumulated, item.value)?;
-        accumulated = add_values(accumulated, item.value)
-            .map_err(|reason| conflict(target_id, reason))?;
+        accumulated =
+            add_values(accumulated, item.value).map_err(|reason| conflict(target_id, reason))?;
     }
     Ok(Some(accumulated))
 }
@@ -145,7 +175,8 @@ fn compose_weighted_blend(
 ) -> Result<Option<TypedValue>, CoreError> {
     // Zero weight is valid but contributes nothing. It is excluded before
     // type compatibility and arithmetic checks.
-    let eligible: Vec<&Contribution> = items.iter()
+    let eligible: Vec<&Contribution> = items
+        .iter()
         .copied()
         .filter(|item| item.weight.unwrap_or(0.0) > 0.0)
         .collect();
@@ -156,17 +187,22 @@ fn compose_weighted_blend(
                 COMPOSITION_NO_ELIGIBLE,
                 DiagnosticSeverity::Warning,
                 "target has no positive-weight contributions",
-            )?.with_target(target_id.clone())
+            )?
+            .with_target(target_id.clone()),
         );
         return Ok(None);
     }
 
     let mut total_weight = 0.0;
     for item in &eligible {
-        let weight = item.weight.expect("validated weighted contribution has a weight");
+        let weight = item
+            .weight
+            .expect("validated weighted contribution has a weight");
         total_weight += weight;
         if !total_weight.is_finite() {
-            return Err(CoreError::CompositionWeightInvalid { binding_id: item.binding_id.to_string() });
+            return Err(CoreError::CompositionWeightInvalid {
+                binding_id: item.binding_id.to_string(),
+            });
         }
     }
     if total_weight <= 0.0 || !total_weight.is_finite() {
@@ -201,11 +237,23 @@ fn compose_weighted_blend(
             TypedValue::vector2(x, y)?
         }
         TypedValue::Angle(first_angle) => {
-            let angles: Vec<(Angle, f64)> = eligible.iter().map(|item| {
-                (item.value.as_angle().expect("type checked"), item.weight.expect("validated"))
-            }).collect();
-            if angles.iter().any(|(angle, _)| angle.is_wrapped() != first_angle.is_wrapped()) {
-                return Err(conflict(target_id, "weighted angle contributions mix wrapped and unwrapped semantics"));
+            let angles: Vec<(Angle, f64)> = eligible
+                .iter()
+                .map(|item| {
+                    (
+                        item.value.as_angle().expect("type checked"),
+                        item.weight.expect("validated"),
+                    )
+                })
+                .collect();
+            if angles
+                .iter()
+                .any(|(angle, _)| angle.is_wrapped() != first_angle.is_wrapped())
+            {
+                return Err(conflict(
+                    target_id,
+                    "weighted angle contributions mix wrapped and unwrapped semantics",
+                ));
             }
             if first_angle.is_wrapped() {
                 let mut sin_sum = 0.0;
@@ -216,7 +264,10 @@ fn compose_weighted_blend(
                     cos_sum += angle.radians().cos() * normalized_weight;
                 }
                 if sin_sum.hypot(cos_sum) <= 1e-12 {
-                    return Err(conflict(target_id, "weighted wrapped-angle mean is undefined for opposing directions"));
+                    return Err(conflict(
+                        target_id,
+                        "weighted wrapped-angle mean is undefined for opposing directions",
+                    ));
                 }
                 TypedValue::angle(normalize_wrapped_angle(sin_sum.atan2(cos_sum)), true)?
             } else {
@@ -234,10 +285,16 @@ fn compose_weighted_blend(
 fn compose_priority_override(items: &[&Contribution]) -> Option<TypedValue> {
     // Highest numeric priority wins. Equal priorities choose the
     // lexicographically smallest (BindingId, ControllerId) key.
-    items.iter().copied().max_by(|left, right| {
-        left.priority.cmp(&right.priority)
-            .then_with(|| (&right.binding_id, &right.controller_id).cmp(&(&left.binding_id, &left.controller_id)))
-    }).map(|item| item.value)
+    items
+        .iter()
+        .copied()
+        .max_by(|left, right| {
+            left.priority.cmp(&right.priority).then_with(|| {
+                (&right.binding_id, &right.controller_id)
+                    .cmp(&(&left.binding_id, &left.controller_id))
+            })
+        })
+        .map(|item| item.value)
 }
 
 fn ensure_compatible(
@@ -248,12 +305,19 @@ fn ensure_compatible(
     if left.kind_name() != right.kind_name() {
         return Err(conflict(
             target_id,
-            format!("incompatible value types: {} and {}", left.kind_name(), right.kind_name()),
+            format!(
+                "incompatible value types: {} and {}",
+                left.kind_name(),
+                right.kind_name()
+            ),
         ));
     }
     if let (TypedValue::Angle(left), TypedValue::Angle(right)) = (left, right) {
         if left.is_wrapped() != right.is_wrapped() {
-            return Err(conflict(target_id, "angle contributions mix wrapped and unwrapped semantics"));
+            return Err(conflict(
+                target_id,
+                "angle contributions mix wrapped and unwrapped semantics",
+            ));
         }
     }
     Ok(())
@@ -263,8 +327,10 @@ fn add_values(left: TypedValue, right: TypedValue) -> Result<TypedValue, &'stati
     match (left, right) {
         (TypedValue::Scalar(a), TypedValue::Scalar(b)) => TypedValue::scalar(a.get() + b.get())
             .map_err(|_| "Additive scalar result is non-finite"),
-        (TypedValue::Vector2(a), TypedValue::Vector2(b)) => TypedValue::vector2(a.x() + b.x(), a.y() + b.y())
-            .map_err(|_| "Additive vector result is non-finite"),
+        (TypedValue::Vector2(a), TypedValue::Vector2(b)) => {
+            TypedValue::vector2(a.x() + b.x(), a.y() + b.y())
+                .map_err(|_| "Additive vector result is non-finite")
+        }
         (TypedValue::Angle(a), TypedValue::Angle(b)) if a.is_wrapped() == b.is_wrapped() => {
             let radians = a.radians() + b.radians();
             let radians = if a.is_wrapped() {
@@ -273,7 +339,8 @@ fn add_values(left: TypedValue, right: TypedValue) -> Result<TypedValue, &'stati
             } else {
                 radians
             };
-            TypedValue::angle(radians, a.is_wrapped()).map_err(|_| "Additive angle result is non-finite")
+            TypedValue::angle(radians, a.is_wrapped())
+                .map_err(|_| "Additive angle result is non-finite")
         }
         _ => Err("Additive values have incompatible types or angle semantics"),
     }
@@ -295,15 +362,26 @@ fn conflict(target_id: &TargetId, reason: impl Into<String>) -> CoreError {
 mod tests {
     use super::*;
     use crate::{
-        canonical::{BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig, TargetMapping},
+        canonical::{
+            BindingMode, CompositionConfig, Controller, ControllerBinding, MappingConfig,
+            TargetMapping,
+        },
         ids::{BindingId, ControllerId, InputId},
         input::{FallbackPolicy, InputDimension, InputSample, InputSource},
     };
 
-    fn id(value: &str) -> TargetId { TargetId::new(value).unwrap() }
-    fn controller(value: &str) -> ControllerId { ControllerId::new(value).unwrap() }
-    fn binding(value: &str) -> BindingId { BindingId::new(value).unwrap() }
-    fn scalar(value: f64) -> TypedValue { TypedValue::scalar(value).unwrap() }
+    fn id(value: &str) -> TargetId {
+        TargetId::new(value).unwrap()
+    }
+    fn controller(value: &str) -> ControllerId {
+        ControllerId::new(value).unwrap()
+    }
+    fn binding(value: &str) -> BindingId {
+        BindingId::new(value).unwrap()
+    }
+    fn scalar(value: f64) -> TypedValue {
+        TypedValue::scalar(value).unwrap()
+    }
 
     fn contribution(
         controller_id: &str,
@@ -325,33 +403,52 @@ mod tests {
     }
 
     fn additive(controller_id: &str, binding_id: &str, value: f64, base: f64) -> Contribution {
-        let mut item = contribution(controller_id, binding_id, scalar(value), CompositionMode::Additive);
+        let mut item = contribution(
+            controller_id,
+            binding_id,
+            scalar(value),
+            CompositionMode::Additive,
+        );
         item.base_ref = Some(BaseRef::Authored);
         item.base_value = Some(scalar(base));
         item
     }
 
     fn weighted(controller_id: &str, binding_id: &str, value: f64, weight: f64) -> Contribution {
-        let mut item = contribution(controller_id, binding_id, scalar(value), CompositionMode::WeightedBlend);
+        let mut item = contribution(
+            controller_id,
+            binding_id,
+            scalar(value),
+            CompositionMode::WeightedBlend,
+        );
         item.weight = Some(weight);
         item
     }
 
     fn priority(controller_id: &str, binding_id: &str, value: f64, priority: i64) -> Contribution {
-        let mut item = contribution(controller_id, binding_id, scalar(value), CompositionMode::PriorityOverride);
+        let mut item = contribution(
+            controller_id,
+            binding_id,
+            scalar(value),
+            CompositionMode::PriorityOverride,
+        );
         item.priority = Some(priority);
         item
     }
 
     #[test]
     fn evaluate_and_compose_uses_explicit_binding_composition_configuration() {
-        let make_controller = |controller_name: &str, input_name: &str, binding_name: &str, weight: f64| {
-            Controller {
+        let make_controller =
+            |controller_name: &str, input_name: &str, binding_name: &str, weight: f64| Controller {
                 id: ControllerId::new(controller_name).unwrap(),
                 enabled: true,
                 inputs: vec![InputId::new(input_name).unwrap()],
                 dependencies: vec![],
-                mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+                mapping: MappingConfig::Range1D {
+                    minimum: -1.0,
+                    neutral: 0.0,
+                    maximum: 1.0,
+                },
                 bindings: vec![ControllerBinding {
                     id: BindingId::new(binding_name).unwrap(),
                     target_id: id("shared-target"),
@@ -371,12 +468,12 @@ mod tests {
                     }),
                 }],
                 parent_scoped: false,
-            }
-        };
+            };
         let graph = ControllerGraph::new(vec![
             make_controller("controller-a", "input-a", "binding-a", 1.0),
             make_controller("controller-b", "input-b", "binding-b", 3.0),
-        ]).unwrap();
+        ])
+        .unwrap();
         let definitions = vec![
             InputDefinition {
                 id: InputId::new("input-a").unwrap(),
@@ -391,10 +488,14 @@ mod tests {
                 fallback: FallbackPolicy::Reject,
             },
         ];
-        let snapshot = InputSnapshot::new(5, vec![
-            InputSample::valid(InputId::new("input-a").unwrap(), scalar(10.0), Some(5)),
-            InputSample::valid(InputId::new("input-b").unwrap(), scalar(20.0), Some(5)),
-        ]).unwrap();
+        let snapshot = InputSnapshot::new(
+            5,
+            vec![
+                InputSample::valid(InputId::new("input-a").unwrap(), scalar(10.0), Some(5)),
+                InputSample::valid(InputId::new("input-b").unwrap(), scalar(20.0), Some(5)),
+            ],
+        )
+        .unwrap();
         let mapper = |controller: &Controller, inputs: &crate::evaluator::ResolvedInputs| {
             Ok(BTreeMap::from([(
                 controller.bindings[0].id.clone(),
@@ -407,7 +508,8 @@ mod tests {
             &snapshot,
             &mapper,
             &CompositionContext::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(result.evaluation.contributions.len(), 2);
         assert_eq!(
             result.composition.outputs.get(&id("shared-target")),
@@ -422,7 +524,11 @@ mod tests {
             enabled: true,
             inputs: vec![InputId::new("angle-input").unwrap()],
             dependencies: vec![],
-            mapping: MappingConfig::Range1D { minimum: -1.0, neutral: 0.0, maximum: 1.0 },
+            mapping: MappingConfig::Range1D {
+                minimum: -1.0,
+                neutral: 0.0,
+                maximum: 1.0,
+            },
             bindings: vec![ControllerBinding {
                 id: BindingId::new("angle-binding").unwrap(),
                 target_id: id("angle-target"),
@@ -451,9 +557,15 @@ mod tests {
             dimension: InputDimension::Scalar,
             fallback: FallbackPolicy::Reject,
         }];
-        let snapshot = InputSnapshot::new(1, vec![
-            InputSample::valid(InputId::new("angle-input").unwrap(), scalar(0.0), Some(1)),
-        ]).unwrap();
+        let snapshot = InputSnapshot::new(
+            1,
+            vec![InputSample::valid(
+                InputId::new("angle-input").unwrap(),
+                scalar(0.0),
+                Some(1),
+            )],
+        )
+        .unwrap();
         let mapper = |controller: &Controller, _: &crate::evaluator::ResolvedInputs| {
             Ok(BTreeMap::from([(
                 controller.bindings[0].id.clone(),
@@ -466,7 +578,8 @@ mod tests {
             &snapshot,
             &mapper,
             &CompositionContext::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(
             result.composition.outputs.get(&id("angle-target")),
             Some(&TypedValue::angle(-std::f64::consts::PI, true).unwrap()),
@@ -475,7 +588,12 @@ mod tests {
 
     #[test]
     fn replace_emits_the_single_contribution() {
-        let item = contribution("controller-a", "binding-a", scalar(4.0), CompositionMode::Replace);
+        let item = contribution(
+            "controller-a",
+            "binding-a",
+            scalar(4.0),
+            CompositionMode::Replace,
+        );
         let result = compose(&[item], &CompositionContext::default()).unwrap();
         assert_eq!(result.outputs.get(&id("target-a")), Some(&scalar(4.0)));
         assert!(result.diagnostics.is_empty());
@@ -484,19 +602,40 @@ mod tests {
     #[test]
     fn multiple_replace_contributions_conflict_instead_of_overwriting() {
         let items = vec![
-            contribution("controller-a", "binding-a", scalar(1.0), CompositionMode::Replace),
-            contribution("controller-b", "binding-b", scalar(2.0), CompositionMode::Replace),
+            contribution(
+                "controller-a",
+                "binding-a",
+                scalar(1.0),
+                CompositionMode::Replace,
+            ),
+            contribution(
+                "controller-b",
+                "binding-b",
+                scalar(2.0),
+                CompositionMode::Replace,
+            ),
         ];
-        assert!(matches!(compose(&items, &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
+        assert!(matches!(
+            compose(&items, &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
     }
 
     #[test]
     fn mixed_modes_for_one_target_are_a_typed_conflict() {
         let items = vec![
-            contribution("controller-a", "binding-a", scalar(1.0), CompositionMode::Replace),
+            contribution(
+                "controller-a",
+                "binding-a",
+                scalar(1.0),
+                CompositionMode::Replace,
+            ),
             additive("controller-b", "binding-b", 2.0, 0.0),
         ];
-        assert!(matches!(compose(&items, &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
+        assert!(matches!(
+            compose(&items, &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
     }
 
     #[test]
@@ -511,20 +650,44 @@ mod tests {
 
     #[test]
     fn additive_supports_neutral_and_explicit_input_bases() {
-        let mut neutral = contribution("controller-a", "binding-a", scalar(2.0), CompositionMode::Additive);
+        let mut neutral = contribution(
+            "controller-a",
+            "binding-a",
+            scalar(2.0),
+            CompositionMode::Additive,
+        );
         neutral.base_ref = Some(BaseRef::Neutral);
-        let mut input = contribution("controller-b", "binding-b", scalar(3.0), CompositionMode::Additive);
+        let mut input = contribution(
+            "controller-b",
+            "binding-b",
+            scalar(3.0),
+            CompositionMode::Additive,
+        );
         input.base_ref = Some(BaseRef::Input("input-base".into()));
-        let neutral_result = compose(&[neutral], &CompositionContext {
-            neutral_values: BTreeMap::from([(id("target-a"), scalar(10.0))]),
-            input_values: BTreeMap::new(),
-        }).unwrap();
-        assert_eq!(neutral_result.outputs.get(&id("target-a")), Some(&scalar(12.0)));
-        let input_result = compose(&[input], &CompositionContext {
-            neutral_values: BTreeMap::new(),
-            input_values: BTreeMap::from([("input-base".into(), scalar(20.0))]),
-        }).unwrap();
-        assert_eq!(input_result.outputs.get(&id("target-a")), Some(&scalar(23.0)));
+        let neutral_result = compose(
+            &[neutral],
+            &CompositionContext {
+                neutral_values: BTreeMap::from([(id("target-a"), scalar(10.0))]),
+                input_values: BTreeMap::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            neutral_result.outputs.get(&id("target-a")),
+            Some(&scalar(12.0))
+        );
+        let input_result = compose(
+            &[input],
+            &CompositionContext {
+                neutral_values: BTreeMap::new(),
+                input_values: BTreeMap::from([("input-base".into(), scalar(20.0))]),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            input_result.outputs.get(&id("target-a")),
+            Some(&scalar(23.0))
+        );
     }
 
     #[test]
@@ -533,10 +696,21 @@ mod tests {
             additive("controller-a", "binding-a", 1.0, 10.0),
             additive("controller-b", "binding-b", 2.0, 11.0),
         ];
-        assert!(matches!(compose(&items, &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
-        let mut missing = contribution("controller-a", "binding-a", scalar(1.0), CompositionMode::Additive);
+        assert!(matches!(
+            compose(&items, &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
+        let mut missing = contribution(
+            "controller-a",
+            "binding-a",
+            scalar(1.0),
+            CompositionMode::Additive,
+        );
         missing.base_ref = Some(BaseRef::Neutral);
-        assert!(matches!(compose(&[missing], &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
+        assert!(matches!(
+            compose(&[missing], &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
     }
 
     #[test]
@@ -558,29 +732,56 @@ mod tests {
         let result = compose(&items, &CompositionContext::default()).unwrap();
         assert!(!result.outputs.contains_key(&id("target-a")));
         assert!(result.unavailable_targets.contains(&id("target-a")));
-        assert!(result.diagnostics.iter().any(|item| item.code == COMPOSITION_NO_ELIGIBLE));
+        assert!(result
+            .diagnostics
+            .iter()
+            .any(|item| item.code == COMPOSITION_NO_ELIGIBLE));
     }
 
     #[test]
     fn invalid_negative_or_non_finite_weights_are_typed_errors() {
         for weight in [-1.0, f64::NAN, f64::INFINITY] {
             let item = weighted("controller-a", "binding-a", 10.0, weight);
-            assert!(matches!(compose(&[item], &CompositionContext::default()), Err(CoreError::CompositionWeightInvalid { .. })));
+            assert!(matches!(
+                compose(&[item], &CompositionContext::default()),
+                Err(CoreError::CompositionWeightInvalid { .. })
+            ));
         }
     }
 
     #[test]
     fn weighted_blend_rejects_incompatible_types_and_undefined_wrapped_angle_mean() {
-        let mut vector = contribution("controller-b", "binding-b", TypedValue::vector2(1.0, 2.0).unwrap(), CompositionMode::WeightedBlend);
+        let mut vector = contribution(
+            "controller-b",
+            "binding-b",
+            TypedValue::vector2(1.0, 2.0).unwrap(),
+            CompositionMode::WeightedBlend,
+        );
         vector.weight = Some(1.0);
         let scalar = weighted("controller-a", "binding-a", 1.0, 1.0);
-        assert!(matches!(compose(&[scalar, vector], &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
+        assert!(matches!(
+            compose(&[scalar, vector], &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
 
-        let mut positive = contribution("controller-a", "binding-a", TypedValue::angle(0.0, true).unwrap(), CompositionMode::WeightedBlend);
+        let mut positive = contribution(
+            "controller-a",
+            "binding-a",
+            TypedValue::angle(0.0, true).unwrap(),
+            CompositionMode::WeightedBlend,
+        );
         positive.weight = Some(1.0);
-        let mut negative = contribution("controller-b", "binding-b", TypedValue::angle(std::f64::consts::PI, true).unwrap(), CompositionMode::WeightedBlend);
+        let mut negative = contribution(
+            "controller-b",
+            "binding-b",
+            TypedValue::angle(std::f64::consts::PI, true).unwrap(),
+            CompositionMode::WeightedBlend,
+        );
         negative.weight = Some(1.0);
-        assert!(matches!(compose(&[positive, negative], &CompositionContext::default()), Err(CoreError::CompositionConflict { .. })));
+        assert!(matches!(
+            compose(&[positive, negative], &CompositionContext::default()),
+            Err(CoreError::CompositionConflict { .. })
+        ));
     }
 
     #[test]
@@ -606,17 +807,33 @@ mod tests {
 
     #[test]
     fn additive_vector_and_wrapped_angle_values_are_supported() {
-        let mut vector = contribution("controller-a", "binding-a", TypedValue::vector2(1.0, -2.0).unwrap(), CompositionMode::Additive);
+        let mut vector = contribution(
+            "controller-a",
+            "binding-a",
+            TypedValue::vector2(1.0, -2.0).unwrap(),
+            CompositionMode::Additive,
+        );
         vector.base_ref = Some(BaseRef::Authored);
         vector.base_value = Some(TypedValue::vector2(10.0, 20.0).unwrap());
         let vector_result = compose(&[vector], &CompositionContext::default()).unwrap();
-        assert_eq!(vector_result.outputs.get(&id("target-a")), Some(&TypedValue::vector2(11.0, 18.0).unwrap()));
+        assert_eq!(
+            vector_result.outputs.get(&id("target-a")),
+            Some(&TypedValue::vector2(11.0, 18.0).unwrap())
+        );
 
-        let mut angle = contribution("controller-a", "binding-a", TypedValue::angle(0.5, true).unwrap(), CompositionMode::Additive);
+        let mut angle = contribution(
+            "controller-a",
+            "binding-a",
+            TypedValue::angle(0.5, true).unwrap(),
+            CompositionMode::Additive,
+        );
         angle.base_ref = Some(BaseRef::Authored);
         angle.base_value = Some(TypedValue::angle(3.0, true).unwrap());
         let angle_result = compose(&[angle], &CompositionContext::default()).unwrap();
-        assert_eq!(angle_result.outputs.get(&id("target-a")), Some(&TypedValue::angle(3.5 - std::f64::consts::TAU, true).unwrap()));
+        assert_eq!(
+            angle_result.outputs.get(&id("target-a")),
+            Some(&TypedValue::angle(3.5 - std::f64::consts::TAU, true).unwrap())
+        );
     }
 
     #[test]

@@ -21,12 +21,21 @@ pub struct SchemaEnvelope<T> {
 
 impl<T> SchemaEnvelope<T> {
     pub fn new(controller: T) -> Self {
-        Self { schema: SchemaIdentity { name: SCHEMA_NAME.into(), version: CURRENT_SCHEMA_VERSION }, controller }
+        Self {
+            schema: SchemaIdentity {
+                name: SCHEMA_NAME.into(),
+                version: CURRENT_SCHEMA_VERSION,
+            },
+            controller,
+        }
     }
 
     pub fn validate_identity(&self) -> Result<(), CoreError> {
         if self.schema.name != SCHEMA_NAME {
-            return Err(CoreError::Serialization(format!("unexpected schema name: {}", self.schema.name)));
+            return Err(CoreError::Serialization(format!(
+                "unexpected schema name: {}",
+                self.schema.name
+            )));
         }
         if self.schema.version != CURRENT_SCHEMA_VERSION {
             return Err(CoreError::UnsupportedSchemaVersion(self.schema.version));

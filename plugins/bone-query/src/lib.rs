@@ -28,10 +28,14 @@ ac::plugin!(MANIFEST, run);
 
 fn run(params: &Value) -> Result<(), String> {
     let document = ac::document()?;
-    let playhead_frame = document["frame"].as_u64()
-        .and_then(|value| u32::try_from(value).ok()).unwrap_or(0);
+    let playhead_frame = document["frame"]
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(0);
     let query = build_query(params, playhead_frame);
-    let frame = query["frame"].as_u64().and_then(|value| u32::try_from(value).ok())
+    let frame = query["frame"]
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
         .unwrap_or(playhead_frame);
     let include_points = query["points"].as_bool().unwrap_or(false);
     let max_points = params["max_points"].as_u64().unwrap_or(30).clamp(1, 100) as usize;
@@ -45,7 +49,9 @@ fn build_query(params: &Value, playhead_frame: u32) -> Value {
     // Every declared manifest parameter receives a default from AniCraft. Explicit enable
     // toggles are therefore needed to distinguish "use frame/layer 0" from "use the default".
     let frame = if params["use_frame"].as_bool().unwrap_or(false) {
-        params["frame"].as_u64().and_then(|value| u32::try_from(value).ok())
+        params["frame"]
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())
             .unwrap_or(playhead_frame)
     } else {
         playhead_frame
@@ -61,11 +67,16 @@ fn build_query(params: &Value, playhead_frame: u32) -> Value {
 }
 
 fn report_armatures(result: &Value, frame: u32, include_points: bool, max_points: usize) {
-    let armatures = result["armatures"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let armatures = result["armatures"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
     let reported_frame = result["frame"].as_u64().unwrap_or(u64::from(frame));
     ac::log(&format!(
         "Bone Query — frame {} (0-based {}) — {} armature(s)",
-        reported_frame + 1, reported_frame, armatures.len()
+        reported_frame + 1,
+        reported_frame,
+        armatures.len()
     ));
 
     if armatures.is_empty() {
@@ -80,7 +91,11 @@ fn report_armatures(result: &Value, frame: u32, include_points: bool, max_points
 fn report_armature(armature: &Value, include_points: bool, max_points: usize) {
     let layer = display_u64(armature.get("layer"));
     let name = armature["name"].as_str().unwrap_or("(unnamed)");
-    let springs = if armature["springs"].as_bool().unwrap_or(false) { "on" } else { "off" };
+    let springs = if armature["springs"].as_bool().unwrap_or(false) {
+        "on"
+    } else {
+        "off"
+    };
     let mixed = armature["mixed"].as_bool().unwrap_or(false);
     let roots = display_id_list(armature.get("roots"));
     let members = display_id_list(armature.get("members"));
@@ -144,7 +159,9 @@ fn report_shape(shape: &Value, include_points: bool, max_points: usize) {
     let shape_id = display_u64(shape.get("shape"));
     let count = shape["count"].as_u64().unwrap_or(0);
     let bones = display_id_list(shape.get("bones"));
-    ac::log(&format!("Shape {shape_id}: {count} skin point(s); bones [{bones}]"));
+    ac::log(&format!(
+        "Shape {shape_id}: {count} skin point(s); bones [{bones}]"
+    ));
     if include_points {
         if let Some(points) = shape["points"].as_array() {
             report_points(points, max_points);
@@ -155,7 +172,9 @@ fn report_shape(shape: &Value, include_points: bool, max_points: usize) {
 }
 
 fn report_shape_alias(armature: &Value, max_points: usize) {
-    let Some(points) = armature["points"].as_array() else { return };
+    let Some(points) = armature["points"].as_array() else {
+        return;
+    };
     let shape_id = display_optional_u64(armature.get("shape"));
     ac::log(&format!("Shape {shape_id}: {} skin point(s)", points.len()));
     report_points(points, max_points);
@@ -165,15 +184,24 @@ fn report_points(points: &[Value], max_points: usize) {
     for (index, point) in points.iter().take(max_points).enumerate() {
         let at = display_point(point.get("at"));
         let manual = point["manual"].as_bool().unwrap_or(false);
-        let weights = point["bones"].as_array().map(|entries| {
-            entries.iter().filter_map(|entry| {
-                let pair = entry.as_array()?;
-                let id = pair.first()?.as_u64()?;
-                let weight = pair.get(1)?.as_f64()?;
-                Some(format!("{id}:{weight:.3}"))
-            }).collect::<Vec<_>>().join(", ")
-        }).unwrap_or_default();
-        ac::log(&format!("  Point {index} at {at}; weights [{weights}]; manual {manual}"));
+        let weights = point["bones"]
+            .as_array()
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| {
+                        let pair = entry.as_array()?;
+                        let id = pair.first()?.as_u64()?;
+                        let weight = pair.get(1)?.as_f64()?;
+                        Some(format!("{id}:{weight:.3}"))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default();
+        ac::log(&format!(
+            "  Point {index} at {at}; weights [{weights}]; manual {manual}"
+        ));
     }
     if points.len() > max_points {
         ac::log(&format!(
@@ -184,7 +212,10 @@ fn report_points(points: &[Value], max_points: usize) {
 }
 
 fn display_u64(value: Option<&Value>) -> String {
-    value.and_then(Value::as_u64).map(|n| n.to_string()).unwrap_or_else(|| "n/a".to_string())
+    value
+        .and_then(Value::as_u64)
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "n/a".to_string())
 }
 
 fn display_optional_u64(value: Option<&Value>) -> String {
@@ -195,27 +226,46 @@ fn display_optional_u64(value: Option<&Value>) -> String {
 }
 
 fn display_id_list(value: Option<&Value>) -> String {
-    value.and_then(Value::as_array).map(|items| {
-        items.iter().filter_map(Value::as_u64).map(|id| id.to_string())
-            .collect::<Vec<_>>().join(", ")
-    }).unwrap_or_default()
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_u64)
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default()
 }
 
 fn display_number(value: Option<&Value>) -> String {
-    value.and_then(Value::as_f64).map(|n| format!("{n:.2}")).unwrap_or_else(|| "n/a".to_string())
+    value
+        .and_then(Value::as_f64)
+        .map(|n| format!("{n:.2}"))
+        .unwrap_or_else(|| "n/a".to_string())
 }
 
 fn display_point(value: Option<&Value>) -> String {
-    let Some(pair) = value.and_then(Value::as_array) else { return "(not evaluated)".to_string() };
-    match (pair.first().and_then(Value::as_f64), pair.get(1).and_then(Value::as_f64)) {
+    let Some(pair) = value.and_then(Value::as_array) else {
+        return "(not evaluated)".to_string();
+    };
+    match (
+        pair.first().and_then(Value::as_f64),
+        pair.get(1).and_then(Value::as_f64),
+    ) {
         (Some(x), Some(y)) => format!("({x:.2}, {y:.2})"),
         _ => "(not evaluated)".to_string(),
     }
 }
 
 fn display_translation_limits(value: Option<&Value>) -> String {
-    let Some(value) = value.filter(|v| !v.is_null()) else { return "disabled".to_string() };
-    if value["constrain"].as_bool() == Some(false) { return "free".to_string() }
+    let Some(value) = value.filter(|v| !v.is_null()) else {
+        return "disabled".to_string();
+    };
+    if value["constrain"].as_bool() == Some(false) {
+        return "free".to_string();
+    }
     match (value["min"].as_f64(), value["max"].as_f64()) {
         (Some(min), Some(max)) => format!("{min:.2}..{max:.2} px"),
         _ => "enabled (limits unavailable)".to_string(),
@@ -223,9 +273,13 @@ fn display_translation_limits(value: Option<&Value>) -> String {
 }
 
 fn display_spring(value: Option<&Value>) -> String {
-    let Some(value) = value.filter(|v| !v.is_null()) else { return "none".to_string() };
+    let Some(value) = value.filter(|v| !v.is_null()) else {
+        return "none".to_string();
+    };
     match (value["strength"].as_f64(), value["damping"].as_f64()) {
-        (Some(strength), Some(damping)) => format!("strength {strength:.1}%, damping {damping:.1}%"),
+        (Some(strength), Some(damping)) => {
+            format!("strength {strength:.1}%, damping {damping:.1}%")
+        }
         _ => "configured (details unavailable)".to_string(),
     }
 }
@@ -271,10 +325,13 @@ mod tests {
     #[test]
     fn query_defaults_to_playhead_and_all_armatures() {
         assert_eq!(
-            build_query(&json!({
-                "use_frame": false, "frame": 0,
-                "use_layer": false, "layer": 0, "points": true
-            }), 9),
+            build_query(
+                &json!({
+                    "use_frame": false, "frame": 0,
+                    "use_layer": false, "layer": 0, "points": true
+                }),
+                9
+            ),
             json!({"frame": 9, "points": true})
         );
     }
@@ -282,10 +339,13 @@ mod tests {
     #[test]
     fn query_can_explicitly_select_frame_zero_and_layer_zero() {
         assert_eq!(
-            build_query(&json!({
-                "use_frame": true, "frame": 0,
-                "use_layer": true, "layer": 0, "points": false
-            }), 9),
+            build_query(
+                &json!({
+                    "use_frame": true, "frame": 0,
+                    "use_layer": true, "layer": 0, "points": false
+                }),
+                9
+            ),
             json!({"frame": 0, "layer": 0, "points": false})
         );
     }
@@ -323,7 +383,9 @@ mod tests {
     #[test]
     fn shape_points_are_parsed_without_mutating_the_response() {
         let result = host_fixture();
-        let points = result["armatures"][0]["shapes"][0]["points"].as_array().unwrap();
+        let points = result["armatures"][0]["shapes"][0]["points"]
+            .as_array()
+            .unwrap();
         let original = result.clone();
         assert_eq!(points.len(), 2);
         assert_eq!(display_point(points[0].get("at")), "(1.00, 2.00)");

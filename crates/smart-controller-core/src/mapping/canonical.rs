@@ -20,7 +20,11 @@ use crate::{
     error::CoreError,
     evaluator::{ControllerMapper, ResolvedInputs},
     ids::BindingId,
-    mapping::{easing::Easing, frame, range::{normalize_directed, ThreePointRange}},
+    mapping::{
+        easing::Easing,
+        frame,
+        range::{normalize_directed, ThreePointRange},
+    },
     pose::Pose2D,
     value::TypedValue,
 };
@@ -40,17 +44,17 @@ impl PoseLibrary {
         Self::default()
     }
 
-    pub fn register(
-        &mut self,
-        pose_id: impl Into<String>,
-        pose: Pose2D,
-    ) -> Result<(), CoreError> {
+    pub fn register(&mut self, pose_id: impl Into<String>, pose: Pose2D) -> Result<(), CoreError> {
         let pose_id = pose_id.into();
         if pose_id.trim().is_empty() {
-            return Err(CoreError::InvalidMapping("pose identity must not be empty".into()));
+            return Err(CoreError::InvalidMapping(
+                "pose identity must not be empty".into(),
+            ));
         }
         if self.poses.contains_key(&pose_id) {
-            return Err(CoreError::InvalidMapping(format!("pose identity {pose_id} is already registered")));
+            return Err(CoreError::InvalidMapping(format!(
+                "pose identity {pose_id} is already registered"
+            )));
         }
         self.poses.insert(pose_id, pose);
         Ok(())
@@ -310,7 +314,9 @@ fn map_anchored_bindings_with_unit(
 /// applied symmetrically so the neutral point remains exactly unchanged.
 fn ease_signed(value: f64, easing: Easing) -> Result<f64, CoreError> {
     if !value.is_finite() {
-        return Err(CoreError::NonFiniteValue { context: "signed mapping input" });
+        return Err(CoreError::NonFiniteValue {
+            context: "signed mapping input",
+        });
     }
     if value < 0.0 {
         Ok(-easing.apply(-value)?)
@@ -329,7 +335,9 @@ fn interpolate_anchors(negative: f64, neutral: f64, positive: f64, signed: f64) 
 
 fn interpolate_pose_set(poses: &[&Pose2D], unit: f64) -> Result<Pose2D, CoreError> {
     if poses.is_empty() {
-        return Err(CoreError::InvalidMapping("PoseSet1D requires at least one registered pose".into()));
+        return Err(CoreError::InvalidMapping(
+            "PoseSet1D requires at least one registered pose".into(),
+        ));
     }
     for pose in poses.iter().skip(1) {
         poses[0].validate_compatible(pose)?;
@@ -347,20 +355,35 @@ fn interpolate_pose_set(poses: &[&Pose2D], unit: f64) -> Result<Pose2D, CoreErro
 
     let mut values = Vec::with_capacity(lower.values().len());
     for (binding_id, lower_value) in lower.iter() {
-        let upper_value = upper.get(binding_id).ok_or_else(|| {
-            CoreError::PoseBindingMissing { binding_id: binding_id.to_string() }
-        })?;
-        values.push((binding_id.clone(), lower_value.interpolate(*upper_value, amount)?));
+        let upper_value = upper
+            .get(binding_id)
+            .ok_or_else(|| CoreError::PoseBindingMissing {
+                binding_id: binding_id.to_string(),
+            })?;
+        values.push((
+            binding_id.clone(),
+            lower_value.interpolate(*upper_value, amount)?,
+        ));
     }
     Pose2D::new(values)
 }
 
 fn validate_pose_bindings(controller: &Controller, pose: &Pose2D) -> Result<(), CoreError> {
-    let expected: HashSet<&BindingId> = controller.bindings.iter().map(|binding| &binding.id).collect();
+    let expected: HashSet<&BindingId> = controller
+        .bindings
+        .iter()
+        .map(|binding| &binding.id)
+        .collect();
     let actual: HashSet<&BindingId> = pose.iter().map(|(binding_id, _)| binding_id).collect();
     if expected != actual {
-        let missing: Vec<String> = expected.difference(&actual).map(|id| id.to_string()).collect();
-        let unexpected: Vec<String> = actual.difference(&expected).map(|id| id.to_string()).collect();
+        let missing: Vec<String> = expected
+            .difference(&actual)
+            .map(|id| id.to_string())
+            .collect();
+        let unexpected: Vec<String> = actual
+            .difference(&expected)
+            .map(|id| id.to_string())
+            .collect();
         return Err(CoreError::InvalidMapping(format!(
             "pose binding set does not match controller {} (missing: [{}]; unexpected: [{}])",
             controller.id,

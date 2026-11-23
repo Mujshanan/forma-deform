@@ -11,5 +11,7 @@ pub enum EndpointPolicy {
 }
 
 impl Default for EndpointPolicy {
-    fn default() -> Self { Self::Exclusive }
+    fn default() -> Self {
+        Self::Exclusive
+    }
 }

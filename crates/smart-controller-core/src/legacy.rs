@@ -164,15 +164,21 @@ impl fmt::Display for ControllerError {
             Self::EmptyTargetId => write!(f, "target ID must not be empty"),
             Self::InvalidInputRange => write!(f, "input range must be finite and strictly ordered"),
             Self::NonFiniteInput => write!(f, "controller input must be finite"),
-            Self::NonFiniteTargetValue => write!(f, "target anchors must contain only finite values"),
+            Self::NonFiniteTargetValue => {
+                write!(f, "target anchors must contain only finite values")
+            }
             Self::RelativeDeltaUnsupportedForSymbolFrame => {
                 write!(f, "RelativeDelta is not supported for SymbolFrame targets")
             }
             Self::DuplicateBindingId(id) => write!(f, "duplicate binding ID: {id}"),
             Self::BindingNotFound(id) => write!(f, "binding not found: {id}"),
-            Self::UnsupportedSchemaVersion(version) => write!(f, "unsupported binding schema version: {version}"),
+            Self::UnsupportedSchemaVersion(version) => {
+                write!(f, "unsupported binding schema version: {version}")
+            }
             Self::Serialization(message) => write!(f, "binding serialization failed: {message}"),
-            Self::ArithmeticOverflow => write!(f, "controller evaluation produced a non-finite result"),
+            Self::ArithmeticOverflow => {
+                write!(f, "controller evaluation produced a non-finite result")
+            }
         }
     }
 }
@@ -190,7 +196,9 @@ impl ControllerBinding {
         self.input_range.validate()?;
 
         match &self.target {
-            ControllerTarget::SymbolFrame { symbol_instance_id, .. } => {
+            ControllerTarget::SymbolFrame {
+                symbol_instance_id, ..
+            } => {
                 if symbol_instance_id.trim().is_empty() {
                     return Err(ControllerError::EmptyTargetId);
                 }
@@ -242,11 +250,7 @@ impl ControllerBinding {
                 positive_frame,
             } => {
                 let frame = if eased < 0.0 {
-                    interpolate(
-                        *negative_frame as f64,
-                        *neutral_frame as f64,
-                        eased + 1.0,
-                    )?
+                    interpolate(*negative_frame as f64, *neutral_frame as f64, eased + 1.0)?
                 } else {
                     interpolate(*neutral_frame as f64, *positive_frame as f64, eased)?
                 };
@@ -312,7 +316,9 @@ impl BindingSet {
 
     pub fn validate(&self) -> Result<(), ControllerError> {
         if self.schema_version != BINDING_SCHEMA_VERSION {
-            return Err(ControllerError::UnsupportedSchemaVersion(self.schema_version));
+            return Err(ControllerError::UnsupportedSchemaVersion(
+                self.schema_version,
+            ));
         }
         validate_bindings(&self.bindings)
     }
@@ -449,15 +455,24 @@ mod tests {
         let binding = symbol_binding();
         assert_eq!(
             binding.evaluate(-45.0).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 1 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 1
+            })
         );
         assert_eq!(
             binding.evaluate(0.0).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 5 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 5
+            })
         );
         assert_eq!(
             binding.evaluate(45.0).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 9 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 9
+            })
         );
     }
 
@@ -466,15 +481,24 @@ mod tests {
         let binding = symbol_binding();
         assert_eq!(
             binding.evaluate(-22.5).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 3 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 3
+            })
         );
     }
 
     #[test]
     fn input_is_clamped_to_the_configured_range() {
         let binding = symbol_binding();
-        assert_eq!(binding.evaluate(-90.0).unwrap(), binding.evaluate(-45.0).unwrap());
-        assert_eq!(binding.evaluate(90.0).unwrap(), binding.evaluate(45.0).unwrap());
+        assert_eq!(
+            binding.evaluate(-90.0).unwrap(),
+            binding.evaluate(-45.0).unwrap()
+        );
+        assert_eq!(
+            binding.evaluate(90.0).unwrap(),
+            binding.evaluate(45.0).unwrap()
+        );
     }
 
     #[test]
@@ -483,11 +507,17 @@ mod tests {
         binding.easing = EaseCurve::Smoothstep;
         assert_eq!(
             binding.evaluate(0.0).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 5 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 5
+            })
         );
         assert_eq!(
             binding.evaluate(22.5).unwrap(),
-            Some(PreviewResult::SymbolFrame { symbol_instance_id: "instance-head".into(), frame: 7 })
+            Some(PreviewResult::SymbolFrame {
+                symbol_instance_id: "instance-head".into(),
+                frame: 7
+            })
         );
     }
 
@@ -537,7 +567,11 @@ mod tests {
 
     #[test]
     fn invalid_and_overflowing_input_ranges_are_rejected() {
-        let invalid = InputRange { minimum: 0.0, neutral: 0.0, maximum: 1.0 };
+        let invalid = InputRange {
+            minimum: 0.0,
+            neutral: 0.0,
+            maximum: 1.0,
+        };
         assert_eq!(invalid.validate(), Err(ControllerError::InvalidInputRange));
 
         let overflowing = InputRange {
@@ -545,22 +579,34 @@ mod tests {
             neutral: f64::MAX / 2.0,
             maximum: f64::MAX,
         };
-        assert_eq!(overflowing.validate(), Err(ControllerError::InvalidInputRange));
+        assert_eq!(
+            overflowing.validate(),
+            Err(ControllerError::InvalidInputRange)
+        );
     }
 
     #[test]
     fn non_finite_input_is_rejected() {
         let binding = symbol_binding();
-        assert_eq!(binding.evaluate(f64::NAN), Err(ControllerError::NonFiniteInput));
+        assert_eq!(
+            binding.evaluate(f64::NAN),
+            Err(ControllerError::NonFiniteInput)
+        );
     }
 
     #[test]
     fn non_finite_geometry_anchor_is_rejected() {
         let mut binding = geometry_binding(ControllerMode::AbsolutePose);
-        if let ControllerTarget::GeometryDeform { positive_offset, .. } = &mut binding.target {
+        if let ControllerTarget::GeometryDeform {
+            positive_offset, ..
+        } = &mut binding.target
+        {
             positive_offset.x = f64::INFINITY;
         }
-        assert_eq!(binding.validate(), Err(ControllerError::NonFiniteTargetValue));
+        assert_eq!(
+            binding.validate(),
+            Err(ControllerError::NonFiniteTargetValue)
+        );
     }
 
     #[test]
@@ -575,7 +621,10 @@ mod tests {
             negative_offset.x = -f64::MAX;
             neutral_offset.x = f64::MAX;
         }
-        assert_eq!(binding.evaluate(-45.0), Err(ControllerError::ArithmeticOverflow));
+        assert_eq!(
+            binding.evaluate(-45.0),
+            Err(ControllerError::ArithmeticOverflow)
+        );
     }
 
     #[test]
@@ -592,7 +641,9 @@ mod tests {
         second.id = first.id.clone();
         assert_eq!(
             validate_bindings(&[first, second]),
-            Err(ControllerError::DuplicateBindingId("binding-head-turn".into()))
+            Err(ControllerError::DuplicateBindingId(
+                "binding-head-turn".into()
+            ))
         );
     }
 
@@ -658,7 +709,8 @@ mod tests {
         let set = BindingSet::new(vec![
             symbol_binding(),
             geometry_binding(ControllerMode::RelativeDelta),
-        ]).unwrap();
+        ])
+        .unwrap();
         let json = set.to_json().unwrap();
         let decoded = BindingSet::from_json(&json).unwrap();
         assert_eq!(decoded, set);
@@ -667,8 +719,7 @@ mod tests {
     #[test]
     fn binding_set_rejects_unknown_schema_versions() {
         let set = BindingSet::new(vec![symbol_binding()]).unwrap();
-        let mut value: serde_json::Value =
-            serde_json::from_str(&set.to_json().unwrap()).unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&set.to_json().unwrap()).unwrap();
         value["schema_version"] = serde_json::json!(2);
         let json = serde_json::to_string(&value).unwrap();
         assert_eq!(
@@ -684,7 +735,9 @@ mod tests {
         second.id = first.id.clone();
         assert_eq!(
             BindingSet::new(vec![first, second]),
-            Err(ControllerError::DuplicateBindingId("binding-head-turn".into()))
+            Err(ControllerError::DuplicateBindingId(
+                "binding-head-turn".into()
+            ))
         );
     }
 

@@ -31,7 +31,10 @@ fn declared_dependencies(manifest: &Path) -> HashSet<String> {
 #[test]
 fn smart_controller_and_form_deform_core_have_no_direct_dependency_on_each_other() {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = crate_dir.parent().and_then(Path::parent).expect("crate is a workspace member");
+    let workspace_root = crate_dir
+        .parent()
+        .and_then(Path::parent)
+        .expect("crate is a workspace member");
     let smart_manifest = workspace_root.join("crates/smart-controller-core/Cargo.toml");
     let deform_manifest = workspace_root.join("crates/form-deform-core/Cargo.toml");
     let smart_dependencies = declared_dependencies(&smart_manifest);

@@ -5,12 +5,11 @@
 use std::collections::BTreeMap;
 
 use smart_controller_core::{
-    BoneTransformChannel, InputDefinition, InputId, InputSample, InputSnapshot,
-    InputSource, TypedValue,
-    migration::CanonicalDocument,
+    BoneTransformChannel, InputDefinition, InputId, InputSample, InputSnapshot, InputSource,
+    TypedValue, migration::CanonicalDocument,
 };
 
-use crate::adapter::{query_bone_info, sample_bone_rotation, BoneAnglePolicy};
+use crate::adapter::{BoneAnglePolicy, query_bone_info, sample_bone_rotation};
 
 /// Explicit host-side values and identity resolution for one preview invocation.
 #[derive(Clone, Debug)]
@@ -32,11 +31,15 @@ pub fn collect_document_input_snapshot(
     context: &HostInputContext,
 ) -> Result<InputSnapshot, String> {
     document.validate().map_err(|error| error.to_string())?;
-    let active: std::collections::BTreeSet<InputId> = document.controllers.iter()
+    let active: std::collections::BTreeSet<InputId> = document
+        .controllers
+        .iter()
         .filter(|controller| controller.enabled)
         .flat_map(|controller| controller.inputs.iter().cloned())
         .collect();
-    let definitions: Vec<InputDefinition> = document.inputs.iter()
+    let definitions: Vec<InputDefinition> = document
+        .inputs
+        .iter()
         .filter(|definition| active.contains(&definition.id))
         .cloned()
         .collect();
@@ -55,14 +58,13 @@ pub fn collect_host_input_snapshot(
     for definition in definitions {
         definition.validate().map_err(|error| error.to_string())?;
         let sample = match &definition.source {
-            InputSource::Manual => {
-                match context.manual_values.get(&definition.id).copied() {
-                    Some(value) if definition.dimension.accepts(value) =>
-                        InputSample::valid(definition.id.clone(), value, Some(0)),
-                    Some(_) => InputSample::invalid(definition.id.clone()),
-                    None => InputSample::missing(definition.id.clone()),
+            InputSource::Manual => match context.manual_values.get(&definition.id).copied() {
+                Some(value) if definition.dimension.accepts(value) => {
+                    InputSample::valid(definition.id.clone(), value, Some(0))
                 }
-            }
+                Some(_) => InputSample::invalid(definition.id.clone()),
+                None => InputSample::missing(definition.id.clone()),
+            },
             InputSource::BoneTransform { bone_id, channel } => {
                 if *channel != BoneTransformChannel::Rotation {
                     return Err(format!(
@@ -70,8 +72,12 @@ pub fn collect_host_input_snapshot(
                         definition.id, channel
                     ));
                 }
-                let layer_id = *context.bone_layers.get(bone_id)
-                    .ok_or_else(|| format!("bone input {} has no explicit layer mapping for bone {}", definition.id, bone_id))?;
+                let layer_id = *context.bone_layers.get(bone_id).ok_or_else(|| {
+                    format!(
+                        "bone input {} has no explicit layer mapping for bone {}",
+                        definition.id, bone_id
+                    )
+                })?;
                 if !responses.contains_key(&layer_id) {
                     if let Ok(response) = query_bone_info(layer_id, None) {
                         responses.insert(layer_id, response);
@@ -100,7 +106,9 @@ pub fn collect_host_input_snapshot(
                 ));
             }
         };
-        definition.validate_sample(&sample).map_err(|error| error.to_string())?;
+        definition
+            .validate_sample(&sample)
+            .map_err(|error| error.to_string())?;
         samples.push(sample);
     }
 
@@ -163,7 +171,10 @@ mod tests {
         };
         let snapshot = collect_host_input_snapshot(&[definition.clone()], &context).unwrap();
         let sample = snapshot.get(&definition.id).unwrap();
-        assert_eq!(sample.validity, smart_controller_core::InputValidity::Missing);
+        assert_eq!(
+            sample.validity,
+            smart_controller_core::InputValidity::Missing
+        );
         assert!(sample.value.is_none());
     }
 
@@ -222,10 +233,16 @@ mod tests {
                 bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
                 wrapped_angles: false,
             },
-        ).unwrap();
+        )
+        .unwrap();
 
-        let sample = snapshot.get(&definition.id).expect("missing input is represented in the snapshot");
-        assert_eq!(sample.validity, smart_controller_core::InputValidity::Missing);
+        let sample = snapshot
+            .get(&definition.id)
+            .expect("missing input is represented in the snapshot");
+        assert_eq!(
+            sample.validity,
+            smart_controller_core::InputValidity::Missing
+        );
         assert!(sample.value.is_none());
     }
 }

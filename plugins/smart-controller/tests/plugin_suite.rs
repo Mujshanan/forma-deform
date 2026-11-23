@@ -1,8 +1,8 @@
 use form_deform_core::{DeformSpec, Vec2 as DeformVec2, evaluate_pin_position};
 use serde_json::json;
 use smart_controller_core::{
-    ControllerBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange,
-    PreviewResult, Vec2 as ControllerVec2,
+    ControllerBinding, ControllerMode, ControllerTarget, EaseCurve, InputRange, PreviewResult,
+    Vec2 as ControllerVec2,
 };
 
 #[test]
@@ -15,14 +15,22 @@ fn bone_query_input_flows_through_controller_and_form_deform_math() {
             "bones": [{"id": 17, "angle": 22.5, "swing": 2.0}]
         }]
     });
-    let bone = bone_info["armatures"][0]["bones"].as_array().unwrap()
-        .iter().find(|item| item["id"].as_u64() == Some(17)).unwrap();
+    let bone = bone_info["armatures"][0]["bones"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["id"].as_u64() == Some(17))
+        .unwrap();
     let input_angle = bone["angle"].as_f64().unwrap(); // keyed pose; spring is opt-in
 
     let binding = ControllerBinding {
         id: "suite-binding".into(),
         controller_id: "17".into(),
-        input_range: InputRange { minimum: -45.0, neutral: 0.0, maximum: 45.0 },
+        input_range: InputRange {
+            minimum: -45.0,
+            neutral: 0.0,
+            maximum: 45.0,
+        },
         easing: EaseCurve::Linear,
         mode: ControllerMode::RelativeDelta,
         target: ControllerTarget::GeometryDeform {
@@ -34,13 +42,17 @@ fn bone_query_input_flows_through_controller_and_form_deform_math() {
         },
         enabled: true,
     };
-    let Some(PreviewResult::GeometryDeform { offset, .. }) = binding.evaluate(input_angle).unwrap() else {
+    let Some(PreviewResult::GeometryDeform { offset, .. }) = binding.evaluate(input_angle).unwrap()
+    else {
         panic!("expected a geometry target");
     };
 
     // Form Deform takes the controller's neutral-relative result as the authored
     // neutral pin base, then computes its own deterministic bone-driven displacement.
-    let base = DeformVec2 { x: 120.0 + offset.x, y: 80.0 + offset.y };
+    let base = DeformVec2 {
+        x: 120.0 + offset.x,
+        y: 80.0 + offset.y,
+    };
     let deform = DeformSpec {
         neutral_position: base,
         neutral_angle_degrees: 0.0,
