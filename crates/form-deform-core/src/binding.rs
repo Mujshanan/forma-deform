@@ -299,6 +299,8 @@ impl ValidatedCageGeometry {
 pub struct MappingRecord {
     pub locator: SourceFeatureLocator,
     pub face_index: u32,
+    /// Reserved revision-bound subface locator. V1 bilinear/barycentric faces use 0.
+    pub subface_index: u8,
     pub control_point_ids: Vec<ControlPointId>,
     pub coordinates: FaceCoordinates,
 }
@@ -369,6 +371,7 @@ fn validate_mapping(
     geometry: &ValidatedCageGeometry,
 ) -> Result<(), BindingError> {
     let face_index = mapping.face_index as usize;
+    if mapping.subface_index != 0 { return Err(BindingError::UnsupportedSubface(mapping.subface_index)); }
     let face = geometry.face(face_index).ok_or(BindingError::FaceIndexOutOfRange(face_index))?;
     let ids = face.control_point_ids();
     if mapping.control_point_ids.as_slice() != ids {
@@ -459,6 +462,7 @@ pub enum BindingError {
     DuplicateControlPoint(ControlPointId),
     MissingControlPoint(ControlPointId),
     FaceIndexOutOfRange(usize),
+    UnsupportedSubface(u8),
     InvalidSourceFeature(SourceFeatureLocator),
     SourceFeatureEnumeration(SourceFeatureError),
     FaceMappingKindMismatch { face_index: usize },
@@ -491,6 +495,7 @@ impl std::fmt::Display for BindingError {
             Self::DuplicateControlPoint(id) => write!(f, "duplicate cage control point ID {}", id.get()),
             Self::MissingControlPoint(id) => write!(f, "missing cage control point ID {}", id.get()),
             Self::FaceIndexOutOfRange(index) => write!(f, "binding face index {index} is out of range"),
+            Self::UnsupportedSubface(index) => write!(f, "face sub-index {index} is unsupported by the v1 unsplit face policy"),
             Self::InvalidSourceFeature(locator) => write!(f, "invalid or duplicate source feature locator ({}, {:?})", locator.command_index, locator.role),
             Self::SourceFeatureEnumeration(error) => write!(f, "source feature enumeration failed: {error}"),
             Self::FaceMappingKindMismatch { face_index } => write!(f, "mapping coordinate kind does not match face {face_index}"),
@@ -645,7 +650,7 @@ mod tests {
         let ids = topology.face_at(0).unwrap().control_point_ids().to_vec();
         let mapping = MappingRecord {
             locator: SourceFeatureLocator { command_index:0, role:PathFeatureRole::MoveToEndpoint },
-            face_index:0, control_point_ids:ids,
+            face_index:0, subface_index:0, control_point_ids:ids,
             coordinates:FaceCoordinates::TriangleBarycentric { weights:[1.1,-0.1,0.0] },
         };
         assert_eq!(validate_mapping(&mapping,point(0.0,0.0),&geometry),
@@ -660,6 +665,7 @@ mod tests {
         let mapping = MappingRecord {
             locator: SourceFeatureLocator { command_index:0, role:PathFeatureRole::MoveToEndpoint },
             face_index:0,
+            subface_index:0,
             control_point_ids:vec![ControlPointId::new(2).unwrap(),ControlPointId::new(1).unwrap(),ControlPointId::new(3).unwrap()],
             coordinates:FaceCoordinates::TriangleBarycentric { weights:[1.0,0.0,0.0] },
         };
