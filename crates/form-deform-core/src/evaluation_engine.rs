@@ -5,12 +5,11 @@
 //! immutable evaluated result. It never reads or mutates host state.
 
 use crate::composition_evaluation::{
-    evaluate_operator, DeformerOperator, EvaluationInterfaceError, GeometryValue,
-    OperatorContext, OperatorInvocationError,
+    DeformerOperator, EvaluationInterfaceError, GeometryValue, OperatorContext,
+    OperatorInvocationError, evaluate_operator,
 };
 use crate::evaluation_contract::{
-    EvaluationContractError, EvaluationRequest, EvaluatedGeometryResult,
-    GeometryOutputOperation,
+    EvaluatedGeometryResult, EvaluationContractError, EvaluationRequest, GeometryOutputOperation,
 };
 use crate::host_contract::{GeometrySnapshot, HostTargetRef, SnapshotFreshness};
 use crate::persistence::DeformationDefinition;
@@ -129,9 +128,9 @@ pub struct EvaluationFailure {
 impl EvaluationFailure {
     fn new(mut diagnostics: Vec<EvaluationDiagnostic>) -> Self {
         diagnostics.sort_by(|left, right| {
-            left.code.cmp(&right.code).then_with(|| {
-                target_sort_key(&left.target).cmp(&target_sort_key(&right.target))
-            })
+            left.code
+                .cmp(&right.code)
+                .then_with(|| target_sort_key(&left.target).cmp(&target_sort_key(&right.target)))
         });
         Self { diagnostics }
     }
@@ -143,7 +142,11 @@ impl EvaluationFailure {
 
 impl std::fmt::Display for EvaluationFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FDM evaluation failed with {} diagnostic(s)", self.diagnostics.len())
+        write!(
+            f,
+            "FDM evaluation failed with {} diagnostic(s)",
+            self.diagnostics.len()
+        )
     }
 }
 
@@ -321,9 +324,7 @@ fn same_target_identity(left: &HostTargetRef, right: &HostTargetRef) -> bool {
         && left.target_id == right.target_id
 }
 
-fn target_sort_key(
-    target: &Option<HostTargetRef>,
-) -> Option<(&str, &str, &str, &str, u64)> {
+fn target_sort_key(target: &Option<HostTargetRef>) -> Option<(&str, &str, &str, &str, u64)> {
     target.as_ref().map(|value| {
         (
             value.namespace.as_str(),
@@ -344,10 +345,10 @@ mod tests {
     };
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
-        CoordinateSpaceKind, GeometryRevision, GeometrySnapshot,
-        HostDocumentId, HostNamespace, HostTargetId, HostTargetKind, TopologyRevision,
+        CoordinateSpaceKind, GeometryRevision, GeometrySnapshot, HostDocumentId, HostNamespace,
+        HostTargetId, HostTargetKind, TopologyRevision,
     };
-    use crate::path2d::{Path2D, PathCommand, Point2, PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION};
+    use crate::path2d::{PATH2D_PAYLOAD_KIND, PATH2D_SCHEMA_VERSION, Path2D, PathCommand, Point2};
     use crate::persistence::{
         DeformationDefinition, DeformationKind, GeometryValueKind, ParameterValue,
     };
@@ -469,7 +470,10 @@ mod tests {
         let source = snapshot(target("shape-1", 1), 1, path(0.0));
         let request = request("captured-1", vec![source.clone()], 1, 10, 1, "stage-1");
         let definition = definition(&source);
-        let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, source.payload().clone());
+        let input = GeometryValue::new(
+            GeometryValueKind::AbsoluteGeometry,
+            source.payload().clone(),
+        );
         (request, definition, input)
     }
 
@@ -497,7 +501,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.result_id(), "result-1");
-        assert_eq!(result.operation(), GeometryOutputOperation::ReplaceSourceGeometry);
+        assert_eq!(
+            result.operation(),
+            GeometryOutputOperation::ReplaceSourceGeometry
+        );
         result.validate_against(&captured).unwrap();
         assert_ne!(result.payload(), input.geometry());
     }
@@ -653,10 +660,15 @@ mod tests {
             )
             .unwrap_err();
 
-        assert_eq!(failure.diagnostics()[0].code(), EvaluationDiagnosticCode::OperatorRejected);
+        assert_eq!(
+            failure.diagnostics()[0].code(),
+            EvaluationDiagnosticCode::OperatorRejected
+        );
         assert_eq!(
             failure.diagnostics()[0].operator_error(),
-            Some(OperatorInvocationError::Operator(OperatorFailure::InvalidParameters))
+            Some(OperatorInvocationError::Operator(
+                OperatorFailure::InvalidParameters
+            ))
         );
     }
 
@@ -688,14 +700,7 @@ mod tests {
             1,
             "stage-1",
         );
-        let current_reverse = request(
-            "current-reverse",
-            vec![second, first],
-            1,
-            10,
-            1,
-            "stage-1",
-        );
+        let current_reverse = request("current-reverse", vec![second, first], 1, 10, 1, "stage-1");
 
         let engine = SingleOperatorEvaluationEngine;
         let operator = crate::single_handle_displacement::SingleHandleDisplacementOperator;
