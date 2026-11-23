@@ -67,14 +67,20 @@ impl PersistedBinding {
         if input.len() > MAX_BINDING_DOCUMENT_BYTES {
             return Err(BindingPersistenceError::ResourceLimitExceeded);
         }
-        let envelope: BindingEnvelope = serde_json::from_str(input)
+        let header: serde_json::Value = serde_json::from_str(input)
             .map_err(|_| BindingPersistenceError::MalformedPayload)?;
-        if envelope.schema_name != BINDING_DOCUMENT_SCHEMA {
+        if header.get("schema_name").and_then(serde_json::Value::as_str)
+            != Some(BINDING_DOCUMENT_SCHEMA)
+        {
             return Err(BindingPersistenceError::UnsupportedSchemaName);
         }
-        if envelope.schema_version != BINDING_DOCUMENT_SCHEMA_VERSION {
+        if header.get("schema_version").and_then(serde_json::Value::as_u64)
+            != Some(u64::from(BINDING_DOCUMENT_SCHEMA_VERSION))
+        {
             return Err(BindingPersistenceError::UnsupportedSchemaVersion);
         }
+        let envelope: BindingEnvelope = serde_json::from_value(header)
+            .map_err(|_| BindingPersistenceError::MalformedPayload)?;
         validate_payload_shape(&envelope.binding)?;
         Ok(Self { binding: envelope.binding })
     }
@@ -214,6 +220,27 @@ pub trait BindingHostAdapter {
     ) -> Result<(), Self::Error>;
 }
 
+/// Validate and write a binding through the host's document transaction.
+/// The adapter is responsible for making the write atomic with its document.
+pub fn persist_binding<A: BindingHostAdapter>(
+    adapter: &mut A,
+    target: &HostTargetRef,
+    persisted: &PersistedBinding,
+) -> Result<(), PersistBindingError<A::Error>> {
+    let context = adapter.current_binding_context(target).map_err(PersistBindingError::Host)?;
+    persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
+        .map_err(PersistBindingError::Diagnostic)?;
+    let payload = persisted.to_json().map_err(PersistBindingError::Persistence)?;
+    adapter.write_binding_payload(target, payload).map_err(PersistBindingError::Host)
+}
+
+#[derive(Debug)]
+pub enum PersistBindingError<E> {
+    Host(E),
+    Persistence(BindingPersistenceError),
+    Diagnostic(BindingDiagnostic),
+}
+
 /// Load, deserialize, and validate. No stale record is silently rebound.
 pub fn load_validated_binding<A: BindingHostAdapter>(
     adapter: &A,
@@ -255,7 +282,12 @@ mod tests {
         let unknown = r#"{"schema_name":"forma-deform-binding","schema_version":99,"binding":{}}"#;
         assert_eq!(
             PersistedBinding::from_json(unknown),
-            Err(BindingPersistenceError::MalformedPayload)
+            Err(BindingPersistenceError::UnsupportedSchemaVersion)
+        );
+        let wrong_name = r#"{"schema_name":"other","schema_version":1,"binding":{}}"#;
+        assert_eq!(
+            PersistedBinding::from_json(wrong_name),
+            Err(BindingPersistenceError::UnsupportedSchemaName)
         );
         let malformed = r#"{"schema_name":"forma-deform-binding","schema_version":1,"binding":{}}"#;
         assert_eq!(
