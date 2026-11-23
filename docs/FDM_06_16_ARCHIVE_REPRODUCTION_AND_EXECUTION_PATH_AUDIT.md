@@ -166,3 +166,12 @@ The user can manually run the existing \`CI\` and \`CI (macOS, Windows)\` workfl
 6. Conduct a formal S0 closure review only after all gates have reproducible evidence.
 
 **Hard gate preserved:** S0 must formally close; FDM-06.6 must then be implemented and verified; and the user must explicitly authorize the implementation stage. This document grants none of those permissions. No FDM runtime implementation, AniCraft production integration, evaluator wiring, adapter bypass, asynchronous evaluation, merge or release was performed or authorized.
+
+
+### 2.6 Evaluation context changes are not equivalent to document revision
+
+The Session declaration exposes `scene`, `editing`, `frame`, `layer` and `selection` as public fields. `Session::set_frame` at `crates/engine/src/lib.rs:1188-1192` changes the playhead and repairs selection without incrementing `revision`. Scene navigation and symbol/group editing commands also update context fields through their callbacks.
+
+The display-list cache already keys on `state`, `scene`, `frame` and the open-edit context (see `display_list` at lines 1119-1133), but that does not provide a monotonic context generation for an independent FDM snapshot/result-acceptance boundary.
+
+**Finding:** an FDM freshness stamp must explicitly include frame, scene, edit-context and relevant selection/dependency state, or use a separately advanced context generation. Document revision alone is insufficient. This is source-level confirmation only; no runtime generation mechanism exists in the pinned host.
