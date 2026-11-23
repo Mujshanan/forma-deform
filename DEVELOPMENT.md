@@ -148,32 +148,63 @@ The repositories below were inspected at source level for selected modules. This
 | ARAP mesh deformation | OpenToonz | Algorithmic reference | Performance/quality benchmark and source-specific license review |
 | Soft selection | OSATURA | Selective algorithm port or reimplementation | Verify core file is MPL-covered and isolate dependencies |
 | Physics/springs | OSATURA; Aether Canvas | Later reference | Must integrate with AniCraft time/evaluation rather than add a second runtime |
+| Scalar animation curves and cubic Bézier handles | Flare `flare-tween` | Candidate isolated algorithm reference/port for controller response curves | Only if Forma Deform needs curve behavior beyond its current mapper; keep AniCraft timeline ownership and compare semantics/tests first |
+| Polyline correspondence and arc-length resampling | Flare `flare-tween::interpolate_sequence` | Strong candidate for future stroke/contour correspondence; not a cage deformer | Validate orientation, degenerate segments, point limits, overshoot and topology policy against Forma's requirements |
+| Vector contour morphing | Flare `flare-eval::morph` | High-value algorithmic reference; selective extraction may be justified for vector-shape deformation | Handles contour matching/splitting/alignment, not arbitrary point-to-cage deformation; audit dependencies and numerical behavior before porting |
+| Vector path data model | Flare `flare-document::Shape` / `PathSegment` | Data-model reference only | Do not import Flare's document model; use AniCraft-owned path/shape identity and lifecycle |
+| 3D triangle mesh and cage representation | Flare experimental `viewspace::BaseMesh` | Data-structure reference only; cage algorithm not reusable yet | `BaseMesh::apply_cage` is an explicit `NotImplemented` stub; do not mistake control-point storage for a working cage deformer |
+| 3D weighted skinning | Flare `flare-mannequin::skin` | Algorithmic reference only | Specialized private 3D mannequin implementation with at-most-two joint influences; not a generic 2D deformation API |
+| 2D rig forward/inverse kinematics | Flare `flare-rig` | Do not adopt; host-boundary reference only | AniCraft owns canonical bones, transforms and rig evaluation; avoid duplicate rig/IK systems |
 | Flare animation/tweening and vector model | Flare | Architecture reference; selective algorithm extraction only after source audit | Identify a concrete Forma Deform gap; inspect the current Rust implementation, API/dependency footprint, tests, numerical behavior, and file-level license. Do not duplicate AniCraft timeline/document/rendering infrastructure or import the whole editor |
 
 **Reuse policy:** do not copy a subsystem because it is written in Rust or has a permissive repository-level license. Verify the exact file license, copyright headers, dependency licenses, tests, numerical behavior, and whether the algorithm duplicates AniCraft. Prefer small, isolated, well-tested algorithms over whole frameworks.
 
 
-### 5.2 Flare-specific assessment
+### 5.2 Flare-specific source audit
 
-**Reference:** [Flare-Animate/Flare](https://github.com/Flare-Animate/Flare)
+**Repository:** [Flare-Animate/Flare](https://github.com/Flare-Animate/Flare)  
+**Audited revision:** `5105e8c85d1e03546e6ce55884fce68055a19c8a` (the `main` tree observed during this audit).  
+**License baseline:** the root `LICENSE` and workspace package metadata state BSD-3-Clause. This is not a substitute for checking bundled third-party material, generated files, or file-specific provenance before copying.
 
-Flare is a Rust-based, early-alpha animation suite built predominantly on OpenToonz and Tahoma2D, with contributions/foundations from AnimationCraft and Next2Flash. Its current README describes vector drawing/editing, a frame/layer timeline, motion and shape tweens with easing, symbols and instances, Moho project import, and CLI/MCP workflows.
+#### Implemented Rust components worth studying
 
-**Forma Deform relevance**
-- Study its tween/easing model and motion-editor representation for reusable interpolation and curve-editing concepts.
-- Study vector-shape and geometry data structures only where they solve a specific deformation-authoring need.
-- Study symbol/instance and Moho-import data mapping as references for host-independent target and asset identity; do not adopt Flare's document model as Forma Deform's.
-- Compare its rig/tween roadmap and implemented components against AniCraft's existing rig, timeline, and evaluation responsibilities before proposing any overlap.
+| Source | Verified implementation | Forma Deform assessment |
+|---|---|---|
+| `crates/foundation/flare-tween` | Pure scalar curves with keyframes, cubic Bézier time/value handles, automatic/aligned/free handle policies, constant/linear/Bezier and easing families, constant/linear/cyclic/cyclic-offset extrapolation, bounded validation and tests. Its crate manifest depends only on `thiserror`; the library describes the implementation as clean-room. | **Best isolated candidate** for controller response curves if our required semantics exceed the current mapper. It is not a timeline and must not take ownership of AniCraft frames or playback. |
+| `flare-tween::interpolate_sequence` | Interpolates 2D stroke point sequences. Equal-count strokes pair by order; unequal counts are resampled by arc length to a common count. Supports reversing the target sequence, easing, finite-input checks and a 4096-point bound. | **Strong future candidate** for stroke/contour correspondence or vector-shape transitions. It is not a cage, mesh, or arbitrary source-to-target binding algorithm. |
+| `crates/foundation/flare-eval/src/morph.rs` | Matches vector contours, converts line segments to cubic pieces, splits the longest cubic pieces to equalize counts, aligns closed-contour winding/start positions, collapses unmatched contours, then interpolates geometry and paint. It applies explicit contour/segment/search limits. | **High-value algorithmic reference** for a future vector-contour deformation/morph feature. It has meaningful topology assumptions and is not a general-purpose FFD solver. Review its full dependency and test surface before any extraction. |
+| `crates/foundation/flare-document/src/shape.rs` | Immutable/shared vector shape path represented by `MoveTo`, `LineTo`, `CubicTo`, and `Close`, with fill, gradient and stroke metadata. | Useful path representation reference only. Forma Deform should bind to AniCraft's authoritative shape/path identities rather than adopt a second document model. |
+| `crates/foundation/flare-mannequin/src/skin.rs` | Builds a specialized 3D tube/ring surface with triangle connectivity, vertex normals and up to two joint influences per vertex; its skinning routine moves vertices from rest to posed joint frames. | Interesting skinning mathematics, but the module is private and tied to Flare's 3D mannequin skeleton and rotation model. Not a drop-in 2D mesh skinning crate. |
+| `crates/foundation/flare-rig` | 2D hierarchical bone model, forward kinematics, pose interpolation, two-bone IK and bounded CCD IK. | Do not reuse as a competing rig system. AniCraft owns canonical bones and rig evaluation; consult only for isolated mathematical edge cases if a real host gap is demonstrated. |
 
-**Reuse boundary**
-- Do not embed or fork the full Flare editor into Forma Deform. Forma Deform remains an AniCraft deformation/controller subsystem, not a second animation application.
-- Prefer algorithmic reference or a small, independently testable extraction. Any port requires exact-file license/provenance review, dependency/license audit, tests, and numerical/behavioral comparison.
-- The repository states BSD-3-Clause for Flare, while also identifying separately licensed third-party components. Preserve applicable notices and honor each dependency's own terms.
-- Treat the repository's `original/` C++ tree as archived reference material; assess the current Rust implementation first.
-- Flare labels itself early alpha. Treat its APIs and behavior as unstable; pin any evaluated commit and record the exact source files before implementation.
+#### Important non-implementation: the experimental cage mesh
 
-**Initial disposition:** Research / architecture reference. No code is approved for copying, vendoring, or runtime dependency use by this entry.
+Flare's `crates/foundation/flare-core/src/experimental/viewspace/mesh.rs` defines a 3D `BaseMesh` with vertices, triangular faces, UVs, semantic regions, depth values, control points, optional bone hierarchy and feature anchors. It validates the mesh and computes vertex normals/bounds.
 
+However, `BaseMesh::apply_cage` currently returns `ViewSpaceError::NotImplemented`. Its source comment describes future mean-value or Green-coordinate weights (and mentions linear blend skinning as a possible v1), but those are TODO design notes, not implemented algorithms. The experimental module's own status table lists `mesh-cage` as a stub. Do not cite this as a working cage deformer or reuse its control-point structure as proof of a completed solver.
+
+The Moho vector importer is also not a suitable curve-deformation source: its own module documentation says it reads indexed points/curves but does not read Bézier handles, so converted paths become polylines.
+
+#### Reuse decisions for Forma Deform
+
+1. **Inspect `flare-tween` first** if we need richer scalar controller curves. Its dependency footprint is small and its algorithms are separate from the editor. Before porting, compare its interpolation/easing and extrapolation semantics with our existing Smart Controller mapper and tests.
+2. **Keep `interpolate_sequence` as a candidate** for future stroke correspondence. Its arc-length resampling is useful where point counts differ, but it assumes ordered contours and does not solve topology correspondence generally.
+3. **Use `flare-eval::morph` as a reference** if we add vector-contour morphing. Do not confuse shape tweening with cage deformation, and do not import the broad `flare-eval` crate merely to obtain this algorithm.
+4. **Do not reuse Flare's experimental cage implementation**; the actual cage operation is unimplemented. Forma Deform still needs its own defined cage topology, point-location/binding contract, deformation weights and evaluation solver (or another verified source).
+5. **Do not import Flare's rig, timeline, document, renderer, UI, CLI, MCP server or application crates.** Those responsibilities either belong to AniCraft or are outside Forma Deform's scope.
+6. **Treat mannequin skinning as research only.** Its private 3D implementation is specialized and would require a deliberate 2D adaptation, not a mechanical port.
+
+#### Licensing and extraction gate
+
+The audited Flare workspace declares BSD-3-Clause and the standalone `flare-tween` crate has a narrow dependency footprint. This makes selected source worth further consideration, but does not grant blanket approval to copy the repository. Before any port or vendoring:
+- pin the exact Flare commit and exact source files;
+- inspect file headers, authorship/provenance and any generated or imported material;
+- audit the transitive dependency licenses for the chosen files/crate;
+- preserve BSD-3-Clause notices and disclaimers where required;
+- run source-specific tests and add Forma Deform regression/property tests;
+- compare edge cases, numerical stability, performance and semantics against our own requirements.
+
+**Audit disposition:** Flare is a useful algorithmic reference, not a deformation-engine dependency. The strongest candidates are the standalone `flare-tween` curve/sequence algorithms and the isolated contour-morph algorithm. No code is approved for copying, vendoring, or runtime dependency use by this assessment.
 ## 6. Code and ownership architecture
 
 ```text
