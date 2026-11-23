@@ -1,0 +1,1 @@
+Trigger for the isolated CQ2 rustfmt patch application and verification workflow. This marker is removed after the workflow completes.
