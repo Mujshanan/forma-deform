@@ -372,14 +372,26 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
 
 
 #[test]
+fn binding_slot_rejects_payload_with_never_used_revision() {
+    assert!(matches!(
+        BindingSlotSnapshot::new(
+            BindingPayloadRevision::new(0),
+            Some("payload".into())
+        ),
+        Err(form_deform_core::binding_persistence::BindingPersistenceError::InvalidBindingRevision)
+    ));
+}
+
+#[test]
 fn path2d_persistence_rejects_source_edit_between_validation_and_commit() {
     let (context, persisted) = fixture();
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None).unwrap(),
         change_source_before_write: true,
         change_binding_before_write: false,
+        delete_binding_before_write: false,
     };
 
     assert!(matches!(
@@ -429,7 +441,7 @@ fn path2d_persistence_rejects_delete_recreate_aba_before_commit() {
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None).unwrap(),
         change_source_before_write: false,
         change_binding_before_write: false,
         delete_binding_before_write: true,
