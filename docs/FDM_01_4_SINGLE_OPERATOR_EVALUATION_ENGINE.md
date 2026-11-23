@@ -69,7 +69,7 @@ Before applying a result, the host must:
 
 ## Tests
 
-The initial suite covers successful result creation and fingerprint validation, stale source rejection before execution, same-revision fingerprint-integrity errors, target-generation changes, simultaneous model/time/dependency/stage mismatches, operator parameter failures, and deterministic diagnostic ordering independent of current-source input order.
+The suite covers successful result creation and fingerprint validation, stale source rejection before execution, same-revision fingerprint-integrity errors, target-generation changes, revision regression, missing/unexpected source detection, simultaneous model/time/dependency/stage mismatches, composition-graph mismatch, operator parameter failures, invalid result identity, and deterministic diagnostic ordering independent of current-source input order.
 
 ## Non-goals
 
