@@ -660,6 +660,7 @@ mod tests {
         ));
     }
 
+    #[test]
     fn output_space_refinement_is_deterministic_and_uses_current_pose() {
         use crate::output_space_refinement::{refine_path_curves, OutputRefinementPolicy};
         let (source, topology, rest_state, rest_geometry, validated) = validated_fixture();
