@@ -411,6 +411,36 @@ mod tests {
     }
 
     #[test]
+    fn operator_dispatch_rejects_authored_source_stamp_mismatch() {
+        let (request, definition) = fixture(
+            space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
+        );
+        let context = OperatorContext::new(&request).unwrap();
+        let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, geometry());
+        let captured = definition.reference_geometry();
+        let stale_reference = crate::host_contract::GeometrySnapshotStamp::new(
+            captured.target().clone(),
+            GeometryRevision(captured.geometry_revision().0 + 1),
+            captured.topology_revision(),
+            captured.fingerprint().clone(),
+        ).unwrap();
+        let stale_definition = DeformationDefinition::new(
+            definition.id(), definition.revision(), definition.name(), definition.kind(),
+            definition.target().clone(), stale_reference, definition.coordinate_space().clone(),
+            definition.input_kind(), definition.output_kind(), definition.parameters().clone(),
+        ).unwrap();
+        let operator = TestOperator {
+            kind: DeformationKind::PinDeformation,
+            output_kind: GeometryValueKind::Displacement,
+        };
+
+        assert_eq!(
+            evaluate_operator(&operator, &stale_definition, &input, &context),
+            Err(OperatorInvocationError::Contract(EvaluationInterfaceError::SourceSnapshotMismatch))
+        );
+    }
+
+    #[test]
     fn operator_dispatch_rejects_coordinate_space_mismatch() {
         let mut wrong_space = space();
         wrong_space.linear_unit = "mm".into();
