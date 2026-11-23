@@ -102,3 +102,16 @@ The current AniCraft command reference and engine implementations were checked f
 - warp.pin_move is mutating. Parameters: element?, required pin, either both x and y or neither, optional dx and dy, and frame?. Absolute x/y coordinates are stage-space; dx/dy are stage-space deltas. The command keys the pin at the requested frame and participates in AniCraft's document undo transaction.
 
 The core's string IDs are adapter-neutral identifiers; the current AniCraft adapter must parse and validate decimal numeric host IDs rather than assuming arbitrary strings are accepted by host commands. A host ID is not interchangeable with an array index or current selection position.
+
+
+---
+
+## 2026-11-23 addendum — native host integration is a separate implementation track
+
+The 2026-11-19 capability matrix above audits AniCraft's WASM command-plugin ABI. It remains valid for that plugin boundary, but it does not describe the newer native Smart Controller UI work.
+
+A separate AniCraft branch, [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03), adds `src/smart_controller_tool.rs`, a `Tool::SmartController` variant, Stage overlay/hit-testing hooks, a Properties inspector, and a small `crates/controller` mapping prototype. The branch is not merged into AniCraft `main`. The UI currently owns transient handle/draft state; the tool hint explicitly states that controller binding and preview are not connected. The native app manifest does not list `anicraft-controller` as an application dependency, and the UI module does not invoke that crate.
+
+Consequently, the native branch is evidence of a native UI implementation slice, not evidence of completed durable controller authoring or live evaluation. The WASM command-plugin constraints in this audit should not be used to deny the existence of the native UI branch; conversely, the UI branch should not be described as closing the persistence/evaluation gaps until its acceptance tests and manual smoke test pass.
+
+For the detailed source-by-source comparison and ownership matrix, see [`docs/quality/native-host-integration-traceability.md`](quality/native-host-integration-traceability.md).
