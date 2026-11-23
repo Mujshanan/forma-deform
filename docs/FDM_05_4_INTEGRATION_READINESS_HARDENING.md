@@ -1,6 +1,6 @@
 # FDM-05.4 — Integration Readiness & Output Contract Hardening
 
-**Status:** implementation in progress  
+**Status:** implementation and CI verification passing; integration contract review in progress  
 **Parent:** FDM-05.3 constructor regression branch, exact-head CI passed at `ea5bf9a0cc85cc11bb7a9148d449d547ce40a578`  
 **Scope:** audit and harden existing FDM-05 output contracts; no new deformation algorithm.
 
@@ -34,7 +34,7 @@ Validate that evaluation counts are at least the emitted sample count and do not
 Exercise endpoint mismatch, invalid evaluation accounting, mixed commands, multiple subpaths, stale provenance, outside-policy mismatch, and deterministic repeat evaluation. Add further tests only for confirmed gaps in existing behavior.
 
 ### FDM-05.4.4 — Native host integration contract
-Document the output as a core-owned immutable value. AniCraft owns scheduling, lifecycle, caching, persistence, UI, rendering, undo/redo, apply, and bake. The host must not flatten or mutate the authoritative Path2D as a side effect of consuming derived samples.
+Document the output as a core-owned immutable value. AniCraft owns scheduling, lifecycle, caching, persistence, UI, rendering, undo/redo, apply, and bake. The host must not flatten or mutate the authoritative Path2D as a side effect of consuming derived samples. Define cache invalidation, recomputation, failure handling, and separation from Smart Controller composition.
 
 ## 4. Explicit exclusions
 
@@ -54,3 +54,15 @@ Document the output as a core-owned immutable value. AniCraft owns scheduling, l
 5. Native host responsibilities and core guarantees are documented.
 6. Exact final-head CI passes `cargo test --workspace`, benchmark smoke test, and release builds for Bone Query, Form Deform, and Smart Controller WASM targets.
 7. PR lineage remains explicit and no stacked PR is merged without approval.
+
+## Verification record
+
+The hardening branch currently passes CI on exact head `3e90ffa89e2dd5e14c84e6357b5befd462ad4b27` (workflow run [#45167359427](https://github.com/Mujshanan/forma-deform/actions/runs/45167359427)):
+
+- `cargo test --workspace`: passed, including 143 `form-deform-core` tests.
+- Curve-sampling benchmark smoke test: passed (20 measured iterations per workload).
+- Bone Query WASM release build: passed.
+- Form Deform WASM release build: passed.
+- Smart Controller WASM release build: passed.
+
+The verification run covers the source/output endpoint checks, command-structure parity, invalid metadata/budget rejection, and deterministic repeated assembly tests. This is not yet a claim that all FDM-05.4 audit work is complete; native host contract review remains in progress.
