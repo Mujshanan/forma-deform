@@ -99,7 +99,7 @@ Every bone input query in a deterministic snapshot must use:
 - an explicit `BoneAnglePolicy`;
 - explicit wrapped/unwrapped angle semantics.
 
-The adapter queries `bone.info` once per required armature layer per invocation, passing both `layer` and `frame`. It verifies that the response's `frame` equals the requested frame and that the response contains the exact mapped armature `layer` before using any bone data. A response from another frame or layer is unavailable, not a usable stale sample.
+The adapter queries `bone.info` once per required armature layer per invocation, passing both `layer` and `frame`. It verifies that the response's `frame` equals the requested frame and that the response contains exactly one armature whose `layer` equals the explicit mapping before using any bone data. A response from another frame or layer is unavailable, not a usable stale sample.
 
 The relevant response is:
 
