@@ -582,6 +582,60 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_samples_use_the_shared_point_locator_and_outside_policy() {
+        use crate::embedding::validate_cage_embedding;
+        use crate::topology::{
+            ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
+            DeformationControlState, DeformationTopology, DeformationTopologyId,
+            DeformationTopologyRevision, IrregularCageTopology, TopologyFace,
+        };
+
+        let ids = [1, 2, 3].map(|value| ControlPointId::new(value).unwrap());
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: DeformationTopologyId::new(7).unwrap(),
+            revision: DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids: ids.to_vec(),
+            faces: vec![TopologyFace::Triangle(ids)],
+        });
+        let state = DeformationControlState {
+            topology_id: topology.topology_id(),
+            topology_revision: topology.topology_revision(),
+            revision: ControlStateRevision::new(1).unwrap(),
+            points: vec![
+                (ids[0], 0.0, 0.0),
+                (ids[1], 2.0, 0.0),
+                (ids[2], 0.0, 2.0),
+            ].into_iter().map(|(id, x, y)| ControlPointState {
+                id,
+                position: ControlPointPosition::new(x, y).unwrap(),
+                pinned: false,
+            }).collect(),
+        };
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = crate::binding::ValidatedCageGeometry::new(
+            &topology, &state, &certificate,
+        ).unwrap();
+
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(-0.5, 0.5)),
+            PathCommand::QuadraticTo {
+                control: point(-0.25, 0.6),
+                to: point(-0.5, 0.7),
+            },
+        ]).unwrap();
+        let samples = sample_path_curves(&path, policy(0.01)).unwrap();
+        let mapped = map_curve_samples(
+            &samples, &geometry, crate::binding::OutsideCagePolicy::ClampToBoundary,
+        ).unwrap();
+
+        assert_eq!(mapped.len(), samples.total_samples);
+        assert!(mapped.iter().all(|sample| matches!(
+            sample.mapping, CurveSampleMapping::Clamped { face_index: 0, .. }
+        )));
+        assert!(mapped.iter().all(|sample| sample.command_index == 1));
+    }
+
+    #[test]
     fn sampling_does_not_mutate_or_replace_the_source_path() {
         let path = Path2D::new(vec![
             PathCommand::MoveTo(point(0.0, 0.0)),
