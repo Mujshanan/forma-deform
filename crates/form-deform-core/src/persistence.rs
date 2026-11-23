@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::composition_graph::{CompositionGraph, CompositionGraphError};
+use crate::cage_binding_persistence::{CageBindingPersistenceError, PersistedCageBinding};
 use crate::host_contract::{
     CoordinateSpaceDescriptor, GeometrySnapshotStamp, HostTargetRef,
 };
@@ -17,6 +18,7 @@ pub const FDM_DOCUMENT_SCHEMA_VERSION: u32 = 1;
 pub const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_DEFORMERS: usize = 10_000;
 pub const MAX_COMPOSITION_GRAPHS: usize = 1_000;
+pub const MAX_CAGE_BINDINGS: usize = 10_000;
 pub const MAX_PARAMETERS_PER_DEFORMER: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -166,7 +168,7 @@ impl FdmDocument {
         }
         require_id(&self.document_id)?;
         if self.revision == 0 { return Err(PersistenceError::InvalidRevision); }
-        if self.deformers.len() > MAX_DEFORMERS || self.composition_graphs.len() > MAX_COMPOSITION_GRAPHS {
+        if self.deformers.len() > MAX_DEFORMERS || self.composition_graphs.len() > MAX_COMPOSITION_GRAPHS || self.cage_bindings.len() > MAX_CAGE_BINDINGS {
             return Err(PersistenceError::ResourceLimitExceeded);
         }
 
@@ -178,7 +180,7 @@ impl FdmDocument {
             }
         }
 
-        let mut graph_ids = std::collections::BTreeSet::new();
+        let mut binding_ids = std::collections::BTreeSet::new();\n        for binding in &self.cage_bindings {\n            binding.validate().map_err(PersistenceError::CageBinding)?;\n            if !binding_ids.insert(binding.id()) { return Err(PersistenceError::DuplicateCageBindingId); }\n        }\n\n        let mut graph_ids = std::collections::BTreeSet::new();
         for graph in &self.composition_graphs {
             if !graph_ids.insert(graph.graph_id()) {
                 return Err(PersistenceError::DuplicateCompositionGraphId);
@@ -238,7 +240,7 @@ impl FdmDocument {
     pub fn document_id(&self) -> &str { &self.document_id }
     pub fn revision(&self) -> u64 { self.revision }
     pub fn deformers(&self) -> &[DeformationDefinition] { &self.deformers }
-    pub fn composition_graphs(&self) -> &[CompositionGraph] { &self.composition_graphs }
+    pub fn composition_graphs(&self) -> &[CompositionGraph] { &self.composition_graphs }\n    pub fn cage_bindings(&self) -> &[PersistedCageBinding] { &self.cage_bindings }
 }
 
 fn require_id(value: &str) -> Result<(), PersistenceError> {
@@ -255,7 +257,7 @@ pub enum PersistenceError {
     ReferenceTargetMismatch,
     NonFiniteParameter,
     DuplicateDeformerId,
-    DuplicateCompositionGraphId,
+    DuplicateCompositionGraphId,\n    DuplicateCageBindingId,\n    CageBinding(CageBindingPersistenceError),
     UnsupportedSchemaName,
     UnsupportedSchemaVersion,
     MalformedDocument,
