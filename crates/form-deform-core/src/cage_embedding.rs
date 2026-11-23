@@ -99,9 +99,9 @@ impl CageEmbedding {
         let tol = self.tolerance()?;
         self.validate_vertex_identity(tol)?;
         self.validate_faces(tol)?;
-        self.validate_vertex_links()?;
         let (edges, components) = self.validate_topology()?;
         self.validate_global_intersections(tol)?;
+        self.validate_vertex_links()?;
         Ok(ValidatedCageEmbedding {
             vertex_count: self.vertices.len(),
             triangle_count: self.triangles.len(),
