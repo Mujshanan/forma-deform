@@ -841,11 +841,24 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_outside_policies_fail_closed() {
+    fn outside_policy_parameters_are_stamped_and_validated() {
         let (topology, _) = cage();
-        assert!(matches!(BindingStamp::from_snapshot(&snapshot(),&topology,
-            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,OutsideCagePolicy::BoundedExtrapolation { max_distance: 1.0 }),
-            Err(BindingError::UnsupportedOutsidePolicy(OutsideCagePolicy::Extrapolate))));
+        let source = snapshot();
+        let stamp = BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::BoundedExtrapolation { max_distance: 12.5 }).unwrap();
+        assert_eq!(stamp.outside_policy_version, OUTSIDE_CAGE_POLICY_VERSION);
+        assert_eq!(stamp.outside_policy, OutsideCagePolicy::BoundedExtrapolation { max_distance: 12.5 });
+        assert_eq!(stamp.validate(), Ok(()));
+
+        assert!(matches!(BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::BoundedExtrapolation { max_distance: f64::NAN }),
+            Err(BindingError::InvalidOutsidePolicyParameter)));
+        assert!(matches!(BindingStamp::from_snapshot(&source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::BoundedExtrapolation { max_distance: 0.0 }),
+            Err(BindingError::InvalidOutsidePolicyParameter)));
     }
 
     #[test]
