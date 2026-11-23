@@ -99,7 +99,10 @@ impl PersistedBinding {
             .map_err(BindingDiagnostic::InvalidBinding)?;
         self.binding.validate_against(snapshot, topology, &geometry)
             .map_err(BindingDiagnostic::from)?;
-        Ok(ValidatedBindingRecord { binding: self.binding.clone() })
+        Ok(ValidatedBindingRecord {
+            binding: self.binding.clone(),
+            rest_cage_fingerprint: *geometry.geometry_fingerprint(),
+        })
     }
 }
 
@@ -108,11 +111,17 @@ impl PersistedBinding {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatedBindingRecord {
     binding: BindingRecord,
+    rest_cage_fingerprint: [u8; 32],
 }
 
 impl ValidatedBindingRecord {
     pub fn binding(&self) -> &BindingRecord {
         &self.binding
+    }
+
+    /// Fingerprint of the exact certified rest-cage geometry used to validate this binding.
+    pub fn rest_cage_fingerprint(&self) -> &[u8; 32] {
+        &self.rest_cage_fingerprint
     }
 }
 
