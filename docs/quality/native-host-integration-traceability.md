@@ -1,4 +1,4 @@
-# Native Host tntegration Traceability
+# Native Host Integration Traceability
 
 **Checked:** 2026-11-23  
 **Repositories:** [Forma Deform](https://github.com/Mujshanan/forma-deform) and [AniCraft](https://github.com/Mujshanan/anicraft)  
@@ -8,7 +8,7 @@
 
 The project history is: three separate proof-of-concept plugins → one consolidated Forma Deform product/codebase → development toward a native AniCraft tool. The three plugin crates still present in the Forma Deform workspace are not three separately shipped products.
 
-There is concrete native Smart Controller Ut work in AniCraft branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03), but it is a partial, unmerged UI slice. It adds a toolbar tool, transient Stage handles, and a Properties inspector. The branch does not yet connect authored controller persistence, source-angle resolution, the controller core, target application, or live preview. AniCraft `main` does not contain this native Smart Controller work.
+There is concrete native Smart Controller UI work in AniCraft branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03), but it is a partial, unmerged UI slice. It adds a toolbar tool, transient Stage handles, and a basic Properties section for the selected transient handle. The branch does not yet connect authored controller persistence, source-angle resolution, the controller core, target application, or live preview. AniCraft `main` does not contain this native Smart Controller work.
 
 Therefore:
 - It is inaccurate to describe Forma Deform as only a proposed native tool or only a WASM plugin suite.
@@ -20,7 +20,7 @@ Therefore:
 | Area | Owner | Evidence / boundary |
 |---|---|---|
 | Controller/deformation domain rules and deterministic evaluation | Forma Deform core | `smart-controller-core` and `form-deform-core` in the Forma Deform workspace |
-| Native toolbar, Stage interaction, inspector and transient UI state | AniCraft | Native UI files on `feat/smart-controller-ui-01-03` |
+| Native toolbar, Stage interaction, basic handle Properties section and transient UI state | AniCraft | Native UI files on `feat/smart-controller-ui-01-03` |
 | Authoritative document schema and persistence | AniCraft | Not implemented for Smart Controller in the inspected feature branch |
 | Commands, undo/redo and transactional edits | AniCraft | Existing command/session architecture; no Smart Controller authored-state commands in the inspected branch |
 | Evaluated rig input, evaluation scheduling and target application | AniCraft host adapter + Forma Deform core | Not connected in the inspected feature branch |
@@ -46,10 +46,10 @@ The inspected branch was 17 commits ahead of `main` at commit [`59ed1f4871b543ec
 | [`src/main.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/main.rs) | Declares `mod smart_controller_tool` | UI module is compiled into this branch's application |
 | [`src/app.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/app.rs) | Adds `Tool::SmartController`, labels/hint, transient handle collection and selected index | Native tool identity and transient state exist |
 | [`src/stage.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/stage.rs) | Draws handle overlay and routes Smart Controller clicks to the tool module | Stage interaction exists |
-| [`src/panels.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/panels.rs) | Adds a Smart Controller Properties section | An inspector surface exists |
+| [`src/panels.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/panels.rs) | Adds a basic Properties section for the selected transient handle | A small handle-properties surface exists, not a connected driver/target binding inspector |
 | [`src/smart_controller_tool.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/src/smart_controller_tool.rs) | Draws transient handles and a draft inspector; tests nearest-handle and draft validation | UI scaffold exists; it does not persist definitions or evaluate a controller |
 | [`crates/controller/src/lib.rs`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/crates/controller/src/lib.rs) | Adds a pure scalar-to-frame mapper from a `BoneId` and nested `InstancePath` | A small native mapping prototype exists, but not its host adapter or runtime |
-| [`crates/controller/README.md`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/crates/controller/README.md) | Lists persistence, source-angle resolution, target application, and UI as not implemented | Confirms important runtime gaps, but its UI statement is stale relative to the added UI module |
+| [`crates/controller/README.md`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/crates/controller/README.md) | Lists persistence, source-angle resolution, target application, and authoring UI as not implemented | Accurate for functional controller authoring; a transient Stage/handle UI shell exists but does not complete that workflow |
 | [`docs/SMART_CONTROLLER_UI_ACCEPTANCE.md`](https://github.com/Mujshanan/anicraft/blob/feat/smart-controller-ui-01-03/docs/SMART_CONTROLLER_UI_ACCEPTANCE.md) | Defines create/select/edit/preview/save/reopen workflow and automated/manual acceptance | This is a completion checklist, not evidence that the workflow passes |
 
 ### Important implementation gaps
