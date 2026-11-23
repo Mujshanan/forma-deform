@@ -22,7 +22,7 @@ The retired standalone Bun/TypeScript rectangle demo is not part of the current 
 
 ## Branch lineage
 
-This PR targets `test/fdm-03-v1-integration-regressions`, the branch containing the FDM-04.2 integration merge commit. The FDM-04.4 branch carried the implementation commit history but did not contain that merge commit as an ancestor. The clean hardening branch is based directly on this integration branch and compares as 22 commits ahead and 0 behind.
+This PR targets `test/fdm-03-v1-integration-regressions`, the branch containing the FDM-04.2 integration merge commit. The FDM-04.4 branch carried the implementation commit history but did not contain that merge commit as an ancestor. The clean hardening branch was created directly from this integration branch (22 commits ahead, 0 behind at creation). The upstream branch advanced by three commits during review; its relevant freshness-validation and documentation changes were incorporated into this branch.
 
 Targeting the upstream integration branch lets GitHub create the normal merge ancestry when this PR is eventually merged. No shared branch is reset, force-pushed, or rewritten. This PR is not authorized for automatic merge.
 
