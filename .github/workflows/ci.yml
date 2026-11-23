@@ -14,6 +14,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
