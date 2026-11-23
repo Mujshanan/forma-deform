@@ -99,7 +99,7 @@ Every bone input query in a deterministic snapshot must use:
 - an explicit `BoneAnglePolicy`;
 - explicit wrapped/unwrapped angle semantics.
 
-The adapter queries `bone.info` once per required armature layer per invocation, passing both `layer` and `frame`. It verifies that the response's `frame` equals the requested frame before using any bone data. A response from another frame is unavailable, not a usable stale sample.
+The adapter queries `bone.info` once per required armature layer per invocation, passing both `layer` and `frame`. It verifies that the response's `frame` equals the requested frame and that the response contains the exact mapped armature `layer` before using any bone data. A response from another frame or layer is unavailable, not a usable stale sample.
 
 The relevant response is:
 
@@ -160,13 +160,15 @@ Before neutral capture or binding UI can be implemented, the host must provide s
 
 ## 5. Conformance tests
 
+The canonical `collect_host_input_snapshot` path is frame-pinned by this contract. The older V1 Slider command remains a separate current-playhead, on-demand preview path; it is not to be represented as a frame-pinned canonical snapshot until it is migrated explicitly.
+
 The adapter conformance suite must cover:
 
 1. Exact `warp.info` schema: `pins[].pin` identity, not `pins[].id` or array index.
 2. Correct element match, live warp, non-bitmap, and exact pin match.
 3. Distinct Unsupported and Unavailable outcomes.
 4. Explicit frame passed to `bone.info` and exact response-frame verification.
-5. Numeric bone-ID match within the explicitly mapped armature layer.
+5. Numeric bone-ID match and exact response-layer verification against the explicitly mapped armature layer.
 6. Keyed angle only versus keyed angle plus spring swing.
 7. Missing spring swing, malformed angles, missing bone, failed host query, and frame mismatch fail closed.
 8. No implicit zero, no cross-invocation cache, and no host mutation.
