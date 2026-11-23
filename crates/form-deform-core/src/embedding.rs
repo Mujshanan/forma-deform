@@ -868,16 +868,40 @@ mod tests {
 
     #[test]
     fn overlapping_non_adjacent_faces_are_rejected() {
-        let (mut topology, state) = two_triangle_cage([
-            (0.0, 0.0), (2.0, 0.0), (0.0, 2.0), (0.2, 0.2),
-        ]);
-        if let DeformationTopology::IrregularCage(value) = &mut topology {
-            value.faces = vec![
+        let topology_id = DeformationTopologyId::new(2).unwrap();
+        let topology_revision = DeformationTopologyRevision::new(1).unwrap();
+        let topology = DeformationTopology::IrregularCage(IrregularCageTopology {
+            id: topology_id,
+            revision: topology_revision,
+            control_point_ids: (1..=5).map(id).collect(),
+            faces: vec![
                 TopologyFace::Triangle([id(1), id(2), id(3)]),
                 TopologyFace::Triangle([id(1), id(3), id(4)]),
-            ];
-        }
-        assert!(validate_cage_embedding(&topology, &state).is_err());
+                TopologyFace::Triangle([id(1), id(4), id(5)]),
+            ],
+        });
+        let state = DeformationControlState {
+            topology_id,
+            topology_revision,
+            revision: ControlStateRevision::new(1).unwrap(),
+            points: [
+                (0.0, 0.0),
+                (2.0, 0.0),
+                (-1.0, 1.732),
+                (-1.0, -1.732),
+                (1.732, 1.0),
+            ].iter().enumerate().map(|(index, (x, y))| ControlPointState {
+                id: id(index as u64 + 1),
+                position: point(*x, *y),
+                pinned: false,
+            }).collect(),
+        };
+
+        assert!(matches!(
+            validate_cage_embedding(&topology, &state),
+            Err(EmbeddingError::NonAdjacentFaceIntersection { .. })
+                | Err(EmbeddingError::FaceInteriorOverlap { .. })
+        ));
     }
 
     #[test]
