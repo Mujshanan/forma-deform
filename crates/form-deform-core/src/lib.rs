@@ -22,6 +22,7 @@ pub mod binding_evaluation;
 pub mod curve_sample_evaluation;
 pub mod deformation_output;
 pub mod output_space_refinement;
+pub mod deformation_output_assembly;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 { pub x: f64, pub y: f64 }
