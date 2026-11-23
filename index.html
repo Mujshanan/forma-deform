@@ -3,48 +3,131 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Forma Deform — Rectangle Tween</title>
-  <link rel="stylesheet" href="/style.css">
+  <meta name="theme-color" content="#111821">
+  <title>Forma Deform Studio</title>
+  <link rel="stylesheet" href="/studio.css">
 </head>
 <body>
-  <header class="topbar">
-    <div><span class="mark">F</span><strong>FORMA DEFORM</strong><span class="subtle">/ rectangle lab</span></div>
-    <div class="top-actions">
-      <button id="save" class="quiet">Save project</button>
-      <label class="button quiet" for="load">Open project</label>
-      <input id="load" type="file" accept="application/json,.json" hidden>
-    </div>
-  </header>
-  <main>
-    <section class="workspace">
-      <aside class="toolrail" aria-label="Tools">
-        <button id="draw-tool" class="tool active" title="Draw rectangle">＋<small>Draw</small></button>
-        <button id="select-tool" class="tool" title="Select and edit">↖<small>Select</small></button>
-      </aside>
-      <section class="stage-wrap">
-        <div class="stage-heading"><div><strong>Stage</strong><span id="mode-label">Draw a rectangle to begin</span></div><span class="coordinates">DOCUMENT SPACE · 960 × 560</span></div>
-        <div class="canvas-shell"><canvas id="stage" width="960" height="560"></canvas></div>
-        <div class="hint" id="hint">Click and drag on the stage to create your first rectangle.</div>
-      </section>
-    </section>
-    <section class="timeline-panel">
-      <div class="timeline-top">
-        <div><strong>Timeline</strong><span class="subtle"> · 24 FPS</span></div>
-        <div class="transport">
-          <button id="first-frame" class="icon-button" title="Go to frame 0">|◀</button>
-          <button id="play" class="play-button">▶ Play</button>
-          <button id="set-key" class="primary" disabled>◆ Set keyframe</button>
-          <button id="remove-key" class="quiet" disabled>Remove key</button>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Forma Deform Studio home">
+        <span class="brand-mark" aria-hidden="true">F</span>
+        <span class="brand-copy"><strong>FORMA DEFORM</strong><small>STUDIO</small></span>
+      </a>
+      <nav class="menu" aria-label="Main menu">
+        <button class="menu-item" type="button" disabled>File</button>
+        <button class="menu-item" type="button" disabled>Edit</button>
+        <button class="menu-item" type="button" disabled>View</button>
+        <button class="menu-item" type="button" disabled>Help</button>
+      </nav>
+      <div class="topbar-actions">
+        <span class="project-state"><span class="state-dot"></span> No project loaded</span>
+        <button class="top-action" type="button" disabled title="Project persistence is not connected yet">Open</button>
+        <button class="top-action primary-action" type="button" disabled title="Project persistence is not connected yet">Save</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tool-panel panel" aria-label="Deformation tools">
+        <div class="panel-heading"><span>AUTHORING</span><span class="panel-kicker">TOOLS</span></div>
+        <div class="tool-group">
+          <button class="tool-button active" type="button" data-tool="select" aria-pressed="true" title="Select (V)">
+            <span class="tool-icon" aria-hidden="true">↖</span><span>Select</span><kbd>V</kbd>
+          </button>
+          <div class="tool-divider"></div>
+          <button class="tool-button" type="button" data-tool="pin" aria-pressed="false" title="Pin & Offset Drivers (P)">
+            <span class="tool-icon pin-icon" aria-hidden="true">⌖</span><span>Pin</span><kbd>P</kbd>
+          </button>
+          <button class="tool-button" type="button" data-tool="array" aria-pressed="false" title="Point Arrays (A)">
+            <span class="tool-icon" aria-hidden="true">⠿</span><span>Point Array</span><kbd>A</kbd>
+          </button>
+          <button class="tool-button" type="button" data-tool="binding" aria-pressed="false" title="Binding (B)">
+            <span class="tool-icon" aria-hidden="true">⌘</span><span>Binding</span><kbd>B</kbd>
+          </button>
+          <div class="tool-divider"></div>
+          <button class="tool-button" type="button" data-tool="cage" aria-pressed="false" title="Cage editing (G)">
+            <span class="tool-icon" aria-hidden="true">▦</span><span>Cage</span><kbd>G</kbd>
+          </button>
+          <button class="tool-button" type="button" data-tool="bezier" aria-pressed="false" title="Bézier editing (E)">
+            <span class="tool-icon" aria-hidden="true">⌁</span><span>Bézier</span><kbd>E</kbd>
+          </button>
+          <button class="tool-button" type="button" data-tool="tessellate" aria-pressed="false" title="Vector tessellation (T)">
+            <span class="tool-icon" aria-hidden="true">⟁</span><span>Tessellate</span><kbd>T</kbd>
+          </button>
         </div>
-      </div>
-      <div class="scrub-row">
-        <label for="frame">FRAME</label><input id="frame" type="range" min="0" max="60" value="0" step="1">
-        <output id="frame-value">0</output>
-      </div>
-      <div class="track-wrap"><div class="track-label">Rectangle</div><div id="track" class="track"><div class="ticks"></div><div id="playhead" class="playhead"></div></div></div>
-      <div class="timeline-foot"><span id="key-count">No keyframes</span><span>Linear interpolation · endpoint hold</span></div>
-    </section>
-  </main>
+        <div class="tool-panel-foot">
+          <span class="foot-label">ENGINE STATUS</span>
+          <span class="engine-indicator"><span class="state-dot muted"></span> Adapter pending</span>
+        </div>
+      </aside>
+
+      <section class="viewport-column" aria-label="Workspace viewport">
+        <div class="viewport-toolbar">
+          <div class="viewport-title">
+            <strong>Viewport</strong>
+            <span class="viewport-separator">/</span>
+            <span id="active-tool-label">Select</span>
+          </div>
+          <div class="viewport-controls">
+            <span class="coordinate-readout" id="coordinate-readout">X — · Y —</span>
+            <button class="viewport-button" id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+            <output id="zoom-level" class="zoom-level">100%</output>
+            <button class="viewport-button" id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+            <button class="viewport-button fit-button" id="fit-view" type="button">Fit</button>
+          </div>
+        </div>
+        <div class="viewport-frame" id="viewport-frame">
+          <canvas id="viewport" aria-label="Deformation authoring viewport. No geometry is loaded."></canvas>
+          <div class="viewport-empty" id="viewport-empty">
+            <div class="empty-glyph" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <strong>Ready for deformation authoring</strong>
+            <p>Open a supported project or connect a geometry source to begin.</p>
+            <span class="empty-note">No geometry loaded · Core evaluation is not connected to this shell yet</span>
+          </div>
+          <div class="viewport-hint"><span class="mouse-symbol">⟲</span> Drag to pan <span class="hint-divider">·</span> Use + / − to zoom</div>
+        </div>
+        <footer class="viewport-status">
+          <span id="status-message">Studio shell ready</span>
+          <span class="status-right"><span>DOCUMENT SPACE</span><span class="status-separator">·</span><span id="pan-readout">0, 0</span></span>
+        </footer>
+      </section>
+
+      <aside class="inspector-panel panel" aria-label="Properties inspector">
+        <div class="inspector-tabs">
+          <button class="inspector-tab active" type="button" aria-current="page">Inspector</button>
+          <button class="inspector-tab" type="button" disabled title="No project data available">Structure</button>
+        </div>
+        <section class="inspector-content" aria-live="polite">
+          <div class="inspector-section-heading">
+            <span class="section-eyebrow" id="inspector-eyebrow">SELECTION</span>
+            <span class="capability-pill">STUDIO</span>
+          </div>
+          <h1 id="inspector-title">Nothing selected</h1>
+          <p class="inspector-description" id="inspector-description">Choose a deformation tool. Its properties and workflow guidance will appear here.</p>
+          <div class="inspector-rule"></div>
+          <div class="property-group">
+            <span class="property-label">WORKSPACE STATE</span>
+            <div class="property-row"><span>Active tool</span><strong id="property-tool">Select</strong></div>
+            <div class="property-row"><span>Target</span><strong class="value-muted">None</strong></div>
+            <div class="property-row"><span>Evaluation</span><strong class="value-pending">Not connected</strong></div>
+          </div>
+          <div class="inspector-notice">
+            <span class="notice-icon" aria-hidden="true">i</span>
+            <div><strong>Core integration pending</strong><p>This shell currently manages workspace navigation only. It does not create or evaluate deformation data.</p></div>
+          </div>
+          <div class="inspector-bottom">
+            <span class="property-label">TOOL GUIDANCE</span>
+            <p id="tool-guidance">Select a tool from the left rail to see its intended authoring workflow.</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="bottom-panel">
+      <div class="bottom-left"><span class="bottom-indicator"></span><strong>STATUS</strong><span class="bottom-divider">/</span><span id="bottom-status">No document loaded</span></div>
+      <div class="bottom-right"><span>FORMA DEFORM CORE</span><span class="version-tag">V1 UI SHELL</span></div>
+    </footer>
+  </div>
   <script type="module" src="/main.js"></script>
 </body>
 </html>

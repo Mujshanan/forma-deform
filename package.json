@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/demo/server.ts",
-    "build": "bun build ./src/demo/main.ts --outdir ./dist --target browser",
+    "build": "bun build ./src/studio/main.ts --outdir ./dist --target browser",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
