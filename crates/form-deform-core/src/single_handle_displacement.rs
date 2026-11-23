@@ -249,7 +249,7 @@ mod tests {
 
     fn definition(
         parameters: BTreeMap<String, ParameterValue>,
-    ) -> (EvaluationRequest, DeformationDefinition) {
+    ) -> Result<(EvaluationRequest, DeformationDefinition), crate::persistence::PersistenceError> {
         let source_path = sample_path();
         let coordinate_space = space();
         let fingerprint = source_path.fingerprint(&coordinate_space).unwrap();
@@ -302,9 +302,8 @@ mod tests {
             GeometryValueKind::AbsoluteGeometry,
             GeometryValueKind::AbsoluteGeometry,
             parameters,
-        )
-        .unwrap();
-        (request, definition)
+        )?;
+        Ok((request, definition))
     }
 
     fn parameters(
@@ -331,7 +330,7 @@ mod tests {
         path: &Path2D,
         parameters: BTreeMap<String, ParameterValue>,
     ) -> Result<GeometryValue, crate::composition_evaluation::OperatorInvocationError> {
-        let (request, definition) = definition(parameters);
+        let (request, definition) = definition(parameters).unwrap();
         let context = OperatorContext::new(&request).unwrap();
         let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, path.clone());
         evaluate_operator(
