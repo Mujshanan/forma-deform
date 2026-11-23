@@ -370,7 +370,7 @@ mod tests {
     use super::*;
     use crate::embedding::validate_cage_embedding;
     use crate::topology::{
-        ControlPointState, ControlStateRevision, DeformationControlState,
+        TopologyView, ControlPointState, ControlStateRevision, DeformationControlState,
         DeformationTopology, DeformationTopologyId, DeformationTopologyRevision,
         IrregularCageTopology, TopologyFace,
     };

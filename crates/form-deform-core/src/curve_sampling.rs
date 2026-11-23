@@ -511,6 +511,7 @@ pub fn map_curve_samples(
 mod tests {
     use super::*;
     use crate::path2d::PathCommand;
+    use crate::topology::TopologyView;
 
     fn point(x: f64, y: f64) -> Point2 {
         Point2::new(x, y).unwrap()
