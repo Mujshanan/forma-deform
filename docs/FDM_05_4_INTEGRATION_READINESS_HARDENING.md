@@ -14,7 +14,7 @@ FDM-05.4 is not an algorithm expansion. The existing binding evaluation, cage ma
 
 - The structured evaluated `Path2D` remains authoritative and preserves authored command kinds, order, subpaths, and Bézier handles.
 - Each quadratic/cubic command has exactly one derived refined segment in original command/subpath order.
-- Refined segment endpoints agree with the corresponding evaluated structured-curve endpoints within a scale-relative floating-point comparison tolerance.
+- Refined source endpoints agree with the immutable source snapshot, and refined output endpoints agree with the corresponding evaluated structured-curve endpoints within a scale-relative floating-point comparison tolerance.
 - Sample parameters are finite, endpoint-inclusive, and strictly increasing.
 - Source snapshot, binding stamp, rest-cage fingerprint, current-cage fingerprint, topology identity/revision, and outside-cage policy are mutually consistent.
 - Evaluation/sample counts agree with actual samples and do not exceed declared policy budgets.
@@ -25,7 +25,7 @@ FDM-05.4 is not an algorithm expansion. The existing binding evaluation, cage ma
 ## 3. Hardening work
 
 ### FDM-05.4.1 — Constructor/output alignment
-Validate the refined first and last output samples against the corresponding endpoints in the authoritative structured path. Reject correctly ordered samples that are geometrically disconnected from the structured result.
+Validate refined first/last source samples against the immutable source snapshot and output samples against the authoritative structured path. Reject correctly ordered samples disconnected from either geometry.
 
 ### FDM-05.4.2 — Metadata and budget consistency
 Validate that evaluation counts are at least the emitted sample count and do not exceed the refinement policy's maximum evaluation budget. Retain checked arithmetic for sample totals.
