@@ -75,7 +75,7 @@ The following documentation changes are made on the dedicated branch `quality/na
 
 ## Recommended next integration sequence
 
-1. Reconcile the stale `crates/controller/README.md` statement on the AniCraft feature branch: the UI view exists, but is only transient scaffolding.
+1. Clarify `crates/controller/README.md` on the AniCraft feature branch: document the transient Stage/handle UI shell while distinguishing it from a functional controller authoring and inspection workflow.
 2. Decide whether the native `anicraft-controller` prototype is the intended canonical Smart Controller core or whether it should adapt the Forma Deform `smart-controller-core`. Avoid two competing controller models.
 3. Add a versioned document-owned controller schema and explicit create/update/delete commands, with stable IDs and undo/redo tests.
 4. Add a host adapter that resolves evaluated bone input, calls the chosen pure core, and applies output through a temporary preview/evaluation layer without rewriting authored keyframes.
