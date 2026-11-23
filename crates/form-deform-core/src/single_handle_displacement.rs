@@ -7,7 +7,7 @@
 use crate::composition_evaluation::{
     DeformerOperator, GeometryValue, OperatorContext, OperatorFailure,
 };
-use crate::path2d::{Path2D, PathCommand, Path2DError, Point2};
+use crate::path2d::{Path2D, Path2DError, PathCommand, Point2};
 use crate::persistence::{
     DeformationDefinition, DeformationKind, GeometryValueKind, ParameterValue,
 };
@@ -69,8 +69,8 @@ impl HandleParameters {
             return Err(OperatorFailure::InvalidParameters);
         }
 
-        let center = Point2::new(handle_x, handle_y)
-            .map_err(|_| OperatorFailure::InvalidParameters)?;
+        let center =
+            Point2::new(handle_x, handle_y).map_err(|_| OperatorFailure::InvalidParameters)?;
 
         Ok(Self {
             center,
@@ -110,7 +110,10 @@ impl DeformerOperator for SingleHandleDisplacementOperator {
         let geometry = displace_path(input.geometry(), parameters)
             .map_err(|_| OperatorFailure::NonFiniteResult)?;
 
-        Ok(GeometryValue::new(GeometryValueKind::AbsoluteGeometry, geometry))
+        Ok(GeometryValue::new(
+            GeometryValueKind::AbsoluteGeometry,
+            geometry,
+        ))
     }
 }
 
@@ -122,22 +125,34 @@ impl DeformerOperator for SingleHandleDisplacementOperator {
 /// Points at or beyond the influence radius are unchanged. The same mapping is
 /// applied independently to anchors and Bézier control points.
 fn displace_path(path: &Path2D, parameters: HandleParameters) -> Result<Path2D, Path2DError> {
-    let commands = path.commands().iter().map(|command| {
-        Ok(match command {
-            PathCommand::MoveTo(point) => PathCommand::MoveTo(displace_point(*point, parameters)?),
-            PathCommand::LineTo(point) => PathCommand::LineTo(displace_point(*point, parameters)?),
-            PathCommand::QuadraticTo { control, to } => PathCommand::QuadraticTo {
-                control: displace_point(*control, parameters)?,
-                to: displace_point(*to, parameters)?,
-            },
-            PathCommand::CubicTo { control1, control2, to } => PathCommand::CubicTo {
-                control1: displace_point(*control1, parameters)?,
-                control2: displace_point(*control2, parameters)?,
-                to: displace_point(*to, parameters)?,
-            },
-            PathCommand::Close => PathCommand::Close,
+    let commands = path
+        .commands()
+        .iter()
+        .map(|command| {
+            Ok(match command {
+                PathCommand::MoveTo(point) => {
+                    PathCommand::MoveTo(displace_point(*point, parameters)?)
+                }
+                PathCommand::LineTo(point) => {
+                    PathCommand::LineTo(displace_point(*point, parameters)?)
+                }
+                PathCommand::QuadraticTo { control, to } => PathCommand::QuadraticTo {
+                    control: displace_point(*control, parameters)?,
+                    to: displace_point(*to, parameters)?,
+                },
+                PathCommand::CubicTo {
+                    control1,
+                    control2,
+                    to,
+                } => PathCommand::CubicTo {
+                    control1: displace_point(*control1, parameters)?,
+                    control2: displace_point(*control2, parameters)?,
+                    to: displace_point(*to, parameters)?,
+                },
+                PathCommand::Close => PathCommand::Close,
+            })
         })
-    }).collect::<Result<Vec<_>, Path2DError>>()?;
+        .collect::<Result<Vec<_>, Path2DError>>()?;
 
     Path2D::new(commands)
 }
@@ -172,14 +187,14 @@ fn displace_point(point: Point2, parameters: HandleParameters) -> Result<Point2,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::composition_evaluation::{evaluate_operator, OperatorContext};
+    use crate::composition_evaluation::{OperatorContext, evaluate_operator};
     use crate::evaluation_contract::{
         EvaluationRequest, EvaluationTimeSample, ModelRevisionStamp, TimeSampleKind,
     };
     use crate::host_contract::{
         AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
-        CoordinateSpaceKind, GeometryRevision, GeometrySnapshot, HostDocumentId,
-        HostNamespace, HostTargetId, HostTargetKind, HostTargetRef, TopologyRevision,
+        CoordinateSpaceKind, GeometryRevision, GeometrySnapshot, HostDocumentId, HostNamespace,
+        HostTargetId, HostTargetKind, HostTargetRef, TopologyRevision,
     };
     use crate::persistence::ParameterValue;
     use std::collections::BTreeMap;
@@ -219,7 +234,10 @@ mod tests {
         path(vec![
             PathCommand::MoveTo(point(0.0, 0.0)),
             PathCommand::LineTo(point(5.0, 0.0)),
-            PathCommand::QuadraticTo { control: point(5.0, 5.0), to: point(10.0, 5.0) },
+            PathCommand::QuadraticTo {
+                control: point(5.0, 5.0),
+                to: point(10.0, 5.0),
+            },
             PathCommand::CubicTo {
                 control1: point(10.0, 10.0),
                 control2: point(15.0, 10.0),
@@ -229,31 +247,63 @@ mod tests {
         ])
     }
 
-    fn definition(parameters: BTreeMap<String, ParameterValue>) -> (EvaluationRequest, DeformationDefinition) {
+    fn definition(
+        parameters: BTreeMap<String, ParameterValue>,
+    ) -> (EvaluationRequest, DeformationDefinition) {
         let source_path = sample_path();
         let coordinate_space = space();
         let fingerprint = source_path.fingerprint(&coordinate_space).unwrap();
         let target = target();
         let snapshot = GeometrySnapshot::new(
-            target.clone(), GeometryRevision(1), TopologyRevision(1), fingerprint,
-            coordinate_space.clone(), crate::path2d::PATH2D_PAYLOAD_KIND,
-            crate::path2d::PATH2D_SCHEMA_VERSION, source_path,
-        ).unwrap();
+            target.clone(),
+            GeometryRevision(1),
+            TopologyRevision(1),
+            fingerprint,
+            coordinate_space.clone(),
+            crate::path2d::PATH2D_PAYLOAD_KIND,
+            crate::path2d::PATH2D_SCHEMA_VERSION,
+            source_path,
+        )
+        .unwrap();
         let reference = snapshot.stamp();
         let request = EvaluationRequest::new(
             "request-1",
             vec![snapshot],
-            ModelRevisionStamp::new("model-1", 1, 1, SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID, SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_VERSION).unwrap(),
-            EvaluationTimeSample::new("frames", "sample-1", 1, 0.0, 1, TimeSampleKind::EvaluatedPose).unwrap(),
+            ModelRevisionStamp::new(
+                "model-1",
+                1,
+                1,
+                SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID,
+                SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_VERSION,
+            )
+            .unwrap(),
+            EvaluationTimeSample::new(
+                "frames",
+                "sample-1",
+                1,
+                0.0,
+                1,
+                TimeSampleKind::EvaluatedPose,
+            )
+            .unwrap(),
             vec![],
             "stage-1",
             None,
-        ).unwrap();
+        )
+        .unwrap();
         let definition = DeformationDefinition::new(
-            "single-handle-1", 1, "Single Handle", DeformationKind::PinDeformation,
-            target, reference, coordinate_space, GeometryValueKind::AbsoluteGeometry,
-            GeometryValueKind::AbsoluteGeometry, parameters,
-        ).unwrap();
+            "single-handle-1",
+            1,
+            "Single Handle",
+            DeformationKind::PinDeformation,
+            target,
+            reference,
+            coordinate_space,
+            GeometryValueKind::AbsoluteGeometry,
+            GeometryValueKind::AbsoluteGeometry,
+            parameters,
+        )
+        .unwrap();
         (request, definition)
     }
 
@@ -265,23 +315,40 @@ mod tests {
         BTreeMap::from([
             (HANDLE_X.into(), ParameterValue::Number(center.0)),
             (HANDLE_Y.into(), ParameterValue::Number(center.1)),
-            (DISPLACEMENT_X.into(), ParameterValue::Number(displacement.0)),
-            (DISPLACEMENT_Y.into(), ParameterValue::Number(displacement.1)),
+            (
+                DISPLACEMENT_X.into(),
+                ParameterValue::Number(displacement.0),
+            ),
+            (
+                DISPLACEMENT_Y.into(),
+                ParameterValue::Number(displacement.1),
+            ),
             (INFLUENCE_RADIUS.into(), ParameterValue::Number(radius)),
         ])
     }
 
-    fn run(path: &Path2D, parameters: BTreeMap<String, ParameterValue>) -> Result<GeometryValue, crate::composition_evaluation::OperatorInvocationError> {
+    fn run(
+        path: &Path2D,
+        parameters: BTreeMap<String, ParameterValue>,
+    ) -> Result<GeometryValue, crate::composition_evaluation::OperatorInvocationError> {
         let (request, definition) = definition(parameters);
         let context = OperatorContext::new(&request).unwrap();
         let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, path.clone());
-        evaluate_operator(&SingleHandleDisplacementOperator, &definition, &input, &context)
+        evaluate_operator(
+            &SingleHandleDisplacementOperator,
+            &definition,
+            &input,
+            &context,
+        )
     }
 
     #[test]
     fn operator_has_stable_identity_and_version() {
         let operator = SingleHandleDisplacementOperator;
-        assert_eq!(operator.algorithm_id(), SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID);
+        assert_eq!(
+            operator.algorithm_id(),
+            SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID
+        );
         assert_eq!(operator.algorithm_version(), 1);
         assert_eq!(operator.kind(), DeformationKind::PinDeformation);
     }
@@ -290,14 +357,20 @@ mod tests {
     fn handle_center_receives_full_displacement() {
         let input = path(vec![PathCommand::MoveTo(point(0.0, 0.0))]);
         let output = run(&input, parameters((0.0, 0.0), (8.0, -4.0), 10.0)).unwrap();
-        assert_eq!(output.geometry().commands(), &[PathCommand::MoveTo(point(8.0, -4.0))]);
+        assert_eq!(
+            output.geometry().commands(),
+            &[PathCommand::MoveTo(point(8.0, -4.0))]
+        );
     }
 
     #[test]
     fn smoothstep_midpoint_receives_half_displacement() {
         let input = path(vec![PathCommand::MoveTo(point(5.0, 0.0))]);
         let output = run(&input, parameters((0.0, 0.0), (8.0, 0.0), 10.0)).unwrap();
-        assert_eq!(output.geometry().commands(), &[PathCommand::MoveTo(point(9.0, 0.0))]);
+        assert_eq!(
+            output.geometry().commands(),
+            &[PathCommand::MoveTo(point(9.0, 0.0))]
+        );
     }
 
     #[test]
@@ -331,13 +404,18 @@ mod tests {
     fn preserves_path_command_kinds_order_and_close_commands() {
         let input = sample_path();
         let output = run(&input, parameters((0.0, 0.0), (3.0, -2.0), 100.0)).unwrap();
-        let kinds = |path: &Path2D| path.commands().iter().map(|command| match command {
-            PathCommand::MoveTo(_) => 1,
-            PathCommand::LineTo(_) => 2,
-            PathCommand::QuadraticTo { .. } => 3,
-            PathCommand::CubicTo { .. } => 4,
-            PathCommand::Close => 5,
-        }).collect::<Vec<_>>();
+        let kinds = |path: &Path2D| {
+            path.commands()
+                .iter()
+                .map(|command| match command {
+                    PathCommand::MoveTo(_) => 1,
+                    PathCommand::LineTo(_) => 2,
+                    PathCommand::QuadraticTo { .. } => 3,
+                    PathCommand::CubicTo { .. } => 4,
+                    PathCommand::Close => 5,
+                })
+                .collect::<Vec<_>>()
+        };
         assert_eq!(kinds(output.geometry()), kinds(&input));
     }
 
@@ -346,13 +424,25 @@ mod tests {
         let input = sample_path();
         let output = run(&input, parameters((0.0, 0.0), (2.0, 0.0), 100.0)).unwrap();
         match (&input.commands()[2], &output.geometry().commands()[2]) {
-            (PathCommand::QuadraticTo { control: before, .. }, PathCommand::QuadraticTo { control: after, .. }) => {
+            (
+                PathCommand::QuadraticTo {
+                    control: before, ..
+                },
+                PathCommand::QuadraticTo { control: after, .. },
+            ) => {
                 assert_ne!(before, after);
             }
             _ => panic!("quadratic command kind changed"),
         }
         match (&input.commands()[3], &output.geometry().commands()[3]) {
-            (PathCommand::CubicTo { control1: before, .. }, PathCommand::CubicTo { control1: after, .. }) => {
+            (
+                PathCommand::CubicTo {
+                    control1: before, ..
+                },
+                PathCommand::CubicTo {
+                    control1: after, ..
+                },
+            ) => {
                 assert_ne!(before, after);
             }
             _ => panic!("cubic command kind changed"),
@@ -364,19 +454,31 @@ mod tests {
         let input = sample_path();
         assert!(matches!(
             run(&input, parameters((0.0, 0.0), (1.0, 1.0), 0.0)),
-            Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::InvalidParameters))
+            Err(
+                crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::InvalidParameters
+                )
+            )
         ));
         let mut missing = parameters((0.0, 0.0), (1.0, 1.0), 10.0);
         missing.remove(HANDLE_X);
         assert!(matches!(
             run(&input, missing),
-            Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::InvalidParameters))
+            Err(
+                crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::InvalidParameters
+                )
+            )
         ));
         let mut extra = parameters((0.0, 0.0), (1.0, 1.0), 10.0);
         extra.insert("unexpected".into(), ParameterValue::Boolean(true));
         assert!(matches!(
             run(&input, extra),
-            Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::InvalidParameters))
+            Err(
+                crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::InvalidParameters
+                )
+            )
         ));
     }
 
@@ -386,15 +488,19 @@ mod tests {
         for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 run(&input, parameters((0.0, 0.0), (invalid, 1.0), 10.0)),
-                Err(crate::composition_evaluation::OperatorInvocationError::Operator(
-                    OperatorFailure::InvalidParameters
-                ))
+                Err(
+                    crate::composition_evaluation::OperatorInvocationError::Operator(
+                        OperatorFailure::InvalidParameters
+                    )
+                )
             ));
             assert!(matches!(
                 run(&input, parameters((0.0, 0.0), (1.0, 1.0), invalid)),
-                Err(crate::composition_evaluation::OperatorInvocationError::Operator(
-                    OperatorFailure::InvalidParameters
-                ))
+                Err(
+                    crate::composition_evaluation::OperatorInvocationError::Operator(
+                        OperatorFailure::InvalidParameters
+                    )
+                )
             ));
         }
     }
@@ -405,8 +511,11 @@ mod tests {
             PathCommand::MoveTo(point(f64::MAX, 0.0)),
             PathCommand::LineTo(point(-f64::MAX, 0.0)),
         ]);
-        let output = run(&input, parameters((0.0, 0.0), (1.0, 1.0), f64::MIN_POSITIVE))
-            .unwrap();
+        let output = run(
+            &input,
+            parameters((0.0, 0.0), (1.0, 1.0), f64::MIN_POSITIVE),
+        )
+        .unwrap();
         assert_eq!(output.geometry(), &input);
     }
 
@@ -427,7 +536,8 @@ mod tests {
         let transformed = displace_path(&input, parameters).unwrap();
 
         let original_curve_midpoint = point(0.0, 1.0);
-        let pointwise_mapped_midpoint = displace_point(original_curve_midpoint, parameters).unwrap();
+        let pointwise_mapped_midpoint =
+            displace_point(original_curve_midpoint, parameters).unwrap();
 
         let (mapped_start, mapped_control, mapped_end) = match transformed.commands() {
             [
@@ -449,7 +559,11 @@ mod tests {
         let input = path(vec![PathCommand::MoveTo(point(f64::MAX, 0.0))]);
         assert!(matches!(
             run(&input, parameters((f64::MAX, 0.0), (f64::MAX, 0.0), 10.0)),
-            Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::NonFiniteResult))
+            Err(
+                crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::NonFiniteResult
+                )
+            )
         ));
     }
 }
