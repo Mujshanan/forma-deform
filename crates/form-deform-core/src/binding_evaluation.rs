@@ -26,6 +26,7 @@ pub struct EvaluatedBindingGeometry {
     geometry: Path2D,
     source_stamp: GeometrySnapshotStamp,
     binding_stamp: BindingStamp,
+    rest_cage_fingerprint: [u8; 32],
     cage_geometry_fingerprint: [u8; 32],
     fingerprint: GeometryFingerprint,
     mapped_features: usize,
@@ -39,6 +40,7 @@ impl EvaluatedBindingGeometry {
     pub fn into_geometry(self) -> Path2D { self.geometry }
     pub fn source_stamp(&self) -> &GeometrySnapshotStamp { &self.source_stamp }
     pub fn binding_stamp(&self) -> &BindingStamp { &self.binding_stamp }
+    pub fn rest_cage_fingerprint(&self) -> &[u8; 32] { &self.rest_cage_fingerprint }
     pub fn cage_geometry_fingerprint(&self) -> &[u8; 32] { &self.cage_geometry_fingerprint }
     pub fn fingerprint(&self) -> &GeometryFingerprint { &self.fingerprint }
     pub fn mapped_features(&self) -> usize { self.mapped_features }
@@ -122,6 +124,7 @@ pub fn evaluate_binding(
         geometry,
         source_stamp: source.stamp(),
         binding_stamp: binding.stamp().clone(),
+        rest_cage_fingerprint: *validated.rest_cage_fingerprint(),
         cage_geometry_fingerprint: *current_cage.geometry_fingerprint(),
         fingerprint,
         mapped_features,
