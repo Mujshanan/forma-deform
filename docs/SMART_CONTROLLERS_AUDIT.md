@@ -906,3 +906,23 @@ The port deliberately excludes the candidate's runtime registry, canonical mappi
 GitHub Actions run [45125175442](https://github.com/Mujshanan/forma-deform/actions/runs/45125175442) was queued and then observed in progress on the exact head. It runs the workspace CI sequence, including Bun typecheck/tests/build, `cargo test --workspace`, and all three release WASM builds. No pass/fail result is claimed until the run completes. No PR has been opened and no merge has occurred.
 
 **Gate:** keep the branch isolated until CI passes. If it passes, open a focused review PR for Phase 2A only. Phase 2B (canonical five-pose joystick dispatch, Vector2 declaration validation and radial boundary behavior) remains a separate increment and must not be inferred complete from this generic algorithm port.
+
+
+## M. Phase 0.1 V1-plan reconciliation and Phase 6A CI update
+
+The V1 compatibility-plan reconciliation is recorded in Section 11 of [the Unified Smart Controllers implementation plan](https://github.com/Mujshanan/forma-deform/blob/docs/unified-smart-controllers-plan/docs/UNIFIED_SMART_CONTROLLERS_IMPLEMENTATION_PLAN.md).
+
+Key outcome: `docs/SMART_CONTROLLER_PLAN.md` remains normative for V1 Slider preview behavior, endpoint/reversed-range semantics, manual-input precedence, fail-closed bone queries and the no-document-mutation/no-playback guarantee. Its original file layout and its V1 `Params` model are historical implementation details, not the current canonical architecture.
+
+The Phase 2A-labelled isolated branch is an advanced mapping work package; in the plan's phase taxonomy its generic grid/triangulated primitives belong to **Phase 6A**. They do not satisfy Phase 2's canonical five-pose joystick acceptance criteria.
+
+### Updated Phase 6A branch evidence
+
+- Branch: `feat/unified-smart-controllers-phase2a-core-mapping`
+- Commit: `675c83a5808bd8620bf89432b0d422c2c5e433d8`
+- CI run [45125175442](https://github.com/Mujshanan/forma-deform/actions/runs/45125175442): **completed successfully**.
+- Verified job steps: Bun install, typecheck, tests and build; `cargo test --workspace`; release WASM builds for Bone Query, Form Deform and Smart Controller.
+- Scope remains six files only (five additions plus one module export); the branch is six commits ahead and zero behind audited main.
+- No PR or merge has been created. The work remains unmerged and is not counted as shipped on `main`.
+
+**Phase 0.1 result:** complete. Preserve V1 as a compatibility contract, use the canonical core as the implementation baseline, keep Phase 2 joystick acceptance distinct from Phase 6A generic mapping, and keep host authoring/persistence/playback claims gated on verified AniCraft APIs.
