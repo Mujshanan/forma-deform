@@ -157,6 +157,53 @@ The repositories below were inspected at source level for selected modules. This
 
 **Reuse policy:** do not copy a subsystem because it is written in Rust or has a permissive repository-level license. Verify the exact file license, copyright headers, dependency licenses, tests, numerical behavior, and whether the algorithm duplicates AniCraft. Prefer small, isolated, well-tested algorithms over whole frameworks.
 
+
+### 5.2 Flare-specific source audit
+
+**Repository:** [Flare-Animate/Flare](https://github.com/Flare-Animate/Flare)  
+**Audited revision:** `5105e8c85d1e03546e6ce55884fce68055a19c8a` (the `main` tree observed during this audit).  
+**License baseline:** the root `LICENSE` and workspace package metadata state BSD-3-Clause. This is not a substitute for checking bundled third-party material, generated files, or file-specific provenance before copying.
+
+#### Implemented Rust components worth studying
+
+| Source | Verified implementation | Forma Deform assessment |
+|---|---|---|
+| `crates/foundation/flare-tween` | Pure scalar curves with keyframes, cubic Bézier time/value handles, automatic/aligned/free handle policies, constant/linear/Bezier and easing families, constant/linear/cyclic/cyclic-offset extrapolation, bounded validation and tests. Its crate manifest depends only on `thiserror`; the library describes the implementation as clean-room. | **Best isolated candidate** for controller response curves if our required semantics exceed the current mapper. It is not a timeline and must not take ownership of AniCraft frames or playback. |
+| `flare-tween::interpolate_sequence` | Interpolates 2D stroke point sequences. Equal-count strokes pair by order; unequal counts are resampled by arc length to a common count. Supports reversing the target sequence, easing, finite-input checks and a 4096-point bound. | **Strong future candidate** for stroke/contour correspondence or vector-shape transitions. It is not a cage, mesh, or arbitrary source-to-target binding algorithm. |
+| `crates/foundation/flare-eval/src/morph.rs` | Matches vector contours, converts line segments to cubic pieces, splits the longest cubic pieces to equalize counts, aligns closed-contour winding/start positions, collapses unmatched contours, then interpolates geometry and paint. It applies explicit contour/segment/search limits. | **High-value algorithmic reference** for a future vector-contour deformation/morph feature. It has meaningful topology assumptions and is not a general-purpose FFD solver. Review its full dependency and test surface before any extraction. |
+| `crates/foundation/flare-document/src/shape.rs` | Immutable/shared vector shape path represented by `MoveTo`, `LineTo`, `CubicTo`, and `Close`, with fill, gradient and stroke metadata. | Useful path representation reference only. Forma Deform should bind to AniCraft's authoritative shape/path identities rather than adopt a second document model. |
+| `crates/foundation/flare-mannequin/src/skin.rs` | Builds a specialized 3D tube/ring surface with triangle connectivity, vertex normals and up to two joint influences per vertex; its skinning routine moves vertices from rest to posed joint frames. | Interesting skinning mathematics, but the module is private and tied to Flare's 3D mannequin skeleton and rotation model. Not a drop-in 2D mesh skinning crate. |
+| `crates/foundation/flare-rig` | 2D hierarchical bone model, forward kinematics, pose interpolation, two-bone IK and bounded CCD IK. | Do not reuse as a competing rig system. AniCraft owns canonical bones and rig evaluation; consult only for isolated mathematical edge cases if a real host gap is demonstrated. |
+
+#### Important non-implementation: the experimental cage mesh
+
+Flare's `crates/foundation/flare-core/src/experimental/viewspace/mesh.rs` defines a 3D `BaseMesh` with vertices, triangular faces, UVs, semantic regions, depth values, control points, optional bone hierarchy and feature anchors. It validates the mesh and computes vertex normals/bounds.
+
+However, `BaseMesh::apply_cage` currently returns `ViewSpaceError::NotImplemented`. Its source comment describes future mean-value or Green-coordinate weights (and mentions linear blend skinning as a possible v1), but those are TODO design notes, not implemented algorithms. The experimental module's own status table lists `mesh-cage` as a stub. Do not cite this as a working cage deformer or reuse its control-point structure as proof of a completed solver.
+
+The Moho vector importer is also not a suitable curve-deformation source: its own module documentation says it reads indexed points/curves but does not read Bézier handles, so converted paths become polylines.
+
+#### Reuse decisions for Forma Deform
+
+1. **Inspect `flare-tween` first** if we need richer scalar controller curves. Its dependency footprint is small and its algorithms are separate from the editor. Before porting, compare its interpolation/easing and extrapolation semantics with our existing Smart Controller mapper and tests.
+2. **Keep `interpolate_sequence` as a candidate** for future stroke correspondence. Its arc-length resampling is useful where point counts differ, but it assumes ordered contours and does not solve topology correspondence generally.
+3. **Use `flare-eval::morph` as a reference** if we add vector-contour morphing. Do not confuse shape tweening with cage deformation, and do not import the broad `flare-eval` crate merely to obtain this algorithm.
+4. **Do not reuse Flare's experimental cage implementation**; the actual cage operation is unimplemented. Forma Deform still needs its own defined cage topology, point-location/binding contract, deformation weights and evaluation solver (or another verified source).
+5. **Do not import Flare's rig, timeline, document, renderer, UI, CLI, MCP server or application crates.** Those responsibilities either belong to AniCraft or are outside Forma Deform's scope.
+6. **Treat mannequin skinning as research only.** Its private 3D implementation is specialized and would require a deliberate 2D adaptation, not a mechanical port.
+
+#### Licensing and extraction gate
+
+The audited Flare workspace declares BSD-3-Clause and the standalone `flare-tween` crate has a narrow dependency footprint. This makes selected source worth further consideration, but does not grant blanket approval to copy the repository. Before any port or vendoring:
+- pin the exact Flare commit and exact source files;
+- inspect file headers, authorship/provenance and any generated or imported material;
+- audit the transitive dependency licenses for the chosen files/crate;
+- preserve BSD-3-Clause notices and disclaimers where required;
+- run source-specific tests and add Forma Deform regression/property tests;
+- compare edge cases, numerical stability, performance and semantics against our own requirements.
+
+**Audit disposition:** Flare is a useful algorithmic reference, not a deformation-engine dependency. The strongest candidates are the standalone `flare-tween` curve/sequence algorithms and the isolated contour-morph algorithm. No code is approved for copying, vendoring, or runtime dependency use by this assessment.
+
 ## 6. Code and ownership architecture
 
 ```text
@@ -284,7 +331,7 @@ Smart Controller binding evaluation and Form Deform pin-deformation evaluation r
 ### 11.2 Authoritative architecture and M0 audit
 
 - [FDM v2 Architecture and Integration Specification](docs/FDM_V2_ARCHITECTURE.md) — consolidated accepted decisions, responsibilities, invariants, lifecycle, and open implementation questions.
-- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Status: audit and ownership matrix complete; CCC-01.5 discrepancy resolved and the Smart Controller changes passed the full GitHub Actions CI workflow, including workspace tests and all three release WASM plugin builds.
+- [FDM v2 AniCraft Host Capability and Integration Audit](docs/FDM_V2_HOST_CAPABILITY_AUDIT.md) — evidence-linked M0 audit. Status: audit, ownership matrix, CCC-01.5 reconciliation, and CI verification are complete. GitHub Actions run [#45149333452](https://github.com/Mujshanan/forma-deform/actions/runs/45149333452) passed workspace tests and all three release WASM plugin builds.
 
 The architecture specification is the authoritative consolidation of accepted semantics. The host audit records actual AniCraft capabilities and gaps; it distinguishes inspected source evidence from assumptions and previously documented but not reverified behavior.
 
