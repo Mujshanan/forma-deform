@@ -3,7 +3,7 @@
 //! Authored Path2D remains authoritative. This module evaluates only derived
 //! tessellation samples and never rewrites or flattens the source path.
 
-use crate::binding::{BindingError, FaceCoordinates, ValidatedCageGeometry};
+use crate::binding::{BindingError, BindingStamp, FaceCoordinates, ValidatedCageGeometry};
 use crate::binding_persistence::ValidatedBindingRecord;
 use crate::curve_sampling::{
     map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
@@ -29,6 +29,7 @@ pub struct EvaluatedCurveSampleSet {
     policy_version: u32,
     policy: crate::curve_sampling::CurveSamplingPolicy,
     source_stamp: GeometrySnapshotStamp,
+    binding_stamp: BindingStamp,
     rest_cage_fingerprint: [u8; 32],
     current_cage_fingerprint: [u8; 32],
     samples: Vec<EvaluatedCurveSample>,
@@ -42,6 +43,7 @@ impl EvaluatedCurveSampleSet {
     pub fn policy_version(&self) -> u32 { self.policy_version }
     pub fn policy(&self) -> crate::curve_sampling::CurveSamplingPolicy { self.policy }
     pub fn source_stamp(&self) -> &GeometrySnapshotStamp { &self.source_stamp }
+    pub fn binding_stamp(&self) -> &BindingStamp { &self.binding_stamp }
     pub fn rest_cage_fingerprint(&self) -> &[u8; 32] { &self.rest_cage_fingerprint }
     pub fn current_cage_fingerprint(&self) -> &[u8; 32] { &self.current_cage_fingerprint }
     pub fn samples(&self) -> &[EvaluatedCurveSample] { &self.samples }
@@ -132,6 +134,7 @@ pub fn evaluate_curve_samples(
         policy_version: mapped_samples.policy_version,
         policy: mapped_samples.policy,
         source_stamp: source.stamp(),
+        binding_stamp: stamp.clone(),
         rest_cage_fingerprint: *rest_cage.geometry_fingerprint(),
         current_cage_fingerprint: *current_cage.geometry_fingerprint(),
         samples,
