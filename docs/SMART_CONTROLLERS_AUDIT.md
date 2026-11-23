@@ -808,3 +808,79 @@ This matrix is a snapshot assessment, not authorization to start every incomplet
 **Phase 0 re-audit: complete for the current `main` snapshot.** The existing canonical implementation is the baseline. No new core, graph, input, evaluator, composition, migration, schema or scalar-mapping implementation should be started as part of the next step without first identifying a specific missing behavior against these existing modules.
 
 Before authorizing additional implementation, the architecture plan should be reconciled into an implementation-status matrix and the unmerged 2D mapping branch should be reviewed against the audited `main` mapper seam. Any subsequent implementation proposal should be limited to verified gaps, preserve compatibility and remain separately testable. This Phase 0 request does not authorize source changes, host API changes, PR creation or merges.
+
+
+---
+
+# Phase 2 candidate review — existing 2D mapping branch
+
+**Review date:** 2026-11-23  
+**Baseline:** `main` at `e7c7fef4e82345af311370426450146a4795523d`  
+**Candidate:** `feat/smart-controller-phase6a-mapping` at `c3e67710a499373948bde592f8899445f15101b2`  
+**Candidate relationship to main:** 38 commits ahead, 5 behind; merge base `9003088254d7301522eef474ff560db2eca81860`.  
+**Candidate CI:** [run 44982826789](https://github.com/Mujshanan/forma-deform/actions/runs/44982826789) passed on the exact candidate head. The job completed Bun install/typecheck/tests/build, `cargo test --workspace`, and release WASM builds for all three plugins. This does not establish rustfmt, Clippy or AniCraft in-app verification.
+
+## I. What the candidate already provides
+
+The branch contains useful reusable 2D mapping work; it is not a blank implementation track:
+
+- `mapping/advanced/grid.rs`: validated rectilinear grids, non-uniform axes, row-major pose storage, bilinear interpolation and explicit Reject/Clamp boundaries.
+- `mapping/advanced/triangulated.rs`: explicit authored triangle topology, barycentric interpolation, deterministic shared-edge ordering, overlap ambiguity rejection and Reject/ClampToMesh boundaries.
+- `mapping/advanced/interpolation.rs`: typed pose interpolation keyed by BindingId, including Scalar, Vector2 and Angle semantics.
+- `mapping/advanced/controller_mapper.rs`: a decorator implementing the existing `ControllerMapper` trait, with explicit controller/input registrations and fallback delegation for unregistered controllers.
+- `mapping/advanced/persistence.rs`: a separately versioned JSON extension contract that reconstructs the runtime registry.
+- Tests cover grid/triangulated interpolation, validation, boundaries, typed pose compatibility, evaluator dispatch, fallback behavior, registry errors and extension round trips.
+
+The generic mapper decorator is structurally compatible with the evaluator's injected `ControllerMapper` seam. It is a useful reuse candidate; a second evaluator or a new core architecture is not needed.
+
+## J. Reconciliation findings — do not merge the branch wholesale yet
+
+### J1 — The runtime registry can override a different canonical mapping declaration
+
+**Priority: P1 — contract consistency**
+
+The advanced registry is keyed by ControllerId and selects an independent mapping, while the canonical Controller still carries its own MappingConfig. The branch's integration and persistence test helpers construct controllers with `ThreeAnchorRange` while registering a Grid or Triangulated mapping for them. The runtime therefore evaluates a mapping different from the one declared by the canonical document.
+
+This may be acceptable as a deliberately separate extension override, but the relationship must be explicit and validated. Otherwise the document is misleading and tooling that inspects MappingConfig cannot explain the evaluated result.
+
+**Required resolution:** either (a) make advanced mapping a declared, versioned mapping kind in an approved schema/extension relationship, or (b) define and validate a strict extension override rule that cannot silently replace an unrelated MappingConfig. Add tests proving incompatible declarations are rejected.
+
+### J2 — Extension loading does not validate the declared input dimension
+
+**Priority: P1 — early validation**
+
+`AdvancedMappingExtension::into_runtime_registry` checks that the referenced InputId belongs to the controller, but it receives only Controllers and cannot verify that the matching InputDefinition declares Vector2. The runtime mapper eventually rejects non-Vector2 samples, but this is later than document/extension admission.
+
+**Required resolution:** validate the referenced InputDefinition and require `InputDimension::Vector2` when constructing the runtime registry (or make the runtime construction API accept a validated document so it can perform this check). Add load-time mismatch tests.
+
+### J3 — The five-pose joystick contract is not yet implemented end-to-end
+
+**Priority: P1 — Phase 2 acceptance**
+
+The generic triangulated mapper can represent a center-plus-four-cardinal mesh when supplied with four authored triangles, and the grid mapper is useful for general pose fields. However, the candidate does not yet provide a canonical `JoystickFivePose` dispatch path that resolves the five IDs from the canonical mapping definition, constructs/validates the required regions, and applies the plan's default radial unit-circle boundary behavior.
+
+The candidate's generic mesh ClampToMesh policy is not equivalent to radial unit-circle clamping. Existing tests establish generic mesh/grid behavior, not the full five-pose joystick contract.
+
+**Required resolution:** implement the canonical five-pose adapter over the reusable triangulated primitives, with exact center/cardinal tests, non-uniform authored pose positions, triangle-edge continuity, radial boundary behavior and invalid topology tests. Preserve the explicit unsupported error until this path is complete; do not silently approximate with scalar mapping.
+
+### J4 — The extension is a serialization contract, not AniCraft project persistence
+
+The extension has an identity/versioned JSON representation and round-trip tests. It does not, by itself, store data in an AniCraft project file. The candidate's own host-storage audit records that the inspected AniCraft document/plug-in API has no generic plug-in extension collection or document metadata setter.
+
+**Required resolution:** keep the core extension codec clearly described as a portable serialization contract. Project durability remains blocked on an authorized AniCraft host extension and save/reopen/undo compatibility tests. Do not claim Phase 6 persistence is complete.
+
+### J5 — Branch integration risk
+
+The candidate is 38 commits ahead and 5 behind the audited `main`, and includes changes beyond the pure 2D algorithms (plugin input provider, preview plan, persistence, project-storage audit and plan updates). It must not be merged wholesale into the current mainline without a file-by-file reconciliation against the newer main commits.
+
+**Required resolution:** create a fresh integration branch from current main. Port only the reviewed advanced mapping modules/tests first, then separately port the mapper bridge and extension codec after J1/J2 contracts are resolved. Keep host adapter changes and host persistence work in separate review units.
+
+## K. Recommended next implementation sequence
+
+1. **Phase 2A — core algorithm adoption:** port the generic Grid/Triangulated/Pose interpolation primitives and their focused tests onto a fresh branch from current main. No host changes and no schema changes in this increment.
+2. **Phase 2B — canonical joystick dispatch:** resolve canonical `JoystickFivePose` IDs into the five-pose mesh; validate Vector2 input declaration; apply the agreed default radial boundary policy; add exact behavioral acceptance tests.
+3. **Phase 2C — generalized mapping selection:** decide whether Grid/Triangulated are schema variants or separately declared extension overrides. Specify the compatibility rule before enabling them in production documents.
+4. **Separate persistence track:** retain the extension codec as a data contract, but do not wire it to AniCraft project files until the host extension API is implemented and verified.
+5. **Host authoring/runtime track:** only after a fresh AniCraft capability audit; keep authoring UI, durable storage, undo-aware target application and playback lifecycle outside the pure-core mapping PRs.
+
+**Phase 2 review result:** reusable algorithms and an evaluator adapter seam exist on the candidate branch, and its final CI job passed. The candidate does not yet satisfy the canonical five-pose joystick acceptance contract and has unresolved mapping-declaration/input-dimension consistency. Reuse is recommended, but wholesale merge and production enablement are not authorized by this review.
