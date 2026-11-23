@@ -78,23 +78,29 @@ impl CageBindingFreshness {
     pub fn requires_rebind(self) -> bool { self != Self::Current }
 }
 
+/// Identity and topology metadata for a persisted generic point binding.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CageBindingMetadata {
+    pub id: String,
+    pub revision: u64,
+    pub target: HostTargetRef,
+    pub reference_geometry: GeometrySnapshotStamp,
+    pub coordinate_space: CoordinateSpaceDescriptor,
+    pub topology_id: DeformationTopologyId,
+    pub topology_revision: DeformationTopologyRevision,
+    pub cage_vertex_ids: Vec<ControlPointId>,
+    pub cage_triangles: Vec<[ControlPointId; 3]>,
+}
+
 impl PersistedCageBinding {
-    #[allow(clippy::too_many_arguments)]
+    /// Construct a canonical persisted binding from its metadata and point records.
     pub fn new(
-        id: impl Into<String>,
-        revision: u64,
-        target: HostTargetRef,
-        reference_geometry: GeometrySnapshotStamp,
-        coordinate_space: CoordinateSpaceDescriptor,
-        topology_id: DeformationTopologyId,
-        topology_revision: DeformationTopologyRevision,
-        mut cage_vertex_ids: Vec<ControlPointId>,
-        mut cage_triangles: Vec<[ControlPointId; 3]>,
+        mut metadata: CageBindingMetadata,
         mut points: Vec<PersistedBoundPoint>,
     ) -> Result<Self, CageBindingPersistenceError> {
-        cage_vertex_ids.sort_unstable();
-        for triangle in &mut cage_triangles { triangle.sort_unstable(); }
-        cage_triangles.sort_unstable();
+        metadata.cage_vertex_ids.sort_unstable();
+        for triangle in &mut metadata.cage_triangles { triangle.sort_unstable(); }
+        metadata.cage_triangles.sort_unstable();
         for point in &mut points {
             let mut pairs = [
                 (point.cage_vertex_ids[0], point.barycentric[0]),
@@ -106,8 +112,16 @@ impl PersistedCageBinding {
             point.barycentric = [pairs[0].1, pairs[1].1, pairs[2].1];
         }
         let value = Self {
-            id: id.into(), revision, target, reference_geometry, coordinate_space,
-            topology_id, topology_revision, cage_vertex_ids, cage_triangles, points,
+            id: metadata.id,
+            revision: metadata.revision,
+            target: metadata.target,
+            reference_geometry: metadata.reference_geometry,
+            coordinate_space: metadata.coordinate_space,
+            topology_id: metadata.topology_id,
+            topology_revision: metadata.topology_revision,
+            cage_vertex_ids: metadata.cage_vertex_ids,
+            cage_triangles: metadata.cage_triangles,
+            points,
         };
         value.validate()?;
         Ok(value)
