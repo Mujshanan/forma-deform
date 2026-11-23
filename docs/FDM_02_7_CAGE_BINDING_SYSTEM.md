@@ -34,7 +34,7 @@ Triangle array indices are deliberately not persisted in a binding. Reordering t
 
 For each bound point, evaluate the weighted sum of its three support vertices in the current cage pose. This is absolute evaluation from the current cage, not incremental displacement from a previously evaluated point.
 
-The current cage must pass the existing global embedding validator and have exactly the same stable vertex ID set as the reference cage. A topology/identity change requires an explicit rebind; it is never silently accommodated.
+The current cage must pass the existing global embedding validator and have exactly the same stable vertex ID set and canonical triangle identity set as the reference cage. Triangle-array ordering and per-triangle cyclic vertex ordering do not affect identity. A topology/identity change requires an explicit rebind; it is never silently accommodated.
 
 ## Initial implementation scope
 
