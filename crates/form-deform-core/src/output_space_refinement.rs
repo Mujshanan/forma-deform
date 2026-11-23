@@ -308,3 +308,47 @@ fn point_segment_distance(point: Point2, start: Point2, end: Point2) -> Result<f
     let distance = ((px-(ax+t*dx)).hypot(py-(ay+t*dy)))*scale;
     if distance.is_finite() { Ok(distance) } else { Err(OutputRefinementError::ArithmeticOverflow) }
 }
+
+
+#[cfg(test)]
+mod numerical_tests {
+    use super::*;
+
+    fn point(x: f64, y: f64) -> Point2 {
+        Point2::new(x, y).unwrap()
+    }
+
+    #[test]
+    fn policy_rejects_non_finite_non_positive_and_over_limit_values() {
+        let mut policy = OutputRefinementPolicy::default();
+        policy.max_deviation = f64::NAN;
+        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+        policy.max_deviation = f64::INFINITY;
+        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+        policy.max_deviation = 0.0;
+        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+        policy.max_deviation = 0.25;
+        policy.max_subdivision_depth = MAX_DEPTH + 1;
+        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+        policy.max_subdivision_depth = 1;
+        policy.max_total_evaluations = 4;
+        assert_eq!(policy.validate(), Err(OutputRefinementError::InvalidPolicy));
+    }
+
+    #[test]
+    fn degenerate_output_chord_uses_point_distance_without_nan() {
+        let distance = point_segment_distance(point(3.0, 4.0), point(0.0, 0.0), point(0.0, 0.0)).unwrap();
+        assert!((distance - 5.0).abs() < 1.0e-12);
+        assert_eq!(point_segment_distance(point(0.0, 0.0), point(0.0, 0.0), point(0.0, 0.0)).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn extreme_finite_coordinates_fail_on_unrepresentable_distance() {
+        let result = point_segment_distance(
+            point(1.0e308, 0.0),
+            point(-1.0e308, 0.0),
+            point(-1.0e308, 0.0),
+        );
+        assert_eq!(result, Err(OutputRefinementError::ArithmeticOverflow));
+    }
+}
