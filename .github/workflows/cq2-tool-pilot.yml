@@ -1,6 +1,8 @@
 name: CQ2 Tool Pilot
 
 on:
+  push:
+    branches: [quality/cq2-tool-pilot]
   workflow_dispatch:
     inputs:
       ref:
@@ -20,7 +22,7 @@ jobs:
       - name: Check out requested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
 
       - name: Install stable Rust
