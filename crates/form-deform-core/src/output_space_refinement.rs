@@ -161,7 +161,7 @@ pub fn refine_path_curves(
                 if current.is_none() { return Err(OutputRefinementError::InvalidPathSequence { command_index: index }); }
                 current = Some(*point);
             }
-            PathCommand::QuadraticTo { control, to } => {
+            PathCommand::QuadraticTo { to, .. } => {
                 let from = current.ok_or(OutputRefinementError::InvalidPathSequence { command_index: index })?;
                 let command_index = index as u32;
                 let mut samples = Vec::new();
@@ -169,14 +169,16 @@ pub fn refine_path_curves(
                     command, from, 0.0, &mut total_evaluations, policy)?;
                 push_sample(&mut samples, RefinedCurveSample { t: 0.0, source_point: from, output_point: first },
                     command_index, &mut total_samples, policy)?;
+                let last = evaluate_at(validated, source, topology, rest_cage, current_cage, outside_policy,
+                    command, from, 1.0, &mut total_evaluations, policy)?;
                 refine_interval(validated, source, topology, rest_cage, current_cage, outside_policy,
-                    command, from, 0.0, 1.0, first, point_at(command, from, 1.0)?,
+                    command, from, 0.0, 1.0, first, last,
                     0, command_index, &mut samples, &mut total_samples, &mut total_evaluations,
                     &mut max_observed_deviation, policy)?;
                 result.push(RefinedCurveSegment { command_index, subpath_index, samples });
                 current = Some(*to);
             }
-            PathCommand::CubicTo { control1, control2, to } => {
+            PathCommand::CubicTo { to, .. } => {
                 let from = current.ok_or(OutputRefinementError::InvalidPathSequence { command_index: index })?;
                 let command_index = index as u32;
                 let mut samples = Vec::new();
@@ -196,7 +198,6 @@ pub fn refine_path_curves(
                 current = None;
             }
         }
-        let _ = (control_placeholder(),);
     }
 
     Ok(RefinedCurveSampleSet {
@@ -208,8 +209,6 @@ pub fn refine_path_curves(
         max_observed_deviation,
     })
 }
-
-fn control_placeholder() {}
 
 fn evaluate_at(
     validated: &ValidatedBindingRecord, source: &GeometrySnapshot, topology: &DeformationTopology,
