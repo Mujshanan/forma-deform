@@ -19,6 +19,11 @@ pub const BINDING_SCHEMA_VERSION: u32 = 1;
 pub const MAPPING_POLICY_VERSION: u32 = 1;
 pub const MAPPING_NUMERICAL_POLICY_VERSION: u32 = 1;
 
+// Centralized v1 acceptance tolerances; changing them requires a policy version bump.
+const WEIGHT_SUM_TOLERANCE: f64 = 1.0e-9;
+const SPATIAL_RELATIVE_TOLERANCE: f64 = 1.0e-9;
+const MIN_SPATIAL_TOLERANCE: f64 = 1.0e-12;
+
 /// Triangle barycentric and quad bilinear coordinates are intentionally
 /// distinct: a quad is never represented by an implicit diagonal split.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -429,7 +434,7 @@ fn bilinear_point(points: &[ControlPointPosition], u: f64, v: f64) -> Result<Poi
     Point2::new(x, y).map_err(|_| BindingError::NonFiniteCoordinate)
 }
 
-fn weight_sum_tolerance() -> f64 { 1.0e-9 }
+fn weight_sum_tolerance() -> f64 { WEIGHT_SUM_TOLERANCE }
 
 fn spatial_tolerance(points: &[ControlPointPosition]) -> Result<f64, BindingError> {
     let first = *points.first().ok_or(BindingError::InvalidFaceGeometry)?;
@@ -439,7 +444,7 @@ fn spatial_tolerance(points: &[ControlPointPosition]) -> Result<f64, BindingErro
         max_x = max_x.max(point.x); max_y = max_y.max(point.y);
     }
     let diagonal = (max_x-min_x).hypot(max_y-min_y);
-    let tolerance = (diagonal * 1.0e-9).max(1.0e-12);
+    let tolerance = (diagonal * SPATIAL_RELATIVE_TOLERANCE).max(MIN_SPATIAL_TOLERANCE);
     if !diagonal.is_finite() || !tolerance.is_finite() || diagonal <= 0.0 {
         return Err(BindingError::InvalidFaceGeometry);
     }
