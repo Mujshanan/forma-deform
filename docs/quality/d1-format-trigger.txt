@@ -1,1 +1,2 @@
 Temporary trigger for D1 rustfmt check.
+Retry after rustfmt whitespace correction.
