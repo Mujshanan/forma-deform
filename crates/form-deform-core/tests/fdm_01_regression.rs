@@ -201,7 +201,7 @@ fn engine_preserves_path2d_topology_and_returns_validated_independent_outputs() 
             original_path
                 .commands()
                 .iter()
-                .map(|command| std::mem::discriminant(command))
+                .map(std::mem::discriminant)
                 .collect::<Vec<_>>()
         );
         assert_eq!(
