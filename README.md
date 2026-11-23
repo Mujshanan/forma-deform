@@ -4,7 +4,7 @@
 
 Forma Deform Studio must launch and operate independently. AniCraft is a future optional integration target, not a runtime dependency. The Studio should share AniCraft's intended visual language and interaction conventions through a small, independently consumable UI design kit; it must not depend on the AniCraft application or unverified host APIs.
 
-The repository currently contains a browser-based rectangle/timeline prototype and a Rust/WASM command-plugin suite. These are development artifacts, not the finished Studio UI. The rectangle/timeline prototype must not become the authoritative deformation document model.
+The default development entrypoint now opens an initial browser-hosted Forma Deform Studio shell. It includes the focused deformation tool rail, viewport navigation, contextual inspector, and status area. Feature editors, geometry loading, engine adapters, and project persistence are not connected yet. The former rectangle/timeline prototype remains as legacy source and tests; it is no longer the default UI and is not the Studio document model.
 
 ## What Forma Deform owns
 
@@ -36,7 +36,7 @@ Forma Deform Studio uses an AniCraft-compatible visual language without copying 
 
 There is no general animation timeline in the standalone Studio. Preview controls are focused on deformation inputs and must not become a second animation editor.
 
-See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md) and [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md).
+See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md), [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md), and [UI-03.1 shell implementation](https://github.com/Mujshanan/forma-deform/commit/ec44889fdb5ced812099618f9b67663109a03257).
 
 ## Current prototype status and limitations
 
@@ -75,4 +75,4 @@ cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-pl
 cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
 ```
 
-The separate TypeScript demo retains its Bun-based scripts. See the package scripts before running it.
+The TypeScript Studio shell uses the existing Bun development server and build scripts. The legacy rectangle-demo modules and tests remain in the repository but are no longer the default build entrypoint.

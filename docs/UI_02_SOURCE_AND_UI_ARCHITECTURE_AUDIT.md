@@ -1,6 +1,6 @@
 # UI-02 — Standalone Studio Source and UI Architecture Audit
 
-**Status:** Audit complete; implementation not started  
+**Status:** Audit complete; initial standalone shell subsequently implemented in UI-03.1  
 **Branch:** `feat/ui-01-deformation-authoring-workspace`  
 **Audit scope:** Forma Deform source tree, current browser demo, existing styling, project documentation, and the AniCraft 360 Studio repository.
 
@@ -143,21 +143,23 @@ There is no general animation timeline in the standalone Studio. If a future fea
 | Step | Work | Result |
 |---|---|---|
 | UI-02.1 | Record source and architecture audit | This document |
-| UI-02.2 | Define theme tokens and foundational UI primitives | Reusable shell-level visual language |
-| UI-02.3 | Build standalone shell and viewport using existing app stack | Independently launchable focused workspace |
-| UI-02.4 | Replace rectangle-specific page flow with deformation workspace navigation | No rectangle-tween product framing |
-| UI-03 | Integrate real core capabilities incrementally | UI reflects actual supported operations only |
-| UI-04 | Add feature-specific tools and inspectors | Pins, arrays/binding, cages/curves/tessellation |
-| UI-05 | Add project persistence, undo/redo, and regression coverage | Reliable authoring workflow |
+| UI-02.1 | Record source and architecture audit | Complete |
+| UI-03.1 | Replace default rectangle-demo page with standalone shell | Implemented; verification pending |
+| UI-03.2 | Harden viewport and app boundaries | Viewport behavior, responsive layout, and entrypoint contract reviewed |
+| UI-04 | Extract theme tokens and reusable primitives | Shared visual language without AniCraft runtime dependency |
+| UI-05A | Pin & Offset Drivers UI and core adapter | Real pin/driver data and non-mutating preview |
+| UI-05B | Point Arrays & Binding UI and core adapter | Validated binding lifecycle and stale diagnostics |
+| UI-05C | Cage, Bézier, and tessellation editors | Topology-safe editing and non-destructive sampling |
+| UI-06 | Project persistence, undo/redo, and UX regression coverage | Reliable authoring workflow |
 
-The current rectangle demo may remain temporarily as a development harness while the new shell is introduced. It must not be mistaken for the product UI, and its rectangle/timeline model must not become the Studio's persistent domain model.
+The rectangle demo remains as legacy source and tests under `src/demo`, `src/core`, and `tests`. The default server and build entry now target `src/studio/main.ts`. The old rectangle/timeline model is not imported by the Studio shell and must not become its persistent domain model.
 
-## 8. Documentation inconsistencies to resolve
+## 8. Documentation alignment
 
-The current `README.md` and `DEVELOPMENT.md` still describe Forma Deform as an AniCraft plugin and explicitly reject a standalone editor. Those statements conflict with the accepted UI-01 product decision. Update those product-level documents in a separate, focused documentation change before presenting the standalone Studio as the repository's current product direction.
+The README and DEVELOPMENT product boundary now describe Forma Deform as a standalone Studio with an optional future AniCraft adapter. The workspace contract and implementation status are linked from those documents.
 
 ## 9. Audit completion
 
-**UI-02 audit: complete.** No source code, tests, build scripts, core semantics, or AniCraft repositories were changed by this audit. No tests/builds were run.
+**UI-02 audit: complete.** The audit itself changed no engine code. The subsequent UI-03.1 implementation changed only the application entry HTML, Studio CSS/TypeScript shell, development server entrypoint, and TypeScript build entrypoint. No Rust crate, plugin, deformation contract, or engine source was changed. Tests/builds were not run for that shell commit.
 
-**Next step:** UI-02.2 — define the minimal visual tokens and reusable primitives, then implement the standalone shell in a separate implementation milestone.
+**Next:** UI-03.2 viewport and application-boundary hardening, then UI-04 reusable theme tokens and primitives.

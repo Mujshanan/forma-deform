@@ -1,7 +1,7 @@
 # Forma Deform — Development and Architecture
 
 **Project role:** standalone deformation authoring Studio with independent deformation engines and an optional future AniCraft adapter.  
-**Status:** core capabilities and browser prototype exist; the focused standalone Studio shell is planned and must not be represented as implemented.  
+**Status:** core capabilities exist; the initial standalone Studio shell is implemented, while feature editors, geometry loading, engine adapters, and project persistence remain pending.  
 **Canonical scope:** deformation authoring, controller preview, point arrays and bindings, cages/curves/tessellation, validation, and deterministic deformation evaluation.  
 **Non-goals:** a general animation editor, general drawing/painting application, or a runtime dependency on AniCraft.
 
@@ -144,13 +144,14 @@ Forma Deform Studio is a standalone application. It uses the visual language and
 |---|---|
 | UI-01 | Standalone workspace/product contract |
 | UI-02 | Source and UI architecture audit |
-| UI-03 | Standalone shell, viewport, project/command boundaries |
-| UI-04 | Reusable theme tokens and foundational primitives |
-| UI-05 | Pin, point-array/binding, cage/Bézier/tessellation feature panels |
-| UI-06 | Project persistence, undo/redo, and UX regression coverage |
-| UI-07 | Optional AniCraft adapter after host APIs are verified |
+| UI-03.1 | Initial standalone shell, focused tool rail, inspector, status, viewport pan/zoom | Implemented; verification pending |
+| UI-03.2 | Viewport and application-boundary hardening | Next |
+| UI-04 | Reusable theme tokens and foundational primitives | Planned |
+| UI-05 | Pin, point-array/binding, cage/Bézier/tessellation feature panels | Planned; core contracts remain authoritative |
+| UI-06 | Project persistence, undo/redo, and UX regression coverage | Planned |
+| UI-07 | Optional AniCraft adapter after host APIs are verified | Future, not a runtime dependency |
 
-See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md) and [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md).
+See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md) and [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md). The first shell implementation is recorded in commit [ec44889](https://github.com/Mujshanan/forma-deform/commit/ec44889fdb5ced812099618f9b67663109a03257).
 
 ## 5. External feature and code-reuse audit
 

@@ -165,6 +165,10 @@ Feature panels may be developed independently after UI-03, but must use the same
 - Treating sampled/tessellated geometry as the source of truth.
 - Claiming a host integration before the actual AniCraft repository and extension APIs are identified and verified.
 
-## 9. Immediate next task
+## 9. Current implementation and next task
 
-**UI-02 — Source and UI Architecture Audit.** Inspect the current Forma Deform app structure, its existing demo and styling, and the available AniCraft/360 Studio design references. Identify what can be reused, what should be replaced, and the smallest independent UI-kit boundary. Do not implement against guessed AniCraft APIs. The audit must preserve standalone launchability and must not alter core deformation semantics.
+**UI-02 source/UI audit: complete. UI-03.1 standalone shell: implemented as an initial browser-hosted workspace shell.** The root application now presents the deformation-focused tool rail, viewport, contextual inspector, status area, and basic viewport pan/zoom. The previous rectangle/timeline implementation remains under `src/demo` and is no longer the default application entry point.
+
+The current shell is navigation and viewport scaffolding only. It does not yet load geometry, create deformation data, call the Rust engines, persist Studio projects, or provide functional feature editors. These capabilities must be integrated incrementally through explicit adapters without changing engine semantics.
+
+**Next:** UI-03.2 — viewport and application-boundary hardening, followed by UI-04 — reusable theme tokens and UI primitives. Keep the rectangle demo and its tests untouched until a separately reviewed retirement decision.
