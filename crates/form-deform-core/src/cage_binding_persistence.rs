@@ -462,7 +462,7 @@ pub fn load_validated_cage_binding<A: CageBindingHostAdapter>(
         .map_err(LoadCageBindingError::Persistence)?;
     let context = adapter.current_cage_binding_context(target)
         .map_err(LoadCageBindingError::Host)?;
-    if context.snapshot.target() != target {
+    if context.source_stamp.target() != target {
         return Err(LoadCageBindingError::Diagnostic(CageBindingDiagnostic::StaleTarget));
     }
     let certificate = validate_cage_embedding(&context.topology, &context.control_state)
@@ -475,7 +475,7 @@ pub fn load_validated_cage_binding<A: CageBindingHostAdapter>(
         CageBindingDiagnostic::InvalidValidatedGeometry(error),
     ))?;
     persisted.validate_against(
-        &context.snapshot, &context.topology, &geometry, &context.points,
+        &context.source_stamp, &context.coordinate_space, &context.topology, &geometry, &context.points,
     ).map(Some).map_err(LoadCageBindingError::Diagnostic)
 }
 
@@ -670,7 +670,8 @@ mod tests {
         ) -> Result<CageBindingHostContext, Self::Error> {
             let (topology, control_state, _) = cage();
             Ok(CageBindingHostContext {
-                snapshot: snapshot(1),
+                source_stamp: snapshot(1).stamp(),
+                coordinate_space: space(),
                 topology,
                 control_state,
                 points: vec![BindingPoint { id: 7, position: point(2.0, 3.0) }],
