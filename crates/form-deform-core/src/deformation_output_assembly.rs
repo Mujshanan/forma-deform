@@ -589,7 +589,10 @@ mod tests {
             Err(DeformationOutputAssemblyError::UnexpectedCommandIdentity { .. })
         ));
         assert!(matches!(
-            validate_refined_alignment(&path, &refined(vec![segment(1, 0), segment(99, 1)])),
+            validate_refined_alignment(&path, &refined(vec![
+                segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0)),
+                segment(99, 1),
+            ])),
             Err(DeformationOutputAssemblyError::UnexpectedCommandIdentity { .. })
         ));
     }
@@ -644,6 +647,7 @@ mod tests {
         ));
         let mut wrong_count = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(3.0, 0.0))]);
         wrong_count.total_samples += 1;
+        wrong_count.total_evaluations += 1;
         assert!(matches!(
             validate_refined_alignment(&path, &wrong_count),
             Err(DeformationOutputAssemblyError::SampleCountMismatch { .. })
