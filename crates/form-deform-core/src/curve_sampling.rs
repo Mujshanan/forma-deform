@@ -5,6 +5,7 @@
 
 use crate::path2d::{Path2D, PathCommand, Point2};
 
+pub const CURVE_SAMPLING_POLICY_VERSION: u32 = 1;
 const MAX_SUBDIVISION_DEPTH: u8 = 32;
 const MAX_TOTAL_SAMPLES: usize = 1_000_000;
 
@@ -66,6 +67,10 @@ pub struct CurveSegmentSamples {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CurveSampleSet {
+    /// Explicit algorithm identity for cache and persistence contracts.
+    pub policy_version: u32,
+    /// Exact policy values used to produce this set.
+    pub policy: CurveSamplingPolicy,
     /// Curved commands in original Path2D command order. Lines are not subdivided.
     pub segments: Vec<CurveSegmentSamples>,
     pub total_samples: usize,
@@ -163,7 +168,7 @@ pub fn sample_path_curves(
         }
     }
 
-    Ok(CurveSampleSet { segments, total_samples })
+    Ok(CurveSampleSet {\n        policy_version: CURVE_SAMPLING_POLICY_VERSION,\n        policy,\n        segments,\n        total_samples,\n    })
 }
 
 fn sample_quadratic(
