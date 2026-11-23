@@ -74,10 +74,13 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Do not claim output-space curve tolerance yet.
 
 ### FDM-05.2 — Output-Space Adaptive Refinement
-- Evaluate source curve points at stable parameters through the validated rest-cage/current-cage mapping.
-- Refine according to output-space deviation, with deterministic subdivision and explicit budgets.
-- Cover face crossings, outside policies, degeneracies, extreme finite coordinates, and budget failures.
-- Document the exact accuracy bound before advertising it.
+- Evaluate original Bézier points at stable parameters through the validated rest-cage/current-cage mapping.
+- Refine in deterministic left-to-right order using output-space probes at 1/4, 1/2, and 3/4 of each candidate interval.
+- The current v1 metric is explicitly a **three-probe deviation estimate**, not a certified global maximum-error bound. It is not safe to label it a strict geometric tolerance.
+- Enforce explicit depth, per-curve sample, total sample, and total evaluation budgets; any exhausted budget fails closed.
+- Use the same point locator and outside-cage policies as FDM-04. Outside-policy behavior is evaluated at every probe.
+- Face-crossing behavior is observed through the output-space probes; the finite probe set cannot prove that an arbitrarily narrow crossing was detected. This limitation is part of the v1 contract.
+- A future certified bound requires a separate proof/algorithm (e.g. face-aware subdivision and conservative mapped control-hull bounds); it is not claimed by this milestone.
 
 ### FDM-05.3 — Structured/Derived Output Assembly
 - Assemble each original curve command with its corresponding refined derived samples.
@@ -93,7 +96,13 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Run workspace tests, benchmark smoke tests, and all three release WASM builds.
 - Audit branch lineage and CI evidence before opening the final review PR.
 
-## 7. Explicit exclusions
+## 7. FDM-05.2 v1 accuracy contract
+
+`OutputRefinementPolicy.max_deviation` is compared with the maximum distance of three deterministic interior probes (quarter, midpoint, three-quarter) from the evaluated endpoint chord. `RefinedCurveSampleSet.max_observed_deviation` records the largest accepted-interval probe deviation. Both are estimates over the probes actually evaluated; neither is a mathematical upper bound on the entire deformed curve. The implementation must not expose this value as a certified tolerance or use wording such as “guaranteed maximum deviation.”
+
+The algorithm returns an error on subdivision-depth, sample, or evaluation-budget exhaustion. It never returns a partial result as if it met the policy. It evaluates every probe from the original immutable Path2D snapshot, never from a prior refined output. The output-space mapping uses the validated binding's outside policy and certified rest/current cage geometry.
+
+## 8. Explicit exclusions
 
 - AniCraft UI or 360 Studio integration.
 - AniCraft host result application or native geometry mutation.
@@ -103,6 +112,6 @@ The algorithm must handle cage-face crossings, outside-cage policy, degenerate c
 - Flattening or replacing the source Path2D with a polyline.
 - Merging any PR without explicit user authorization.
 
-## 8. Completion criteria
+## 9. Completion criteria
 
 FDM-05 is complete only when the paired output contract, output-space accuracy behavior, structured/derived assembly, numerical regressions, performance baseline, and CI gates are all verified on one clean branch descended from the merged FDM-04.5 base. Passing source-space curve sampling tests alone is insufficient.
