@@ -159,6 +159,7 @@ struct MemoryAdapter {
     slot: BindingSlotSnapshot,
     change_source_before_write: bool,
     change_binding_before_write: bool,
+    delete_binding_before_write: bool,
 }
 
 impl BindingHostAdapter for MemoryAdapter {
@@ -204,6 +205,10 @@ impl BindingHostAdapter for MemoryAdapter {
                 Some("competing host write".into()),
             );
             self.change_binding_before_write = false;
+        }
+        if self.delete_binding_before_write {
+            self.slot = BindingSlotSnapshot::new(BindingPayloadRevision::new(3), None);
+            self.delete_binding_before_write = false;
         }
 
         let source_snapshot_changed = self.context.snapshot.stamp() != *expected_source_stamp;
@@ -339,6 +344,7 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
         slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
         change_source_before_write: false,
         change_binding_before_write: false,
+        delete_binding_before_write: false,
     };
 
     persist_binding(&mut adapter, &target_ref, &persisted).unwrap();
@@ -365,7 +371,7 @@ fn path2d_persistence_rejects_source_edit_between_validation_and_commit() {
     let target_ref = context.snapshot.target().clone();
     let mut adapter = MemoryAdapter {
         context,
-        payload: None,
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
         change_source_before_write: true,
         change_binding_before_write: false,
     };
@@ -389,6 +395,7 @@ fn path2d_persistence_rejects_competing_binding_write_between_read_and_commit() 
         payload: None,
         change_source_before_write: false,
         change_binding_before_write: true,
+        delete_binding_before_write: false,
     };
 
     assert!(matches!(
@@ -408,6 +415,29 @@ fn path2d_persistence_rejects_competing_binding_write_between_read_and_commit() 
         Some("competing host write"),
         "the competing payload must not be overwritten"
     );
+}
+
+#[test]
+fn path2d_persistence_rejects_delete_recreate_aba_before_commit() {
+    let (context, persisted) = fixture();
+    let target_ref = context.snapshot.target().clone();
+    let mut adapter = MemoryAdapter {
+        context,
+        slot: BindingSlotSnapshot::new(BindingPayloadRevision::new(0), None),
+        change_source_before_write: false,
+        change_binding_before_write: false,
+        delete_binding_before_write: true,
+    };
+
+    assert!(matches!(
+        persist_binding(&mut adapter, &target_ref, &persisted),
+        Err(PersistBindingError::Conflict(BindingWriteConflict {
+            source_snapshot_changed: false,
+            binding_revision_changed: true,
+        }))
+    ));
+    assert_eq!(adapter.slot.revision().value(), 3);
+    assert!(adapter.slot.payload().is_none());
 }
 
 #[test]
