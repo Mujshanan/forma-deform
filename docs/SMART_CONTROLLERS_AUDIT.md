@@ -776,6 +776,21 @@ The unified implementation plan remains a valid target architecture, but its pha
 
 The branch `core/characterize-consolidate-smart-controller` is not a clean substitute for `main`: at the time of this audit it is diverged (32 commits ahead, 5 behind) and removes several existing planning/audit documents. Do not use it as the implementation baseline without a separate merge-base and scope review. Likewise, treat phase-specific feature branches as unmerged work until their exact contents are compared and reviewed.
 
+### G.1 Implementation-plan status against audited `main`
+
+| Plan phase | Status on audited `main` | What is already present | Remaining work / constraint |
+|---|---|---|---|
+| Phase 0 — Audit and V1 characterization | **Complete** | Source inventory, three V1 fixtures, executable characterization tests, migration compatibility tests, current CI evidence | In-app host smoke remains a separate integration check |
+| Phase 1 — Canonical model, schema, diagnostics, migration and scalar mapping | **Largely implemented** | Canonical types, typed IDs/values/errors, input contracts, schema v1, diagnostics, migration/reporting, range/easing/frame mapping | Preserve legacy exports; review any missing contract against existing code before adding files |
+| Phase 2 — Input contracts and pose mapping | **Partially implemented** | Input snapshot/freshness/fallback contracts; `Pose2D` binding/value representation and angle-aware value interpolation | Concrete 2D input-space mapper, five-pose joystick region selection, barycentric/triangulated interpolation and boundary policies are not on `main` |
+| Phase 3 — Pure DAG evaluation | **Implemented in core** | Deterministic graph/evaluator, complete preflight, dependency resolution, unavailable propagation, typed contributions | Mapper capability is injected; do not duplicate evaluator orchestration |
+| Phase 4 — Bindings and composition | **Implemented in core** | Typed target bindings and four composition modes as a deterministic post-pass | Any semantic expansion needs explicit contract/tests; do not merge with Form Deform evaluation |
+| Phase 5 — AniCraft adapter integration | **Partially implemented** | Legacy migration adapter, manual/bone-rotation input collection, canonical read-only preview orchestration and target capability planning | Complete input channels, target application, in-app verification and host lifecycle integration remain open |
+| Phase 6 — Persistence and authoring UI/lifecycle | **Not complete on audited `main`** | Core JSON schema serialization; adapter preview foundations | Core JSON is not AniCraft document persistence; durable storage, native authoring/inspector, undo-aware application and lifecycle wiring need verified host support |
+| Phase 7 — Compatibility, performance and release validation | **Partially evidenced** | Characterization/migration tests and green workspace/WASM CI | No complete native workflow smoke, 2D mapper acceptance suite, performance baseline or final release sign-off |
+
+This matrix is a snapshot assessment, not authorization to start every incomplete row. The next technical proposal should be narrow: first reconcile the unmerged 2D mapping work with the current mapper seam, then define the missing host contracts separately from pure-core mapping.
+
 ## H. Phase 0 exit and implementation authorization
 
 | Deliverable | Current result |
