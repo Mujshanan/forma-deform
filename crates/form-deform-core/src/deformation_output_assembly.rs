@@ -89,6 +89,9 @@ fn validate_refined_alignment(
         return Err(DeformationOutputAssemblyError::InvalidRefinementMetadata);
     }
 
+    if !same_command_structure(source_path, output_path) {
+        return Err(DeformationOutputAssemblyError::PathStructureMismatch);
+    }
     let source_endpoints = curve_endpoints(source_path)?;
     let output_endpoints = curve_endpoints(output_path)?;
     if source_endpoints.len() != output_endpoints.len()
@@ -160,6 +163,20 @@ fn validate_refined_alignment(
         });
     }
     Ok(())
+}
+
+fn same_command_structure(source: &Path2D, output: &Path2D) -> bool {
+    source.commands().len() == output.commands().len()
+        && source.commands().iter().zip(output.commands()).all(|(source, output)| {
+            matches!(
+                (source, output),
+                (PathCommand::MoveTo(_), PathCommand::MoveTo(_))
+                    | (PathCommand::LineTo(_), PathCommand::LineTo(_))
+                    | (PathCommand::QuadraticTo { .. }, PathCommand::QuadraticTo { .. })
+                    | (PathCommand::CubicTo { .. }, PathCommand::CubicTo { .. })
+                    | (PathCommand::Close, PathCommand::Close)
+            )
+        })
 }
 
 fn curve_endpoints(
@@ -627,6 +644,24 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn rejects_source_and_output_paths_with_different_authored_command_structure() {
+        let source = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::QuadraticTo { control: point(1.0, 1.0), to: point(2.0, 0.0) },
+        ]).unwrap();
+        let output = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.25, 0.0)),
+            PathCommand::CubicTo {
+                control1: point(0.5, 0.5), control2: point(1.5, 0.5), to: point(2.25, 0.0),
+            },
+        ]).unwrap();
+        assert_eq!(
+            validate_refined_alignment(&source, &output, &refined(vec![])),
+            Err(DeformationOutputAssemblyError::PathStructureMismatch),
+        );
+    }
 
     #[test]
     fn rejects_refined_source_endpoints_disconnected_from_source_snapshot() {
