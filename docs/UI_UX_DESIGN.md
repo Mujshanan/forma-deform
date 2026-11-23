@@ -319,3 +319,20 @@ Use AniCraft theme tokens if available; do not hard-code a separate theme implem
 - Invalid and unsupported states are actionable and never silently coerced.
 - Persistent edits, when host persistence exists, participate in AniCraft undo/redo.
 - The UI does not claim live playback or durable binding storage before host support is verified.
+
+
+---
+
+## 2026-11-23 implementation status — native M1 foundation
+
+The first native Smart Controller UI foundation has been merged into the AniCraft host repository in [AniCraft PR #2](https://github.com/Mujshanan/anicraft/pull/2) (merge commit `8a437b81f0f59618a16a87b669cfffd4c9e38c4b`). This is an **M1 UI foundation**, not completion of the full authoring workflow.
+
+Implemented in AniCraft:
+- A native Smart Controller entry in the existing tool strip.
+- Transient Stage handles with nearest-handle selection and a foreground overlay.
+- A Properties inspector showing selected handle coordinates and allowing draft-handle removal/clear.
+- Explicit draft-only labeling; no unsupported Save, Apply, Bake, or Preview controls.
+
+Still outstanding: drag editing, stable source/target identity, controller binding and mapping UI, validation graph, deterministic non-mutating preview, document persistence/undo integration, target application, live playback, and the manual Windows host smoke test. The merged PR had no reported workflow runs or commit status checks, so this merge is not evidence of a passing native build or CI run.
+
+The Smart Controller remains independent of Form Deform pin evaluation under CCC-01.5. AniCraft continues to own the native UI lifecycle and host document/evaluation boundaries; Forma Deform owns reusable domain logic.

@@ -95,3 +95,8 @@ cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controll
 ```
 
 The separate TypeScript demo retains its Bun-based scripts. See the package scripts before running it.
+
+
+## Native UI implementation status (2026-11-23)
+
+The first M1 Smart Controller UI foundation is merged in [AniCraft PR #2](https://github.com/Mujshanan/anicraft/pull/2). It adds a native tool-strip entry, transient Stage handles, a foreground overlay, and a draft-only Properties inspector. It does not yet implement source/target binding, mapping, evaluation, preview, persistence, target application, or live playback. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) for the detailed specification and the implementation-status addendum.
