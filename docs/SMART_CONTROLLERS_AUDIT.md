@@ -884,3 +884,25 @@ The candidate is 38 commits ahead and 5 behind the audited `main`, and includes 
 5. **Host authoring/runtime track:** only after a fresh AniCraft capability audit; keep authoring UI, durable storage, undo-aware target application and playback lifecycle outside the pure-core mapping PRs.
 
 **Phase 2 review result:** reusable algorithms and an evaluator adapter seam exist on the candidate branch, and its final CI job passed. The candidate does not yet satisfy the canonical five-pose joystick acceptance contract and has unresolved mapping-declaration/input-dimension consistency. Reuse is recommended, but wholesale merge and production enablement are not authorized by this review.
+
+
+## L. Phase 2A core-only port — verification pending
+
+Following the reconciliation above, a clean implementation branch was created from the audited `main` commit:
+
+- **Branch:** `feat/unified-smart-controllers-phase2a-core-mapping`
+- **Base:** `e7c7fef4e82345af311370426450146a4795523d`
+- **Current head:** `675c83a5808bd8620bf89432b0d422c2c5e433d8`
+- **Scope:** five added files and one module export only:
+  - `mapping/advanced/grid.rs`
+  - `mapping/advanced/interpolation.rs`
+  - `mapping/advanced/triangulated.rs`
+  - `mapping/advanced/mod.rs`
+  - `tests/advanced_pose_tests.rs`
+  - one `pub mod advanced;` declaration in `mapping.rs`
+
+The port deliberately excludes the candidate's runtime registry, canonical mapping override, plugin adapter changes, extension persistence codec, AniCraft host changes and schema changes. The branch is six commits ahead of main, zero behind, with exactly these six files changed.
+
+GitHub Actions run [45125175442](https://github.com/Mujshanan/forma-deform/actions/runs/45125175442) was queued and then observed in progress on the exact head. It runs the workspace CI sequence, including Bun typecheck/tests/build, `cargo test --workspace`, and all three release WASM builds. No pass/fail result is claimed until the run completes. No PR has been opened and no merge has occurred.
+
+**Gate:** keep the branch isolated until CI passes. If it passes, open a focused review PR for Phase 2A only. Phase 2B (canonical five-pose joystick dispatch, Vector2 declaration validation and radial boundary behavior) remains a separate increment and must not be inferred complete from this generic algorithm port.
