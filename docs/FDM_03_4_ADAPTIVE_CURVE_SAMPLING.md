@@ -17,7 +17,7 @@ LineTo and Close commands are not subdivided. MoveTo establishes the current poi
 - `CurveSamplingPolicy`: maximum source-space deviation, maximum recursive depth, maximum samples per curve, and maximum total samples.
 - `CURVE_SAMPLING_POLICY_VERSION`: explicit algorithm version; each `CurveSampleSet` retains both this version and the exact policy values used.
 - `sample_path_curves(&Path2D, CurveSamplingPolicy)`: returns ordered `CurveSegmentSamples` for quadratic/cubic commands.
-- `map_curve_samples(&CurveSampleSet, &ValidatedCageGeometry, OutsideCagePolicy)`: maps each sample using the shared deterministic point locator and explicit outside-cage resolver.
+- `map_curve_samples(&CurveSampleSet, &ValidatedCageGeometry, OutsideCagePolicy)`: maps each sample using the shared deterministic point locator and explicit outside-cage resolver, returning a `MappedCurveSampleSet` that retains the sampling-policy version and values.
 - `CurveSampleMapping`: transient `Mapped`, `Clamped`, `Extrapolated`, or `Unbound` result, including the owning face, stable face control IDs, and face coordinates where applicable.
 
 A sample is identified by its source command index, subpath ordinal, per-command sample ordinal, and parameter (t). This is derived metadata, not a host-persistent point ID. The host must associate the results with the source snapshot fingerprint and binding stamp. Any derived cache key must also include the sampling-policy version and exact policy values; changing the tolerance or any resource limit changes the derived sample set.
