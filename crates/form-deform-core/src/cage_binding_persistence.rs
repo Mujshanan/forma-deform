@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::binding::{BindingError, ValidatedCageGeometry};
+use crate::embedding::{validate_cage_embedding, EmbeddingError};
 use crate::cage_binding::{
     BindingPoint, BoundPoint, CageBinding, CageBindingError,
     canonical_triangle_identities, canonical_vertex_ids, validate_topology_view,
@@ -14,7 +16,7 @@ use crate::host_contract::{
     HostTargetRef, SnapshotFreshness,
 };
 use crate::topology::{
-    ControlPointId, DeformationTopology,
+    ControlPointId, DeformationControlState, DeformationTopology,
     DeformationTopologyId, DeformationTopologyRevision, TopologyView,
 };
 use crate::binding::ValidatedCageGeometry;
@@ -366,13 +368,121 @@ impl ValidatedCageBinding {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CageBindingDiagnostic {
     Stale(CageBindingFreshness),
+    StaleTarget,
     InvalidCurrentSnapshot,
+    InvalidCageEmbedding(EmbeddingError),
+    InvalidValidatedGeometry(BindingError),
     TargetOrCoordinateSpaceMismatch,
     PointSetMismatch,
     PointReconstructionMismatch { point: u64 },
     InvalidRestCageGeometry,
     RuntimeBinding(CageBindingError),
     Persistence(CageBindingPersistenceError),
+}
+
+/// Current host-owned inputs for validating a persisted generic point binding.
+pub struct CageBindingHostContext {
+    pub snapshot: GeometrySnapshot,
+    pub topology: DeformationTopology,
+    pub control_state: DeformationControlState,
+    /// Stable source point IDs and their current authored positions.
+    pub points: Vec<BindingPoint>,
+}
+
+/// The host stores point bindings in a distinct payload slot from Path2D feature bindings.
+/// It owns atomic document transactions, dirty state, save/load, and undo/redo.
+pub trait CageBindingHostAdapter {
+    type Error;
+
+    fn current_cage_binding_context(
+        &self,
+        target: &HostTargetRef,
+    ) -> Result<CageBindingHostContext, Self::Error>;
+
+    fn read_cage_binding_payload(
+        &self,
+        target: &HostTargetRef,
+    ) -> Result<Option<String>, Self::Error>;
+
+    fn write_cage_binding_payload(
+        &mut self,
+        target: &HostTargetRef,
+        payload: String,
+    ) -> Result<(), Self::Error>;
+}
+
+/// Validate and persist without rebinding. The host adapter must make the write
+/// atomic with its authoritative document transaction.
+pub fn persist_cage_binding<A: CageBindingHostAdapter>(
+    adapter: &mut A,
+    target: &HostTargetRef,
+    persisted: &PersistedCageBinding,
+) -> Result<(), PersistCageBindingError<A::Error>> {
+    let context = adapter.current_cage_binding_context(target)
+        .map_err(PersistCageBindingError::Host)?;
+    if context.snapshot.target() != target {
+        return Err(PersistCageBindingError::Diagnostic(CageBindingDiagnostic::StaleTarget));
+    }
+    let certificate = validate_cage_embedding(&context.topology, &context.control_state)
+        .map_err(|error| PersistCageBindingError::Diagnostic(
+            CageBindingDiagnostic::InvalidCageEmbedding(error),
+        ))?;
+    let geometry = ValidatedCageGeometry::new(
+        &context.topology, &context.control_state, &certificate,
+    ).map_err(|error| PersistCageBindingError::Diagnostic(
+        CageBindingDiagnostic::InvalidValidatedGeometry(error),
+    ))?;
+    persisted.validate_against(
+        &context.snapshot, &context.topology, &geometry, &context.points,
+    ).map_err(PersistCageBindingError::Diagnostic)?;
+    let payload = persisted.to_json().map_err(PersistCageBindingError::Persistence)?;
+    adapter.write_cage_binding_payload(target, payload)
+        .map_err(PersistCageBindingError::Host)
+}
+
+#[derive(Debug)]
+pub enum PersistCageBindingError<E> {
+    Host(E),
+    Persistence(CageBindingPersistenceError),
+    Diagnostic(CageBindingDiagnostic),
+}
+
+/// Load, deserialize, and validate against current source points and a freshly
+/// certified rest cage. Stale data is rejected, never silently rebound.
+pub fn load_validated_cage_binding<A: CageBindingHostAdapter>(
+    adapter: &A,
+    target: &HostTargetRef,
+) -> Result<Option<ValidatedCageBinding>, LoadCageBindingError<A::Error>> {
+    let Some(payload) = adapter.read_cage_binding_payload(target)
+        .map_err(LoadCageBindingError::Host)? else {
+        return Ok(None);
+    };
+    let persisted = PersistedCageBinding::from_json(&payload)
+        .map_err(LoadCageBindingError::Persistence)?;
+    let context = adapter.current_cage_binding_context(target)
+        .map_err(LoadCageBindingError::Host)?;
+    if context.snapshot.target() != target {
+        return Err(LoadCageBindingError::Diagnostic(CageBindingDiagnostic::StaleTarget));
+    }
+    let certificate = validate_cage_embedding(&context.topology, &context.control_state)
+        .map_err(|error| LoadCageBindingError::Diagnostic(
+            CageBindingDiagnostic::InvalidCageEmbedding(error),
+        ))?;
+    let geometry = ValidatedCageGeometry::new(
+        &context.topology, &context.control_state, &certificate,
+    ).map_err(|error| LoadCageBindingError::Diagnostic(
+        CageBindingDiagnostic::InvalidValidatedGeometry(error),
+    ))?;
+    persisted.validate_against(
+        &context.snapshot, &context.topology, &geometry, &context.points,
+    ).map(Some).map_err(LoadCageBindingError::Diagnostic)
+}
+
+#[derive(Debug)]
+pub enum LoadCageBindingError<E> {
+    Host(E),
+    Persistence(CageBindingPersistenceError),
+    Diagnostic(CageBindingDiagnostic),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
