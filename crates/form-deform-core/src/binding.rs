@@ -599,6 +599,89 @@ mod tests {
     }
 
     #[test]
+    fn complete_unbound_record_validates_against_certified_geometry() {
+        let (topology, state) = cage();
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        let source = snapshot();
+        let stamp = BindingStamp::from_snapshot(
+            &source,
+            &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence,
+        ).unwrap();
+        let entries = enumerate_source_features(source.payload()).unwrap().into_iter()
+            .map(|feature| FeatureBindingEntry { locator: feature.locator, status: SourceFeatureBinding::Unbound })
+            .collect();
+        let record = BindingRecord::new(stamp, entries);
+        assert_eq!(record.validate_against(&source, &topology, &geometry), Ok(()));
+    }
+
+    #[test]
+    fn missing_source_feature_status_is_rejected() {
+        let (topology, state) = cage();
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        let source = snapshot();
+        let stamp = BindingStamp::from_snapshot(
+            &source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence,
+        ).unwrap();
+        let mut entries: Vec<_> = enumerate_source_features(source.payload()).unwrap().into_iter()
+            .map(|feature| FeatureBindingEntry { locator: feature.locator, status: SourceFeatureBinding::Unbound })
+            .collect();
+        entries.pop();
+        let record = BindingRecord::new(stamp, entries);
+        assert_eq!(record.validate_against(&source, &topology, &geometry),
+            Err(BindingError::IncompleteFeatureCoverage));
+    }
+
+    #[test]
+    fn freshness_rejects_changed_source_revision() {
+        let (topology, _) = cage();
+        let source = snapshot();
+        let stamp = BindingStamp::from_snapshot(
+            &source, &topology,
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,
+            OutsideCagePolicy::UnboundZeroInfluence,
+        ).unwrap();
+        let changed = GeometrySnapshot::new(
+            source.target().clone(),
+            GeometryRevision(2),
+            source.topology_revision(),
+            source.fingerprint().clone(),
+            source.coordinate_space().clone(),
+            source.payload_kind(),
+            source.payload_schema_version(),
+            source.payload().clone(),
+        ).unwrap();
+        assert_eq!(stamp.validate_freshness(&changed, &topology),
+            Err(BindingError::StaleGeometryRevision));
+    }
+
+    #[test]
+    fn non_finite_and_out_of_domain_coordinates_are_rejected() {
+        let (topology, state) = cage();
+        let certificate = validate_cage_embedding(&topology, &state).unwrap();
+        let geometry = ValidatedCageGeometry::new(&topology, &state, &certificate).unwrap();
+        let ids = topology.face_at(0).unwrap().control_point_ids().to_vec();
+        let locator = SourceFeatureLocator { command_index: 0, role: PathFeatureRole::MoveToEndpoint };
+        let non_finite = MappingRecord {
+            locator, face_index: 0, subface_index: 0, control_point_ids: ids.clone(),
+            coordinates: FaceCoordinates::TriangleBarycentric { weights: [f64::NAN, 0.0, 1.0] },
+        };
+        assert_eq!(validate_mapping(&non_finite, point(0.0, 0.0), &geometry),
+            Err(BindingError::NonFiniteCoordinate));
+        let outside = MappingRecord {
+            locator, face_index: 0, subface_index: 0, control_point_ids: ids,
+            coordinates: FaceCoordinates::TriangleBarycentric { weights: [1.01, 0.0, -0.01] },
+        };
+        assert_eq!(validate_mapping(&outside, point(0.0, 0.0), &geometry),
+            Err(BindingError::CoordinateOutsideDomain));
+    }
+
+    #[test]
     fn quad_coordinates_reconstruct_using_all_four_authored_vertices() {
         let positions = [
             ControlPointPosition::new(0.0,0.0).unwrap(),
