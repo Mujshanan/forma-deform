@@ -7,6 +7,11 @@ use form_deform_core::binding_persistence::{
     HostBindingContext, LoadBindingError, PersistBindingError, PersistedBinding,
 };
 use form_deform_core::embedding::validate_cage_embedding;
+use form_deform_core::binding::ValidatedCageGeometry;
+use form_deform_core::curve_sampling::{
+    map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
+    CurveSamplingPolicy,
+};
 use form_deform_core::host_contract::{
     AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
     CoordinateSpaceKind, GeometryRevision, GeometrySnapshot, HostDocumentId, HostNamespace,
@@ -312,5 +317,49 @@ fn adapter_persists_and_loads_only_validated_payloads_for_exact_target_generatio
     assert!(matches!(
         load_validated_binding(&adapter, &wrong_generation),
         Err(LoadBindingError::Diagnostic(BindingDiagnostic::StaleTarget))
+    ));
+}
+
+
+#[test]
+fn adaptive_curve_samples_map_through_certified_cage_without_replacing_path2d() {
+    let (context, _) = fixture();
+    let source_path = context.snapshot.payload().clone();
+    let samples = sample_path_curves(&source_path, CurveSamplingPolicy::default()).unwrap();
+
+    assert_eq!(samples.segments.len(), 1);
+    assert_eq!(samples.segments[0].command_index, 2);
+    assert_eq!(samples.segments[0].samples.first().unwrap().t, 0.0);
+    assert_eq!(samples.segments[0].samples.last().unwrap().t, 1.0);
+
+    let certificate =
+        validate_cage_embedding(&context.topology, &context.control_state).unwrap();
+    let geometry =
+        ValidatedCageGeometry::new(&context.topology, &context.control_state, &certificate)
+            .unwrap();
+    let mapped = map_curve_samples(
+        &samples,
+        &geometry,
+        OutsideCagePolicy::UnboundZeroInfluence,
+    )
+    .unwrap();
+
+    assert_eq!(mapped.policy_version, samples.policy_version);
+    assert_eq!(mapped.samples.len(), samples.total_samples);
+    assert!(mapped
+        .samples
+        .iter()
+        .all(|sample| matches!(sample.mapping, CurveSampleMapping::Mapped { .. })));
+    assert_eq!(context.snapshot.payload(), &source_path);
+
+    let mut invalid_samples = samples.clone();
+    invalid_samples.policy_version += 1;
+    assert!(matches!(
+        map_curve_samples(
+            &invalid_samples,
+            &geometry,
+            OutsideCagePolicy::UnboundZeroInfluence
+        ),
+        Err(CurveMappingError::InvalidSampleSet)
     ));
 }
