@@ -2,7 +2,7 @@
 
 **Forma Deform** is AniCraft's deformation and rig-control tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
-The long-term product is a native AniCraft tool backed by reusable, host-independent Rust cores. The repository still contains three historical WASM command adapters used as development, diagnostic, and integration probes. Their presence does not mean the native product integration is complete or that the adapters are separate production products.
+The product is a native AniCraft tool backed by reusable, host-independent Rust cores. The repository contains three historical WASM command adapters used as development, diagnostic, and integration probes. The former TypeScript rectangle/timeline demo has been retired; the Rust workspace is the sole implementation and test path.
 
 ## What Forma Deform owns
 
@@ -86,7 +86,7 @@ Additional technical references:
 
 ## Verification
 
-The current CI workflow runs the Rust workspace tests and builds the three historical WASM adapter crates. These checks establish build/test coverage only; they do not establish successful in-app integration or native playback evaluation.
+The current CI workflow checks Rust formatting, runs the Rust workspace tests, and builds the three historical WASM adapter crates. These checks establish build/test coverage only; they do not establish successful in-app integration or native playback evaluation.
 
 For the Rust workspace and WASM adapters:
 
@@ -99,4 +99,4 @@ cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-pl
 cargo build --release --target wasm32-unknown-unknown -p anicraft-smart-controller-plugin
 ```
 
-The separate TypeScript demo retains its Bun-based scripts. See the package scripts before running it.
+
