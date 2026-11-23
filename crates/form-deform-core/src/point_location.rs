@@ -288,7 +288,7 @@ fn solve_quadratic(
         return Ok(vec![root]);
     }
     let mut discriminant = b*b - 4.0*a*c;
-    let discriminant_scale = (b*b).abs().max((4.0*a*c).abs()).max(1.0);
+    let discriminant_scale = (b*b).abs().max((4.0*a*c).abs()).max(f64::MIN_POSITIVE);
     let discriminant_tolerance = f64::EPSILON * FLOAT_EPSILON_FACTOR * discriminant_scale;
     if !discriminant.is_finite() { return Err(PointLocationError::NonFiniteIntermediate(face_index)); }
     if discriminant < -discriminant_tolerance { return Ok(Vec::new()); }
@@ -427,6 +427,46 @@ mod tests {
         let result=locate_point(query(0.0,0.0),&geometry).unwrap();
         let PointLocationOutcome::Located(found)=result else { panic!("expected quad corner match"); };
         assert_eq!(found.coordinates,FaceCoordinates::QuadBilinear{u:0.0,v:0.0});
+    }
+
+    #[test]
+    fn shared_vertex_ownership_uses_lowest_adjacent_face_index() {
+        let topology=DeformationTopology::IrregularCage(IrregularCageTopology {
+            id:DeformationTopologyId::new(4).unwrap(),
+            revision:DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids:vec![id(1),id(2),id(3),id(4),id(5)],
+            faces:vec![
+                TopologyFace::Triangle([id(1),id(2),id(3)]),
+                TopologyFace::Triangle([id(1),id(3),id(4)]),
+                TopologyFace::Triangle([id(1),id(4),id(5)]),
+            ],
+        });
+        let geometry=certified(topology,&[
+            (1,0.0,0.0),(2,2.0,0.0),(3,1.0,1.0),(4,0.0,2.0),(5,-2.0,0.0),
+        ]);
+        let result=locate_point(query(0.0,0.0),&geometry).unwrap();
+        let PointLocationOutcome::Located(found)=result else { panic!("expected shared vertex match"); };
+        assert_eq!(found.face_index,0);
+    }
+
+    #[test]
+    fn adjacent_quad_shared_edge_uses_stable_face_order() {
+        let topology=DeformationTopology::IrregularCage(IrregularCageTopology {
+            id:DeformationTopologyId::new(5).unwrap(),
+            revision:DeformationTopologyRevision::new(1).unwrap(),
+            control_point_ids:vec![id(1),id(2),id(3),id(4),id(5),id(6)],
+            faces:vec![
+                TopologyFace::Quad([id(1),id(2),id(5),id(4)]),
+                TopologyFace::Quad([id(2),id(3),id(6),id(5)]),
+            ],
+        });
+        let geometry=certified(topology,&[
+            (1,0.0,0.0),(2,1.0,0.0),(3,2.0,0.0),
+            (4,0.0,1.0),(5,1.0,1.0),(6,2.0,1.0),
+        ]);
+        let result=locate_point(query(1.0,0.5),&geometry).unwrap();
+        let PointLocationOutcome::Located(found)=result else { panic!("expected adjacent quad edge match"); };
+        assert_eq!(found.face_index,0);
     }
 
     #[test]
