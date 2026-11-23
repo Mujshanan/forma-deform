@@ -51,7 +51,7 @@ These cover multiple simultaneous invalid conditions and assert the existing fir
 
 PR #38: https://github.com/Mujshanan/forma-deform/pull/38
 
-At the time of this report, no submitted PR reviews or inline review threads were returned by GitHub. The PR is ready for review and has not been merged. Merge is intentionally gated on explicit maintainer approval.
+At the time of this report, no submitted PR reviews or inline review threads were returned by GitHub. PR #38 was approved by the project owner and squash-merged into `quality/cq2-rustfmt-clean` as commit `612f2ea8522ef9f29c0b18f4792df6d6dab3812e`. Merge is intentionally gated on explicit maintainer approval.
 
 ## Behavior-preservation constraints
 
