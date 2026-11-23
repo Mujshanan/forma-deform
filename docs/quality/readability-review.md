@@ -174,3 +174,41 @@ Still required before CQ2 can be closed:
 - [ ] Verify the native integration call path before changing adapter lifecycle labels or removing historical plugin code.
 - [ ] Re-run Rust tests and WASM builds after any remediation.
 
+
+
+## Candidate automated quality tools — suitability assessment
+
+The following external tools were evaluated as possible instruments for CQ2 and the wider CQ audit. This is a suitability review only: none has been installed, run against this repository, or added to CI. Tool output must be treated as evidence to review, not an automatic refactoring mandate.
+
+### Tool comparison
+
+| Tool | Best use in Forma Deform | Risks / limitations | Recommendation |
+|---|---|---|---|
+| `mozilla/rust-code-analysis` | Establish quantitative baselines for cyclomatic/cognitive complexity, Halstead metrics, maintainability index, function size, and nesting. | Metrics identify hotspots, not design defects; thresholds need interpretation and comparisons must use the same scope/version. | **Use for CQ2 measurement.** |
+| `saschaontour/rustqual` | Structural scan for complexity, duplication, SRP, coupling, test quality, and configurable architecture rules. | Syntactic analysis; IOSP classification is opinionated and may not suit every Rust idiom. Workspace layer mapping and suppressions need careful calibration. | **Pilot on a non-gating report first.** |
+| `AgentWorkforce/rust-oleum` | Ratchet to stop quality debt increasing after an agreed baseline; can combine source metrics with Clippy, coverage, and mutation evidence. | Repository guide requires a lockfile for its measurement workflow; current audit baseline found no `Cargo.lock`. Default policy is strict and includes 100% coverage, zero panic/suppression targets, and opinionated lint groups. It can create noise or pressure unsafe/incorrect cleanups if adopted without policy review. | **Consider later as a regression gate**, after lockfile and baseline policy decisions. |
+| `RAprogramm/cargo-quality` | Optional checks for import style, format argument style, blank lines, and inline comments. | Its embedded house style is not Rust community convention: it flags blank lines inside functions and inline comments, and its formatter uses nightly/unstable options including `trailing_comma = "Never"`. This conflicts with the project's preference for standard, readable Rust formatting. | **Do not use as a formatter or blocking gate.** Individual analyzer experiments only if they demonstrate value. |
+
+### Tool-specific notes
+
+- **Mozilla rust-code-analysis:** Its documented metric set includes ABC, cyclomatic complexity, cognitive complexity, Halstead, maintainability index, logical/physical lines, argument count, exit count, and function/method counts. Use the exported metrics to rank hotspots; do not convert a single maintainability score into a pass/fail quality verdict.
+- **rustqual:** Its seven dimensions and configurable layer/forbidden-edge rules make it the closest candidate to the architecture and maintainability goals of this audit. Its adapter call-parity feature is not directly relevant to the three historical plugin tracks unless they are deliberately maintained as peer adapters to the same application surface. Do not configure parity merely because three plugin directories exist; product evolution says these are historical tracks leading to one native tool.
+- **rust-oleum:** Its ratchet model is valuable for preventing regression once debt is measured and accepted. Before adoption, decide whether to commit a `Cargo.lock`, define `rust_roots`, explicitly set lint groups, choose realistic coverage/mutation policy, and review every default target. In particular, do not adopt a 100% coverage target or zero-`unsafe` policy blindly in a host SDK integration workspace.
+- **cargo-quality:** Do not run its formatter over the repository. Stable `cargo fmt` remains the formatting authority. Its analyzers should be considered independently and only after dry-run output is reviewed.
+
+### Recommended staged use
+
+1. **Measurement only:** Run Mozilla rust-code-analysis on the same source scope and archive the raw output as the CQ2 baseline. Prioritize the known large evaluator, canonical validation, migration, composition, and historical adapter entrypoints.
+2. **Structural pilot:** Run rustqual in report/non-failing mode. Inspect findings around pure core vs host adapter boundaries, tests, module cohesion, and duplication. Configure architecture layers to reflect the actual workspace and native-tool composition root—not the historical three-plugin layout.
+3. **Ratchet evaluation:** Trial rust-oleum after resolving the lockfile decision and defining a project-owned policy. Compare its baseline behavior with current CI and ensure only new regressions fail.
+4. **Style experiment:** If desired, run selected cargo-quality analyzers without auto-fixes or formatter changes. Reject rules that penalize idiomatic blank-line grouping or useful local comments.
+5. **Adoption decision:** Add only checks whose findings are reproducible, actionable, and aligned with the product architecture. Pin tool versions in CI and preserve raw reports for comparison.
+
+### Proposed CQ2 evidence outputs
+
+- Raw complexity/maintainability metrics and a ranked hotspot list.
+- rustqual findings reviewed and classified as valid, false positive, or policy mismatch.
+- A ratchet proposal defining accepted baseline, thresholds, exclusions, and update procedure.
+- A written decision for each candidate tool: adopt, limited use, or reject.
+
+**Status:** Recommendations documented. No candidate tool execution or CI integration has yet been performed.
