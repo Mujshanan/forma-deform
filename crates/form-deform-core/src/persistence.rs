@@ -18,7 +18,7 @@ pub const FDM_DOCUMENT_SCHEMA_VERSION: u32 = 1;
 pub const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_DEFORMERS: usize = 10_000;
 pub const MAX_COMPOSITION_GRAPHS: usize = 1_000;
-pub const MAX_CAGE_BINDINGS: usize = 10_000;
+pub const MAX_CAGE_BINDINGS: usize = crate::cage_binding_persistence::MAX_CAGE_BINDING_RECORDS;
 pub const MAX_PARAMETERS_PER_DEFORMER: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
