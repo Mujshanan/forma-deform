@@ -14,8 +14,10 @@ pub enum TargetCapabilityStatus {
     /// The core can calculate the target value, but the inspected SDK does not
     /// establish a corresponding host application command.
     CalculationOnly,
-    /// A documented host command exists, but is mutating and must be invoked
-    /// only through the host's preview/undo transaction.
+    /// A documented read/write command pair may exist, but the exact target
+    /// has not yet been resolved against the active host document.
+    RequiresHostResolution,
+    /// Exact host identity was verified; mutation remains preview/undo-only.
     CommandPreviewOnly,
 }
 
@@ -155,11 +157,11 @@ pub fn assess_target(target: &TargetMapping) -> TargetCapability {
             explanation: "Frame-range calculation is supported; a host command that applies this calculated frame is not established.",
         },
         TargetMapping::GeometryDeform { element_id, pin_id, .. } => TargetCapability {
-            status: TargetCapabilityStatus::CommandPreviewOnly,
+            status: TargetCapabilityStatus::RequiresHostResolution,
             target_key: format!("geometry:{element_id}:{pin_id}"),
             read_command: Some("warp.info"),
             apply_command: Some("warp.pin_move"),
-            explanation: "Pin inspection and mutation commands are documented; mutation is permitted only through the host preview/undo transaction.",
+            explanation: "The mapping names a possible geometry pin; query warp.info and verify the exact live element/pin before treating it as supported.",
         },
         TargetMapping::Property { target_id, property, .. } => TargetCapability {
             status: TargetCapabilityStatus::CalculationOnly,
@@ -205,6 +207,8 @@ mod tests {
 
         assert!(matches!(resolve_geometry_pin(&supported, "18", "12"), TargetResolution::Unavailable(_)));
         assert!(matches!(resolve_geometry_pin(&supported, "17", "99"), TargetResolution::Unsupported(_)));
+        assert!(matches!(resolve_geometry_pin(&serde_json::json!({"element":17,"layer":4,"bitmap":false}), "17", "12"), TargetResolution::Unavailable(_)));
+        assert!(matches!(resolve_geometry_pin(&serde_json::json!({"element":17,"bitmap":false,"warped":true,"pins":[{"pin":12}]}), "17", "12"), TargetResolution::Unavailable(_)));
     }
 
     #[test]
@@ -228,7 +232,7 @@ mod tests {
             neutral_offset: [1.0, 1.0],
             positive_offset: [2.0, 2.0],
         });
-        assert_eq!(capability.status, TargetCapabilityStatus::CommandPreviewOnly);
+        assert_eq!(capability.status, TargetCapabilityStatus::RequiresHostResolution);
         assert_eq!(capability.read_command, Some("warp.info"));
         assert_eq!(capability.apply_command, Some("warp.pin_move"));
     }
