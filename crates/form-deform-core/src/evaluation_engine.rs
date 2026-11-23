@@ -163,6 +163,10 @@ impl SingleOperatorEvaluationEngine {
     /// time sample, dependencies, stage, composition graph and source snapshots
     /// must still agree with the captured request. The host must repeat freshness
     /// validation atomically when it applies the returned result.
+    // Keep the invocation dependencies explicit at this host-independent API boundary:
+    // operator, definition, input, captured/current requests, result identity, and operation
+    // are distinct parts of the evaluation contract.
+    #[allow(clippy::too_many_arguments)]
     pub fn evaluate(
         &self,
         operator: &dyn DeformerOperator,
