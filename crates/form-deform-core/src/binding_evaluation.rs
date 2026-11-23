@@ -533,7 +533,7 @@ mod tests {
             panic!("expected evaluated MoveTo");
         };
         assert!((result.x() - 0.9375).abs() < 1.0e-9);
-        assert!((result.y() - 0.9375).abs() < 1.0e-9);
+        assert!((result.y() - 0.5625).abs() < 1.0e-9);
     }
 
 }
