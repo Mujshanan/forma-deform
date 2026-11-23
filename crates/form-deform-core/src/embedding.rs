@@ -385,6 +385,8 @@ fn position(
 type SharedEdgeKey = (ControlPointId, ControlPointId);
 type EdgeIncidence = (usize, ControlPointId, ControlPointId);
 type EdgeIncidenceMap = HashMap<SharedEdgeKey, Vec<EdgeIncidence>>;
+type VertexLinkGraph = BTreeMap<ControlPointId, BTreeSet<ControlPointId>>;
+type VertexLinkMap = HashMap<ControlPointId, VertexLinkGraph>;
 
 fn validate_shared_edge_incidence(faces: &[FaceGeometry]) -> Result<(), EmbeddingError> {
     let mut edges: EdgeIncidenceMap = HashMap::new();
@@ -417,8 +419,7 @@ fn validate_vertex_links(
     faces: &[FaceGeometry],
     topology_point_ids: &[ControlPointId],
 ) -> Result<(), EmbeddingError> {
-    let mut links: HashMap<ControlPointId, BTreeMap<ControlPointId, BTreeSet<ControlPointId>>> =
-        HashMap::new();
+    let mut links: VertexLinkMap = HashMap::new();
 
     for face in faces {
         let ids = face.ids.as_slice();
@@ -549,7 +550,7 @@ fn count_face_components(faces: &[FaceGeometry]) -> usize {
 
     let mut visited = vec![false; faces.len()];
     let mut component_count = 0usize;
-    for start in 0..faces.len() {
+    for (start, _) in adjacency.iter().enumerate() {
         if visited[start] { continue; }
         component_count += 1;
         visited[start] = true;
