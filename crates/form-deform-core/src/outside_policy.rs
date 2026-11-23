@@ -5,6 +5,7 @@
 //! the input point or silently converts an outside point into an inside hit.
 
 use crate::binding::{FaceCoordinates, ValidatedCageGeometry};
+pub use crate::binding::OutsideCagePolicy as OutsideCageResolutionPolicy;
 use crate::path2d::Point2;
 use crate::topology::{ControlPointId, TopologyFace};
 use std::collections::BTreeMap;
@@ -12,16 +13,6 @@ use std::collections::BTreeMap;
 pub const OUTSIDE_CAGE_POLICY_VERSION: u32 = 1;
 const DISTANCE_TIE_RELATIVE_TOLERANCE: f64 = 1.0e-12;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum OutsideCageResolutionPolicy {
-    /// Preserve the historical behavior: an outside source feature is unbound.
-    UnboundZeroInfluence,
-    /// Project to the nearest topological boundary segment.
-    ClampToBoundary,
-    /// Preserve the offset from the nearest boundary, but only within this
-    /// explicit source-space distance budget.
-    BoundedExtrapolation { max_distance: f64 },
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundaryProjection {
