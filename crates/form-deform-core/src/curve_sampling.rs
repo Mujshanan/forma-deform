@@ -383,6 +383,13 @@ pub struct MappedCurveSample {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct MappedCurveSampleSet {
+    pub policy_version: u32,
+    pub policy: CurveSamplingPolicy,
+    pub samples: Vec<MappedCurveSample>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum CurveMappingError {
     PointLocation(crate::point_location::PointLocationError),
     OutsideCage(crate::outside_policy::OutsideCageError),
@@ -397,9 +404,15 @@ pub fn map_curve_samples(
     sample_set: &CurveSampleSet,
     geometry: &crate::binding::ValidatedCageGeometry,
     outside_policy: crate::binding::OutsideCagePolicy,
-) -> Result<Vec<MappedCurveSample>, CurveMappingError> {
+ -> Result<MappedCurveSampleSet, CurveMappingError> {
     use crate::outside_policy::{resolve_outside_point, OutsideCageResolution};
     use crate::point_location::{locate_point, PointLocationOutcome};
+
+    if sample_set.policy_version != CURVE_SAMPLING_POLICY_VERSION
+        || sample_set.policy.validate().is_err()
+    {
+        return Err(CurveMappingError::InvalidSampleSet);
+    }
 
     if let crate::binding::OutsideCagePolicy::BoundedExtrapolation { max_distance } = outside_policy {
         if !max_distance.is_finite() || max_distance <= 0.0 {
@@ -424,7 +437,9 @@ pub fn map_curve_samples(
         }
         actual_total = actual_total.checked_add(segment.samples.len())
             .ok_or(CurveMappingError::InvalidSampleSet)?;
-        if actual_total > MAX_TOTAL_SAMPLES {
+        if actual_total > MAX_TOTAL_SAMPLES
+            || segment.samples.len() > sample_set.policy.max_samples_per_curve
+        {
             return Err(CurveMappingError::InvalidSampleSet);
         }
         previous_command = Some(segment.command_index);
@@ -484,7 +499,11 @@ pub fn map_curve_samples(
             });
         }
     }
-    Ok(mapped)
+    Ok(MappedCurveSampleSet {
+        policy_version: sample_set.policy_version,
+        policy: sample_set.policy,
+        samples: mapped,
+    })
 }
 
 #[cfg(test)]
@@ -677,11 +696,11 @@ mod tests {
             &samples, &geometry, crate::binding::OutsideCagePolicy::ClampToBoundary,
         ).unwrap();
 
-        assert_eq!(mapped.len(), samples.total_samples);
-        assert!(mapped.iter().all(|sample| matches!(
+        assert_eq!(mapped.samples.len(), samples.total_samples);
+        assert!(mapped.samples.iter().all(|sample| matches!(
             sample.mapping, CurveSampleMapping::Clamped { face_index: 0, .. }
         )));
-        assert!(mapped.iter().all(|sample| sample.command_index == 1));
+        assert!(mapped.samples.iter().all(|sample| sample.command_index == 1));
     }
 
     #[test]
