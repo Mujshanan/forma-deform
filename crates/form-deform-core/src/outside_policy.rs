@@ -7,7 +7,7 @@
 use crate::binding::{FaceCoordinates, ValidatedCageGeometry};
 pub use crate::binding::OutsideCagePolicy as OutsideCageResolutionPolicy;
 use crate::path2d::Point2;
-use crate::topology::{ControlPointId, TopologyFace};
+use crate::topology::{ControlPointId, TopologyFace, TopologyView};
 use std::collections::BTreeMap;
 
 pub const OUTSIDE_CAGE_POLICY_VERSION: u32 = 1;
