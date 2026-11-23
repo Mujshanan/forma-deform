@@ -122,6 +122,12 @@ pub struct Controller {
 
 impl Controller {
     pub fn validate_local(&self) -> Result<(), CoreError> {
+        self.validate_controller_references()?;
+        self.validate_bindings()?;
+        self.validate_mapping_config()
+    }
+
+    fn validate_controller_references(&self) -> Result<(), CoreError> {
         if self.inputs.is_empty() {
             return Err(CoreError::InvalidModel(format!(
                 "controller {} has no inputs",
@@ -152,6 +158,10 @@ impl Controller {
                 self.id
             )));
         }
+        Ok(())
+    }
+
+    fn validate_bindings(&self) -> Result<(), CoreError> {
         let mut ids = std::collections::HashSet::new();
         for binding in &self.bindings {
             if !ids.insert(binding.id.clone()) {
@@ -339,6 +349,10 @@ impl Controller {
                 _ => {}
             }
         }
+        Ok(())
+    }
+
+    fn validate_mapping_config(&self) -> Result<(), CoreError> {
         match &self.mapping {
             MappingConfig::Range1D {
                 minimum,
