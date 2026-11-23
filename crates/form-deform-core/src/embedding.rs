@@ -708,11 +708,6 @@ fn point_in_convex_polygon(
         if value < -tolerance.area { negative = true; }
     }
     !(positive && negative)
-        && polygon.iter().enumerate().all(|(index, a)| {
-            let b = polygon[(index + 1) % polygon.len()];
-            !point_on_segment(point, *a, b, tolerance)
-                || point.x >= a.x.min(b.x) - tolerance.spatial
-        })
 }
 
 fn polygon_centroid(points: &[ControlPointPosition]) -> ControlPointPosition {
