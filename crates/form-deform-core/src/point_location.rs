@@ -241,6 +241,9 @@ fn locate_in_quad(
     let mut accepted: Vec<(f64, f64)> = Vec::new();
     for mut u in roots {
         if !u.is_finite() { return Err(PointLocationError::NonFiniteIntermediate(face_index)); }
+        if u < -parameter_tolerance || u > 1.0 + parameter_tolerance {
+            continue;
+        }
         let residual_vector = q.sub(b.scale(u));
         let v_axis = c.add(d.scale(u));
         let denominator = v_axis.dot(v_axis);
@@ -250,8 +253,7 @@ fn locate_in_quad(
         }
         let mut v = residual_vector.dot(v_axis) / denominator;
         if !v.is_finite() { return Err(PointLocationError::NonFiniteIntermediate(face_index)); }
-        if u < -parameter_tolerance || u > 1.0 + parameter_tolerance
-            || v < -parameter_tolerance || v > 1.0 + parameter_tolerance { continue; }
+        if v < -parameter_tolerance || v > 1.0 + parameter_tolerance { continue; }
         u = u.clamp(0.0, 1.0);
         v = v.clamp(0.0, 1.0);
         let reconstructed = a.add(b.scale(u)).add(c.scale(v)).add(d.scale(u*v));
