@@ -283,4 +283,172 @@ mod tests {
             Err(EvaluationInterfaceError::InvalidOperatorVersion)
         );
     }
+
+    use crate::evaluation_contract::{
+        EvaluationRequest, EvaluationTimeSample, ModelRevisionStamp, TimeSampleKind,
+    };
+    use crate::host_contract::{
+        AxisOrientation, CoordinateOrigin, CoordinateSpaceDescriptor, CoordinateSpaceId,
+        CoordinateSpaceKind, GeometryRevision, HostDocumentId, HostNamespace, HostTargetId,
+        HostTargetKind, HostTargetRef, TopologyRevision, GeometrySnapshot,
+    };
+    use crate::persistence::{DeformationDefinition, ParameterValue};
+    use std::collections::BTreeMap;
+
+    fn target() -> HostTargetRef {
+        HostTargetRef {
+            namespace: HostNamespace::new("anicraft").unwrap(),
+            document_id: HostDocumentId::new("doc-1").unwrap(),
+            target_kind: HostTargetKind::new("shape").unwrap(),
+            target_id: HostTargetId::new("shape-1").unwrap(),
+            generation: 1,
+        }
+    }
+
+    fn space() -> crate::host_contract::CoordinateSpaceDescriptor {
+        CoordinateSpaceDescriptor {
+            id: CoordinateSpaceId::new("shape-local-rest").unwrap(),
+            kind: CoordinateSpaceKind::TargetLocalRest,
+            dimensions: 2,
+            linear_unit: "px".into(),
+            canonical_unit: "px".into(),
+            unit_scale: 1.0,
+            axes: AxisOrientation::XRightYDown,
+            origin: CoordinateOrigin::TopLeft,
+        }
+    }
+
+    fn fixture(
+        coordinate_space: CoordinateSpaceDescriptor,
+        input_kind: GeometryValueKind,
+        output_kind: GeometryValueKind,
+    ) -> (EvaluationRequest, DeformationDefinition) {
+        let path = geometry();
+        let fingerprint = path.fingerprint(&coordinate_space).unwrap();
+        let target = target();
+        let snapshot = GeometrySnapshot::new(
+            target.clone(), GeometryRevision(1), TopologyRevision(1), fingerprint,
+            coordinate_space.clone(), crate::path2d::PATH2D_PAYLOAD_KIND,
+            crate::path2d::PATH2D_SCHEMA_VERSION, path,
+        ).unwrap();
+        let reference = snapshot.stamp();
+        let request = EvaluationRequest::new(
+            "request-1",
+            vec![snapshot],
+            ModelRevisionStamp::new("model-1", 1, 1, "test-model", 1).unwrap(),
+            EvaluationTimeSample::new(
+                "frames", "sample-1", 1, 0.0, 1, TimeSampleKind::EvaluatedPose,
+            ).unwrap(),
+            vec![],
+            "stage-1",
+            None,
+        ).unwrap();
+        let definition = DeformationDefinition::new(
+            "deformer-1", 1, "Test Deformer", DeformationKind::PinDeformation,
+            target, reference, coordinate_space, input_kind, output_kind, BTreeMap::<String, ParameterValue>::new(),
+        ).unwrap();
+        (request, definition)
+    }
+
+    struct TestOperator {
+        kind: DeformationKind,
+        output_kind: GeometryValueKind,
+    }
+
+    impl DeformerOperator for TestOperator {
+        fn kind(&self) -> DeformationKind { self.kind }
+        fn algorithm_id(&self) -> &'static str { "test-operator" }
+        fn algorithm_version(&self) -> u32 { 1 }
+        fn evaluate(
+            &self,
+            _definition: &DeformationDefinition,
+            input: &GeometryValue,
+            _context: &OperatorContext<'_>,
+        ) -> Result<GeometryValue, OperatorFailure> {
+            Ok(GeometryValue::new(self.output_kind, input.geometry().clone()))
+        }
+    }
+
+    #[test]
+    fn operator_dispatch_accepts_matching_definition_snapshot_and_value_contracts() {
+        let (request, definition) = fixture(
+            space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
+        );
+        let context = OperatorContext::new(&request).unwrap();
+        let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, geometry());
+        let operator = TestOperator {
+            kind: DeformationKind::PinDeformation,
+            output_kind: GeometryValueKind::Displacement,
+        };
+
+        let output = evaluate_operator(&operator, &definition, &input, &context).unwrap();
+        assert_eq!(output.kind(), GeometryValueKind::Displacement);
+    }
+
+    #[test]
+    fn operator_dispatch_rejects_input_kind_before_running_operator() {
+        let (request, definition) = fixture(
+            space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
+        );
+        let context = OperatorContext::new(&request).unwrap();
+        let input = GeometryValue::new(GeometryValueKind::Displacement, geometry());
+        let operator = TestOperator {
+            kind: DeformationKind::PinDeformation,
+            output_kind: GeometryValueKind::Displacement,
+        };
+
+        assert_eq!(
+            evaluate_operator(&operator, &definition, &input, &context),
+            Err(OperatorInvocationError::Contract(EvaluationInterfaceError::InputKindMismatch))
+        );
+    }
+
+    #[test]
+    fn operator_dispatch_rejects_coordinate_space_mismatch() {
+        let mut wrong_space = space();
+        wrong_space.linear_unit = "mm".into();
+        let (request, definition) = fixture(
+            wrong_space, GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
+        );
+        let context = OperatorContext::new(&request).unwrap();
+        let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, geometry());
+        let operator = TestOperator {
+            kind: DeformationKind::PinDeformation,
+            output_kind: GeometryValueKind::Displacement,
+        };
+
+        // The authored definition is internally valid, but its coordinate
+        // interpretation is incompatible with the immutable host snapshot.
+        assert_eq!(
+            evaluate_operator(&operator, &definition, &input, &context),
+            Err(OperatorInvocationError::Contract(EvaluationInterfaceError::CoordinateSpaceMismatch))
+        );
+    }
+
+    #[test]
+    fn operator_dispatch_rejects_wrong_kind_and_wrong_output_kind() {
+        let (request, definition) = fixture(
+            space(), GeometryValueKind::AbsoluteGeometry, GeometryValueKind::Displacement,
+        );
+        let context = OperatorContext::new(&request).unwrap();
+        let input = GeometryValue::new(GeometryValueKind::AbsoluteGeometry, geometry());
+
+        let wrong_operator = TestOperator {
+            kind: DeformationKind::Lattice,
+            output_kind: GeometryValueKind::Displacement,
+        };
+        assert_eq!(
+            evaluate_operator(&wrong_operator, &definition, &input, &context),
+            Err(OperatorInvocationError::Contract(EvaluationInterfaceError::DefinitionKindMismatch))
+        );
+
+        let wrong_output = TestOperator {
+            kind: DeformationKind::PinDeformation,
+            output_kind: GeometryValueKind::AbsoluteGeometry,
+        };
+        assert_eq!(
+            evaluate_operator(&wrong_output, &definition, &input, &context),
+            Err(OperatorInvocationError::Contract(EvaluationInterfaceError::OutputKindMismatch))
+        );
+    }
 }
