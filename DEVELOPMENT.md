@@ -133,6 +133,7 @@ The repositories below were inspected at source level for selected modules. This
 | [OSATURA](https://github.com/chiuta/osatura) | FABRIK, RBF pin warp, soft selection, spring behavior | Benchmark RBF against AniCraft MLS; port only self-contained core components | MPL-2.0 core; other components AGPL-3.0-or-later. Keep file boundaries and obligations clear |
 | [OpenToonz](https://github.com/opentoonz/opentoonz) | Plastic deformation, ARAP mesh methods, surface handles | Algorithmic reference first; C++ transplant is not the default | BSD-3-Clause project code; third-party components have separate terms |
 | [Aether Canvas](https://github.com/syuumaimikan/Aether-Canvas) | Parameter/keyform grids, multi-axis interpolation, additive blend shapes, warp and rotation deformers, driver evaluation | High-value design reference; isolate generic algorithms only after license and dependency verification | License was not confirmed in the source audit: do not copy code until verified |
+| [Flare](https://github.com/Flare-Animate/Flare) | Rust animation-suite architecture; vector drawing/editing, timeline/keyframes, motion and shape tweens, easing, symbols/instances, Moho project import, CLI/MCP workflows | High-value architecture and algorithm reference. Evaluate isolated tween/easing, vector-geometry, symbol/playback, and import-model components only where Forma Deform has a demonstrated gap; do not import the editor, timeline, document model, renderer, or plugin framework | BSD-3-Clause is stated by the current repository README. Early alpha and actively evolving; verify the exact source file, dependency tree, notices, provenance, and current license before any code port. `original/` is archived C++ reference material, not the default integration target |
 
 ### 5.1 Reuse decision matrix
 
@@ -147,8 +148,31 @@ The repositories below were inspected at source level for selected modules. This
 | ARAP mesh deformation | OpenToonz | Algorithmic reference | Performance/quality benchmark and source-specific license review |
 | Soft selection | OSATURA | Selective algorithm port or reimplementation | Verify core file is MPL-covered and isolate dependencies |
 | Physics/springs | OSATURA; Aether Canvas | Later reference | Must integrate with AniCraft time/evaluation rather than add a second runtime |
+| Flare animation/tweening and vector model | Flare | Architecture reference; selective algorithm extraction only after source audit | Identify a concrete Forma Deform gap; inspect the current Rust implementation, API/dependency footprint, tests, numerical behavior, and file-level license. Do not duplicate AniCraft timeline/document/rendering infrastructure or import the whole editor |
 
 **Reuse policy:** do not copy a subsystem because it is written in Rust or has a permissive repository-level license. Verify the exact file license, copyright headers, dependency licenses, tests, numerical behavior, and whether the algorithm duplicates AniCraft. Prefer small, isolated, well-tested algorithms over whole frameworks.
+
+
+### 5.2 Flare-specific assessment
+
+**Reference:** [Flare-Animate/Flare](https://github.com/Flare-Animate/Flare)
+
+Flare is a Rust-based, early-alpha animation suite built predominantly on OpenToonz and Tahoma2D, with contributions/foundations from AnimationCraft and Next2Flash. Its current README describes vector drawing/editing, a frame/layer timeline, motion and shape tweens with easing, symbols and instances, Moho project import, and CLI/MCP workflows.
+
+**Forma Deform relevance**
+- Study its tween/easing model and motion-editor representation for reusable interpolation and curve-editing concepts.
+- Study vector-shape and geometry data structures only where they solve a specific deformation-authoring need.
+- Study symbol/instance and Moho-import data mapping as references for host-independent target and asset identity; do not adopt Flare's document model as Forma Deform's.
+- Compare its rig/tween roadmap and implemented components against AniCraft's existing rig, timeline, and evaluation responsibilities before proposing any overlap.
+
+**Reuse boundary**
+- Do not embed or fork the full Flare editor into Forma Deform. Forma Deform remains an AniCraft deformation/controller subsystem, not a second animation application.
+- Prefer algorithmic reference or a small, independently testable extraction. Any port requires exact-file license/provenance review, dependency/license audit, tests, and numerical/behavioral comparison.
+- The repository states BSD-3-Clause for Flare, while also identifying separately licensed third-party components. Preserve applicable notices and honor each dependency's own terms.
+- Treat the repository's `original/` C++ tree as archived reference material; assess the current Rust implementation first.
+- Flare labels itself early alpha. Treat its APIs and behavior as unstable; pin any evaluated commit and record the exact source files before implementation.
+
+**Initial disposition:** Research / architecture reference. No code is approved for copying, vendoring, or runtime dependency use by this entry.
 
 ## 6. Code and ownership architecture
 
