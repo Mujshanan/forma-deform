@@ -9,6 +9,7 @@ use crate::path2d::Point2;
 use std::collections::BTreeMap;
 
 const RELATIVE_EPSILON: f64 = 1.0e-12;
+type EdgeIncidence = BTreeMap<(usize, usize), Vec<(usize, i8)>>;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CageVertex {
@@ -216,7 +217,7 @@ impl CageEmbedding {
         Ok(())
     }
 
-    fn validate_topology(&self) -> Result<(BTreeMap<(usize, usize), Vec<(usize, i8)>>, usize), CageEmbeddingError> {
+    fn validate_topology(&self) -> Result<(EdgeIncidence, usize), CageEmbeddingError> {
         let mut edges = BTreeMap::<(usize, usize), Vec<(usize, i8)>>::new();
         let mut parent: Vec<usize> = (0..self.triangles.len()).collect();
         for (face, tri) in self.triangles.iter().enumerate() {
