@@ -718,4 +718,85 @@ mod tests {
         assert_eq!(path, original);
         assert!(matches!(path.commands()[1], PathCommand::CubicTo { .. }));
     }
+    fn cubic_point(p0: Point2, p1: Point2, p2: Point2, p3: Point2, t: f64) -> Point2 {
+        let one_minus_t = 1.0 - t;
+        let a = one_minus_t * one_minus_t * one_minus_t;
+        let b = 3.0 * one_minus_t * one_minus_t * t;
+        let c = 3.0 * one_minus_t * t * t;
+        let d = t * t * t;
+        point(
+            a * p0.x() + b * p1.x() + c * p2.x() + d * p3.x(),
+            a * p0.y() + b * p1.y() + c * p2.y() + d * p3.y(),
+        )
+    }
+
+    #[test]
+    fn high_curvature_cubic_respects_tolerance_and_tightening_is_monotonic() {
+        let p0 = point(0.0, 0.0);
+        let p1 = point(0.0, 100.0);
+        let p2 = point(100.0, -100.0);
+        let p3 = point(100.0, 0.0);
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(p0),
+            PathCommand::CubicTo { control1: p1, control2: p2, to: p3 },
+        ]).unwrap();
+
+        let coarse = sample_path_curves(&path, policy(1.0)).unwrap();
+        let fine = sample_path_curves(&path, policy(0.1)).unwrap();
+        assert!(fine.total_samples >= coarse.total_samples);
+        assert!(fine.total_samples > 2);
+
+        let samples = &fine.segments[0].samples;
+        assert_eq!(samples.first().unwrap().t, 0.0);
+        assert_eq!(samples.last().unwrap().t, 1.0);
+        assert!(samples.windows(2).all(|pair| {
+            pair[0].t.is_finite()
+                && pair[0].t < pair[1].t
+                && pair[1].t.is_finite()
+        }));
+
+        for pair in samples.windows(2) {
+            let midpoint_t = (pair[0].t + pair[1].t) * 0.5;
+            let curve_midpoint = cubic_point(p0, p1, p2, p3, midpoint_t);
+            let chord_deviation = point_segment_distance(
+                curve_midpoint, pair[0].point, pair[1].point,
+            ).unwrap();
+            assert!(
+                chord_deviation <= 0.1,
+                "deviation {chord_deviation} exceeded tolerance for [{}, {}]",
+                pair[0].t,
+                pair[1].t,
+            );
+        }
+    }
+
+    #[test]
+    fn closed_loop_cubic_and_large_coordinates_remain_finite() {
+        let scale = 1.0e100;
+        let path = Path2D::new(vec![
+            PathCommand::MoveTo(point(scale, scale)),
+            PathCommand::CubicTo {
+                control1: point(scale, -scale),
+                control2: point(-scale, -scale),
+                to: point(-scale, scale),
+            },
+            PathCommand::CubicTo {
+                control1: point(-scale, 3.0 * scale),
+                control2: point(scale, 3.0 * scale),
+                to: point(scale, scale),
+            },
+        ]).unwrap();
+
+        let sampled = sample_path_curves(&path, policy(scale * 0.01)).unwrap();
+        assert_eq!(sampled.segments.len(), 2);
+        assert!(sampled.segments.iter().all(|segment| {
+            segment.samples.len() >= 2
+                && segment.samples.iter().all(|sample| {
+                    sample.t.is_finite()
+                        && sample.point.x().is_finite()
+                        && sample.point.y().is_finite()
+                })
+        }));
+    }
+
 }
