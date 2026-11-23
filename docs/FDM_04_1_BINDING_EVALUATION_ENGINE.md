@@ -69,7 +69,8 @@ The evaluator does not silently rebind, switch outside-cage policies, repair mal
 ## Initial verification matrix
 
 - Triangle barycentric mapping follows a translated cage pose.
+- Quad bilinear evaluation uses all four current control points.
 - Repeated evaluation is identical and does not accumulate.
 - Unbound features remain at their source positions.
 - Source revision and cage topology changes are rejected.
-- Quad bilinear evaluation and mapped curve-sample output are follow-up coverage before FDM-04 is declared complete.
+- Adaptive curve-sample evaluation remains a follow-up FDM-04 slice before the engine is declared complete.
