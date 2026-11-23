@@ -271,7 +271,7 @@ mod tests {
     use super::*;
     use crate::binding::{
         enumerate_source_features, BindingRecord, BindingStamp, FeatureBindingEntry,
-        MappingPolicy, SourceFeatureBinding, ValidatedCageGeometry,
+        MappingPolicy, OutsideCagePolicy, SourceFeatureBinding, ValidatedCageGeometry,
     };
     use crate::binding_persistence::PersistedBinding;
     use crate::embedding::validate_cage_embedding;
