@@ -4,6 +4,7 @@ pub mod composition_evaluation;
 pub mod geometry;
 pub mod composition_graph;
 pub mod evaluation_contract;
+pub mod evaluation_engine;
 pub mod host_contract;
 pub mod path2d;
 pub mod persistence;
