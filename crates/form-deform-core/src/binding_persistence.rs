@@ -145,7 +145,6 @@ pub enum BindingPersistenceError {
     InvalidStamp(BindingError),
     Serialization,
     ResourceLimitExceeded,
-    InvalidBindingRevision,
 }
 
 impl std::fmt::Display for BindingPersistenceError {
@@ -211,17 +210,16 @@ pub struct HostBindingContext {
     pub control_state: DeformationControlState,
 }
 
-/// Host-issued monotonic revision for the Path2D binding payload slot.
-/// This is separate from source geometry revisions and is never read from FDM JSON.
+/// Host-issued monotonic revision for the Path2D binding slot.
+/// Revision zero represents a slot that has never been changed. The host must
+/// retain and increment this token for writes and deletes; it must never reset
+/// it when a payload is absent, which prevents absent/present ABA races.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BindingPayloadRevision(u64);
 
 impl BindingPayloadRevision {
-    pub fn new(value: u64) -> Result<Self, BindingPersistenceError> {
-        if value == 0 {
-            return Err(BindingPersistenceError::InvalidBindingRevision);
-        }
-        Ok(Self(value))
+    pub fn new(value: u64) -> Self {
+        Self(value)
     }
 
     pub fn value(self) -> u64 {
@@ -229,15 +227,15 @@ impl BindingPayloadRevision {
     }
 }
 
-/// Payload and host-issued slot revision observed together by the adapter.
+/// Atomic snapshot of a Path2D binding slot, including its revision when empty.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VersionedBindingPayload {
+pub struct BindingSlotSnapshot {
     revision: BindingPayloadRevision,
-    payload: String,
+    payload: Option<String>,
 }
 
-impl VersionedBindingPayload {
-    pub fn new(revision: BindingPayloadRevision, payload: String) -> Self {
+impl BindingSlotSnapshot {
+    pub fn new(revision: BindingPayloadRevision, payload: Option<String>) -> Self {
         Self { revision, payload }
     }
 
@@ -245,8 +243,8 @@ impl VersionedBindingPayload {
         self.revision
     }
 
-    pub fn payload(&self) -> &str {
-        &self.payload
+    pub fn payload(&self) -> Option<&str> {
+        self.payload.as_deref()
     }
 }
 
@@ -277,10 +275,10 @@ pub trait BindingHostAdapter {
         target: &HostTargetRef,
     ) -> Result<HostBindingContext, Self::Error>;
 
-    fn read_binding_payload(
+    fn read_binding_slot(
         &self,
         target: &HostTargetRef,
-    ) -> Result<Option<VersionedBindingPayload>, Self::Error>;
+    ) -> Result<BindingSlotSnapshot, Self::Error>;
 
     /// Atomically replace the payload only if the target's current source stamp
     /// and this binding slot's revision still equal the values observed before
@@ -289,7 +287,7 @@ pub trait BindingHostAdapter {
     fn write_binding_payload(
         &mut self,
         target: &HostTargetRef,
-        expected_binding_revision: Option<BindingPayloadRevision>,
+        expected_binding_revision: BindingPayloadRevision,
         expected_source_stamp: &crate::host_contract::GeometrySnapshotStamp,
         payload: String,
     ) -> Result<BindingWriteOutcome, Self::Error>;
@@ -307,9 +305,9 @@ pub fn persist_binding<A: BindingHostAdapter>(
         return Err(PersistBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
     }
     let expected_source_stamp = context.snapshot.stamp();
-    let expected_binding_revision = adapter.read_binding_payload(target)
+    let expected_binding_revision = adapter.read_binding_slot(target)
         .map_err(PersistBindingError::Host)?
-        .map(|existing| existing.revision());
+        .revision();
     persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map_err(PersistBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistBindingError::Persistence)?;
@@ -337,10 +335,11 @@ pub fn load_validated_binding<A: BindingHostAdapter>(
     adapter: &A,
     target: &HostTargetRef,
 ) -> Result<Option<ValidatedBindingRecord>, LoadBindingError<A::Error>> {
-    let Some(payload) = adapter.read_binding_payload(target).map_err(LoadBindingError::Host)? else {
+    let slot = adapter.read_binding_slot(target).map_err(LoadBindingError::Host)?;
+    let Some(payload) = slot.payload() else {
         return Ok(None);
     };
-    let persisted = PersistedBinding::from_json(payload.payload())
+    let persisted = PersistedBinding::from_json(payload)
         .map_err(LoadBindingError::Persistence)?;
     let context = adapter.current_binding_context(target).map_err(LoadBindingError::Host)?;
     if context.snapshot.target() != target {
