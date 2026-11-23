@@ -14,6 +14,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
+      - run: rustfmt --edition 2024 --check crates/form-deform-core/src/single_handle_displacement.rs crates/form-deform-core/src/evaluation_engine.rs
+      - run: cargo clippy --manifest-path crates/form-deform-core/Cargo.toml --all-targets -- -D warnings -A clippy::too_many_arguments
       - run: cargo test --workspace
       - run: cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
