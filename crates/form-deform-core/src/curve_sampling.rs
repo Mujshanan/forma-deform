@@ -4,7 +4,6 @@
 //! and their indices are not persistent source-feature identities.
 
 use crate::path2d::{Path2D, PathCommand, Point2};
-use crate::topology::TopologyView;
 
 pub const CURVE_SAMPLING_POLICY_VERSION: u32 = 1;
 const MAX_SUBDIVISION_DEPTH: u8 = 32;
@@ -512,6 +511,7 @@ pub fn map_curve_samples(
 mod tests {
     use super::*;
     use crate::path2d::PathCommand;
+    use crate::topology::TopologyView;
 
     fn point(x: f64, y: f64) -> Point2 {
         Point2::new(x, y).unwrap()
