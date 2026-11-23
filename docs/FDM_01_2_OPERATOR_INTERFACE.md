@@ -27,9 +27,10 @@ The existing operator interface lives in `composition_evaluation.rs`. This slice
 3. Require the resolved operator kind to match the authored deformation kind.
 4. Require the incoming `GeometryValueKind` to match the definition's declared input kind.
 5. Resolve the immutable source snapshot for the definition's target from the request.
-6. Require exact coordinate-space descriptor equality between definition and host snapshot. No unit conversion, axis flip, or origin translation is implicit.
-7. Invoke the pure operator implementation.
-8. Require the returned `GeometryValueKind` to match the definition's declared output kind.
+6. Require the resolved snapshot stamp to equal the definition's authored reference stamp. This prevents evaluating a definition against a different captured geometry revision or fingerprint.
+7. Require exact coordinate-space descriptor equality between definition and host snapshot. No unit conversion, axis flip, or origin translation is implicit.
+8. Invoke the pure operator implementation.
+9. Require the returned `GeometryValueKind` to match the definition's declared output kind.
 
 Contract rejection and algorithm failure are represented separately by `OperatorInvocationError::Contract` and `OperatorInvocationError::Operator`.
 
@@ -37,7 +38,7 @@ Contract rejection and algorithm failure are represented separately by `Operator
 
 The operator receives the current intermediate `GeometryValue` as its actual input. The context separately exposes the immutable root snapshot through `source_geometry(target)`. These are intentionally distinct: a later sequential graph node may consume an upstream result without replacing or mutating the original host snapshot.
 
-This slice does not add freshness comparison against a second, current host snapshot. That remains part of the evaluator lifecycle in FDM-01.4. Nor does it define graph scheduling or parallel execution.
+This slice verifies the definition against the immutable snapshot captured in the request. It does not compare that captured snapshot against a second, current host snapshot; that live freshness check remains part of the evaluator lifecycle in FDM-01.4. Nor does it define graph scheduling or parallel execution.
 
 ## Determinism and purity
 
@@ -50,6 +51,7 @@ The dispatch wrapper validates the shared interface contract; each operator rema
 The focused tests cover:
 - successful invocation with matching definition, source snapshot, coordinate space, and input/output kinds;
 - rejection of an input-kind mismatch;
+- rejection of an authored source-stamp mismatch;
 - rejection of a coordinate-space mismatch;
 - rejection of an operator-kind mismatch;
 - rejection of an output-kind mismatch;
