@@ -1,4 +1,4 @@
-# Native Host Integration Traceability
+# Native Host tntegration Traceability
 
 **Checked:** 2026-11-23  
 **Repositories:** [Forma Deform](https://github.com/Mujshanan/forma-deform) and [AniCraft](https://github.com/Mujshanan/anicraft)  
@@ -8,7 +8,7 @@
 
 The project history is: three separate proof-of-concept plugins → one consolidated Forma Deform product/codebase → development toward a native AniCraft tool. The three plugin crates still present in the Forma Deform workspace are not three separately shipped products.
 
-There is concrete native Smart Controller UI work in AniCraft branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03), but it is a partial, unmerged UI slice. It adds a toolbar tool, transient Stage handles, and a Properties inspector. The branch does not yet connect authored controller persistence, source-angle resolution, the controller core, target application, or live preview. AniCraft `main` does not contain this native Smart Controller work.
+There is concrete native Smart Controller Ut work in AniCraft branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03), but it is a partial, unmerged UI slice. It adds a toolbar tool, transient Stage handles, and a Properties inspector. The branch does not yet connect authored controller persistence, source-angle resolution, the controller core, target application, or live preview. AniCraft `main` does not contain this native Smart Controller work.
 
 Therefore:
 - It is inaccurate to describe Forma Deform as only a proposed native tool or only a WASM plugin suite.
@@ -58,8 +58,8 @@ The inspected branch was 17 commits ahead of `main` at commit [`59ed1f4871b543ec
 2. **No controller commands.** No create/update/delete controller command or undo/redo contract was found in this branch's change set.
 3. **No native core adapter.** The app root manifest does not depend on `anicraft-controller`; `src/smart_controller_tool.rs` does not call it.
 4. **No evaluated source resolver.** The UI does not obtain a bone's evaluated angle and pass it into the mapping core.
-5. **No target application.** The core returns a requested nested symbol frame, but no host path applies that frame to player/evaluation state.
-6. **No live preview/reset transaction.** The tool hint explicitly says binding and preview are not connected.
+5. **No connected binding inspector.** A driver/target draft UI helper is present in the tool module, but the active Properties section only edits transient handle coordinates; the draft helper is not wired into the application panel.
+6. **No target application or live preview/reset transaction.** The core returns a requested nested symbol frame, but no host path applies it to player/evaluation state. The tool hint explicitly says binding and preview are not connected.
 7. **No completion evidence.** The acceptance document requires command tests, serialization round trips, undo/redo, preview immutability, save/reopen, and a manual native Windows smoke test. A source tree or compile alone does not satisfy that gate.
 
 The native prototype's target is a nested symbol instance frame. Forma Deform's deformation core also addresses geometry targets and pin deformation. Keep those semantics explicit; do not silently conflate Smart Controller symbol-frame mapping with Form Deform pin evaluation.
