@@ -6,10 +6,16 @@ Establish a reproducible baseline for the adaptive Path2D curve sampler without 
 
 ## Benchmark workloads
 
-Run:
+Run locally with the default 200 measured iterations per workload:
 
 ```sh
 cargo bench -p form-deform-core --bench curve_sampling
+```
+
+Use a shorter smoke run:
+
+```sh
+cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
 ```
 
 The harness reports elapsed nanoseconds per sampling iteration and per emitted sample for:
@@ -19,15 +25,17 @@ The harness reports elapsed nanoseconds per sampling iteration and per emitted s
 - One hundred twenty-eight moderate-curvature cubic segments.
 - Thirty-two cubic segments at large coordinate magnitudes.
 
-Each workload performs warm-up iterations, then a fixed measured iteration count. It verifies that every measured output exactly matches the reference output before reporting timing. Run on an otherwise idle machine, with the same Rust toolchain and release profile when comparing results.
+Each workload performs 20 warm-up iterations and a configurable measured iteration count. Exact output equality is checked during warm-up; the timed loop measures sampling and black-boxes the result, then checks the aggregate emitted sample count. Run on an otherwise idle machine, with the same Rust toolchain and release profile when comparing results.
 
 ## Quality gates
 
-The benchmark is diagnostic, not a flaky timing gate. CI compiles it with:
+CI executes the benchmark with a short smoke workload:
 
 ```sh
-cargo bench --no-run -p form-deform-core --bench curve_sampling
+cargo bench -p form-deform-core --bench curve_sampling -- --iterations 20
 ```
+
+This verifies that all four workloads execute successfully and emit the expected deterministic sample counts. It does not enforce a wall-clock threshold.
 
 Correctness remains enforced by deterministic unit and numerical regression tests:
 
