@@ -69,7 +69,7 @@ The source tree and relevant blobs were fetched by their exact Git object IDs. T
 The most important API proof is the pinned engine declaration:
 
 ```rust
-pub type RunFn = fn(&mut Session, &Value);
+pub type RunFn = fn(&mut Session, &Value) -> Result<Value>;
 
 pub struct CommandSpec {
     // metadata ...
