@@ -7,7 +7,7 @@
 
 use crate::topology::{
     ControlPointId, ControlPointPosition, DeformationControlState, IrregularCageTopology,
-    TopologyContractError, TopologyFace, TopologyView,
+    TopologyContractError, TopologyFace,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -115,6 +115,10 @@ impl IrregularCage {
                     return Err(IrregularCageError::NonManifoldEdge(from.get(), to.get()));
                 }
             }
+        }
+        let referenced: HashSet<_> = edges.keys().flat_map(|edge| [edge.0, edge.1]).collect();
+        if let Some(unused) = self.topology.control_point_ids.iter().find(|id| !referenced.contains(id)) {
+            return Err(IrregularCageError::UnusedControlPoint(unused.get()));
         }
         for incidences in edges.values() {
             if incidences.len() == 2
@@ -360,7 +364,7 @@ pub enum IrregularCageError {
     Empty,
     MissingPoint(u64),
     CoincidentPoints(usize, usize),
-    NonManifoldEdge(u64, u64),
+    NonManifoldEdge(u64, u64),\n    UnusedControlPoint(u64),
     InconsistentSharedEdgeWinding { first_face: usize, second_face: usize },
     DisconnectedFace(usize),
     ZeroLengthFaceEdge(usize, usize),
@@ -387,7 +391,7 @@ impl std::fmt::Display for IrregularCageError {
             Self::Empty => write!(f, "cage has no control-point geometry"),
             Self::MissingPoint(id) => write!(f, "control point {id} is missing"),
             Self::CoincidentPoints(a, b) => write!(f, "control points at storage positions {a} and {b} are coincident or too close"),
-            Self::NonManifoldEdge(a, b) => write!(f, "edge ({a}, {b}) is shared by more than two faces"),
+            Self::NonManifoldEdge(a, b) => write!(f, "edge ({a}, {b}) is shared by more than two faces"),\n            Self::UnusedControlPoint(id) => write!(f, "control point {id} is not referenced by any face"),
             Self::InconsistentSharedEdgeWinding { first_face, second_face } => write!(f, "faces {first_face} and {second_face} traverse their shared edge in the same direction"),
             Self::DisconnectedFace(index) => write!(f, "face {index} is disconnected from the cage face component"),
             Self::ZeroLengthFaceEdge(face, edge) => write!(f, "face {face} has a zero-length edge at local edge {edge}"),
