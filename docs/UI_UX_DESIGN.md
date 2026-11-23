@@ -336,3 +336,17 @@ Implemented in AniCraft:
 Still outstanding: drag editing, stable source/target identity, controller binding and mapping UI, validation graph, deterministic non-mutating preview, document persistence/undo integration, target application, live playback, and the manual Windows host smoke test. The merged PR had no reported workflow runs or commit status checks, so this merge is not evidence of a passing native build or CI run.
 
 The Smart Controller remains independent of Form Deform pin evaluation under CCC-01.5. AniCraft continues to own the native UI lifecycle and host document/evaluation boundaries; Forma Deform owns reusable domain logic.
+
+
+---
+
+## Native M1 progress — 2026-11-23 update
+
+AniCraft [PR #3](https://github.com/Mujshanan/anicraft/pull/3) is merged (commit `20120928c914a4b741ee81ad8c097031690237c5`). The M1 transient-handle interaction now supports:
+
+- Click-to-create and click-to-select Stage handles.
+- Drag-to-move an existing handle, with live Stage coordinates in Properties.
+- Removal and clearing of transient draft handles.
+- Hit-testing and movement tests, including invalid coordinates and indices.
+
+These handles remain editor-only view state: no document persistence, dirty-state changes, undo command, source/target binding, mapping evaluation, target application, or live playback is introduced. CI has not reported any runs/status checks for the merged commit, and the manual Windows smoke test remains outstanding. This is progress within M1, not completion of the full native authoring UI.
