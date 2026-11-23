@@ -10,7 +10,7 @@ use crate::curve_sample_evaluation::{
     evaluate_source_point, CurveSampleEvaluationError,
 };
 use crate::host_contract::GeometrySnapshot;
-use crate::path2d::{PathCommand, Path2D, Point2};
+use crate::path2d::{PathCommand, Point2};
 use crate::topology::{DeformationTopology, TopologyView};
 
 pub const OUTPUT_REFINEMENT_POLICY_VERSION: u32 = 1;
@@ -186,8 +186,10 @@ pub fn refine_path_curves(
                     command, from, 0.0, &mut total_evaluations, policy)?;
                 push_sample(&mut samples, RefinedCurveSample { t: 0.0, source_point: from, output_point: first },
                     command_index, &mut total_samples, policy)?;
+                let last = evaluate_at(validated, source, topology, rest_cage, current_cage, outside_policy,
+                    command, from, 1.0, &mut total_evaluations, policy)?;
                 refine_interval(validated, source, topology, rest_cage, current_cage, outside_policy,
-                    command, from, 0.0, 1.0, first, point_at(command, from, 1.0)?,
+                    command, from, 0.0, 1.0, first, last,
                     0, command_index, &mut samples, &mut total_samples, &mut total_evaluations,
                     &mut max_observed_deviation, policy)?;
                 result.push(RefinedCurveSegment { command_index, subpath_index, samples });
