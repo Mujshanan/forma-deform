@@ -93,6 +93,10 @@ impl PersistedBinding {
     ) -> Result<ValidatedBindingRecord, BindingDiagnostic> {
         snapshot.validate_envelope()
             .map_err(|_| BindingDiagnostic::InvalidCurrentSnapshot)?;
+        // Reject stale rest-space dependencies before the expensive global
+        // embedding pass. This also preserves the most actionable diagnostic.
+        self.binding.stamp().validate_freshness(snapshot, topology)
+            .map_err(BindingDiagnostic::from)?;
         let certificate = validate_cage_embedding(topology, control_state)
             .map_err(BindingDiagnostic::InvalidCageEmbedding)?;
         let geometry = ValidatedCageGeometry::new(topology, control_state, &certificate)
