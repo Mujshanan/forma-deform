@@ -8,7 +8,9 @@
 
 ## 1. Executive summary
 
-The repository has a sound high-level separation between AniCraft-facing WebAssembly adapters and host-independent Rust domain crates. In particular, Smart Controller's canonical model, input snapshots, graph evaluator, mapping layer, and target composition are separated from the plugin's host input collection and preview planning.
+The repository must be understood as an evolutionary product, not just as a set of currently independent plugins. The product began as three plugins, those capabilities were merged into one unified plugin, and that unified product was subsequently developed into a native AniCraft tool. The code-quality audit therefore evaluates both the current architecture and the migration from the three-plugin design to the unified/native product. The current workspace still contains three plugin crates, but their presence in Cargo does not by itself establish that they are still independently shipped or are the intended product architecture.
+
+At the code level, the repository has a sound high-level separation between AniCraft-facing WebAssembly adapters and host-independent Rust domain crates. In particular, Smart Controller's canonical model, input snapshots, graph evaluator, mapping layer, and target composition are separated from host input collection and preview planning.
 
 The most important architecture risks are at the edges of that structure:
 
@@ -19,7 +21,27 @@ The most important architecture risks are at the edges of that structure:
 
 No evidence from this pass justifies merging the Smart Controller and Form Deform domain cores. They represent different concepts and currently have clean, independent dependency roots.
 
-## 2. Workspace responsibility map
+## 2. Product evolution and architectural interpretation
+
+The product history supplied by the project owner is:
+
+```mermaid
+flowchart TD
+  A["Three original plugins"] --> B["Capabilities consolidated into one plugin"]
+  B --> C["Unified product developed into a native AniCraft tool"]
+```
+
+This history changes the audit criteria:
+
+- The three plugin crates in the current workspace must be classified as historical source packages, compatibility/development adapters, or actively shipped products based on evidence; do not assume the third category from their directory names.
+- Shared functionality should be evaluated across the original three capabilities and the unified/native implementation. Repetition may represent intentional compatibility or migration code, but it must be documented and must not become a second place to add new features.
+- The native tool is the target product architecture. Plugin entrypoints and the guest SDK should be assessed as integration/compatibility boundaries in that migration, not automatically treated as the product's permanent top-level architecture.
+- Domain cores should remain independent where they represent genuinely distinct domain concepts. Consolidation of the user experience does not require collapsing all domain logic into one crate.
+- Persistence, document lifecycle, undo/redo, and native host integration belong to the AniCraft host boundary; the product adapter should not recreate host responsibilities.
+
+The code snapshot alone does not establish whether the original plugin entrypoints remain separately distributed. Until packaging/release evidence is checked, the audit will refer to them as workspace plugin crates rather than claiming they are independently shipped.
+
+## 3. Workspace responsibility map
 
 | Workspace member | Responsibility | Owns | Must not own |
 |---|---|---|---|
@@ -66,7 +88,7 @@ No evidence from this pass justifies merging the Smart Controller and Form Defor
 | `preview_plan` | Converts composed typed outputs into target-specific, read-only preview items |
 | `targets` | Queries geometry information and assesses whether a canonical target is supported/previewable |
 
-## 3. Dependency diagram
+## 4. Dependency diagram
 
 The following shows declared Cargo dependencies and the principal runtime call direction. Solid arrows represent crate dependencies; dotted arrows represent internal orchestration/call relationships.
 
@@ -91,7 +113,7 @@ flowchart TD
   SDK -. "ABI requests" .-> HOST
 ```
 
-### 3.1 Smart Controller internal call graph
+### 4.1 Smart Controller internal call graph
 
 ```mermaid
 flowchart TD
@@ -125,7 +147,7 @@ flowchart TD
 
 **Important distinction:** this is a responsibility/call map, not a claim that the current `run` entrypoint invokes every module. The V1 entrypoint in `plugins/smart-controller/src/lib.rs` currently uses `Params`, `validation::validate`, `preview_slider`, and `bone.info`. The canonical adapter workflow is available separately through public adapter functions.
 
-## 4. Architecture findings
+## 5. Architecture findings
 
 ### CQ1-01 — Legacy and canonical models share one crate-level public surface
 
@@ -136,9 +158,9 @@ flowchart TD
 - `crates/smart-controller-core/src/canonical.rs:1-10` describes the canonical host-independent configuration model.
 - `crates/smart-controller-core/src/migration.rs:1-15` bridges legacy and canonical formats.
 
-**Why it matters:** A wildcard re-export makes the legacy API look like the default crate API and makes it harder for readers to distinguish stable canonical types from compatibility-only types. The coexistence of two representations is understandable during migration, but the crate root does not make that lifecycle visible.
+**Why it matters:** A wildcard re-export makes the legacy API look like the default crate API and makes it harder for readers to distinguish stable canonical types from compatibility-only types. Given the product's progression from three plugins to a unified plugin and then a native tool, the legacy surface may be a deliberate bridge for existing data or workflows. The issue is not that legacy code exists; it is that its supported lifecycle and intended consumers are not obvious from the public API.
 
-**Recommendation:** Keep both models for compatibility, but stop expanding the root wildcard surface. Prefer explicit namespaces such as `legacy::` and `canonical::`, and re-export only intentionally stable canonical types at the crate root. Treat any breaking export cleanup as a planned API change with call-site inventory and tests.
+**Recommendation:** Keep both models while migration/compatibility requires them. First document which historical plugin formats and persisted documents the legacy model serves, which code path is authoritative for the native tool, and the deprecation/support policy. Then stop expanding the root wildcard surface where compatibility permits. Prefer explicit namespaces such as `legacy::` and `canonical::`; make any breaking export cleanup a planned API change with call-site inventory and migration tests.
 
 **Acceptance:** New code uses canonical types through explicit canonical APIs; legacy types remain available through an explicitly named compatibility namespace; migration tests continue to pass.
 
@@ -152,9 +174,9 @@ flowchart TD
 - `plugins/smart-controller/src/input_provider.rs:1-25` describes explicit host input collection.
 - `plugins/smart-controller/src/preview_plan.rs:1-25` describes read-only target preview planning.
 
-**Why it matters:** A maintainer can discover a substantial canonical pipeline in the plugin crate but cannot infer from the current entrypoint how it is selected, configured, or reached. This can lead to duplicate implementations, accidental assumptions that canonical evaluation is live, or code that is effectively dormant from the user's perspective.
+**Why it matters:** The repository's product direction is now a native AniCraft tool, while the visible WASM plugin entrypoint still runs the V1 preview path. A maintainer cannot infer how the canonical pipeline relates to the native tool, whether the plugin entrypoint is a compatibility path, or which execution path is authoritative. This risks maintaining parallel workflows or mistaking a callable library API for the actual user-facing native workflow.
 
-**Recommendation:** Document the intended activation milestone and current reachability of each pipeline. When canonical authoring is ready, introduce an explicit workflow dispatcher rather than adding more branches to the V1 `run` function. Until then, label the modules as an internal/future integration path and test their public entry functions directly.
+**Recommendation:** Map the complete native-tool execution path first: native entrypoint, command/event registration, document state, canonical controller loading, input acquisition, evaluation, preview/apply, and persistence. Identify exactly which plugin code is reused, wrapped, or retained only for backward compatibility. Do not assume that wiring the canonical adapter into the old V1 `run` function is the right next step; the native tool may need its own composition root. Keep the legacy entrypoint explicitly classified as compatibility, if that is its actual role.
 
 **Acceptance:** A documented workflow map identifies the actual WASM entrypoint for every user-visible mode; no public API is mistaken for a shipped host workflow.
 
@@ -180,9 +202,9 @@ flowchart TD
 - `crates/smart-controller-core/src/migration.rs` is approximately 478 lines and contains multiple migration and export paths.
 - `plugins/smart-controller/src/compatibility.rs:1-25` delegates format compatibility work into core migrations.
 
-**Why it matters:** Compatibility is necessary, but it can become a permanent parallel implementation if new features are added to the legacy model instead of the canonical model.
+**Why it matters:** Compatibility is necessary during the transition from the three original plugins through the unified plugin to the native tool. It can nevertheless become a permanent parallel implementation if new features continue to be added to legacy models instead of the canonical/native path.
 
-**Recommendation:** Declare the legacy module maintenance-only. New behavior should target canonical types. Keep legacy changes limited to bug fixes and migration/export support. Consider separating legacy data types from legacy evaluation only if future changes continue to touch both independently.
+**Recommendation:** Treat legacy modules as compatibility/migration code unless a specific supported workflow proves otherwise. New behavior should target the canonical/native path. Keep legacy changes limited to required bug fixes, import/export, and compatibility. Before declaring a module maintenance-only, verify the native tool no longer relies on its behavior.
 
 **Acceptance:** Feature PRs identify whether a change belongs to canonical behavior or compatibility support; no new product capability is implemented only in legacy code without an explicit reason.
 
@@ -223,13 +245,13 @@ flowchart TD
 - `plugins/bone-query/src/lib.rs:1-100` starts with manifest/entrypoint, host query, and report formatting in one file.
 - `plugins/smart-controller/src/lib.rs:1-75` contains the current V1 manifest and run orchestration.
 
-**Why it matters:** Small plugins can reasonably begin as one file, but as workflows grow these files can mix transport, parsing, domain decisions, and presentation.
+**Why it matters:** The old plugin entrypoints may now be migration shells or compatibility adapters rather than the main product composition roots. The native tool should have a clear composition root of its own. Treating the old plugin `lib.rs` files as the sole application architecture would obscure the actual product execution path.
 
 **Recommendation:** Keep entrypoints as composition roots. Extract a module only when a concern grows independently (e.g. host response decoding, parameter parsing, reporting, or apply workflow). Avoid speculative one-function modules.
 
 **Acceptance:** Each entrypoint reads like a short workflow and delegates substantive policy/algorithm logic to named modules.
 
-## 5. Architecture strengths to preserve
+## 6. Architecture strengths to preserve
 
 - Domain cores have no direct AniCraft SDK dependency.
 - Form Deform core is deterministic and non-accumulating.
@@ -239,7 +261,7 @@ flowchart TD
 - Target preview planning is documented as read-only and separate from mutating host commands.
 - AniCraft host operations are isolated behind the guest SDK.
 
-## 6. Recommended dependency direction
+## 7. Recommended dependency direction
 
 Maintain this direction:
 
@@ -249,25 +271,31 @@ Maintain this direction:
 4. The AniCraft host remains authoritative for document mutation, persistence, undo/redo, and evaluation lifecycle.
 5. Cross-domain workflows coordinate at a plugin/application orchestration layer rather than coupling the two core crates.
 
-## 7. CQ1 review decisions needed
+## 8. CQ1 review decisions needed
 
-Before refactoring, agree on these decisions:
+Before refactoring, resolve these architecture questions through repository and host integration evidence:
 
-- Is the canonical Smart Controller pipeline intentionally not wired into the current plugin entrypoint yet?
+- Which of the three original plugin crates remain independently distributed, if any? Which are retained only as source/history, compatibility adapters, or test fixtures?
+- Where is the native tool's actual composition root and how does it call into these workspace crates?
+- Is the current Smart Controller V1 WASM entrypoint a supported compatibility path, or is it expected to be replaced by the native tool path?
+- Which historical document/data formats must remain readable and writable, and for how long?
 - Should the legacy API remain publicly re-exported at crate root for downstream compatibility, or can future major versions move it behind `legacy::`?
 - Which evaluator phases are stable enough to extract without obscuring the overall algorithm?
-- Should plugin report formatting be a shared helper or remain local to each plugin? Current evidence is insufficient to justify a shared reporting abstraction.
+- Is any shared plugin report formatting still used by the native tool, or is it purely historical?
 
-## 8. CQ1 exit criteria
+## 9. CQ1 exit criteria
 
 - [x] Workspace responsibility map created.
 - [x] Cargo dependency direction recorded.
 - [x] Smart Controller module responsibility map created.
 - [x] Main architecture findings tied to source references.
-- [ ] Product owner confirms canonical pipeline activation/reachability status.
+- [x] Product evolution recorded: three plugins → unified plugin → native AniCraft tool.
+- [ ] Native tool composition root and actual execution path mapped to source files.
+- [ ] Original plugin crates classified as shipped, compatibility, migration, or historical.
+- [ ] Persisted data and legacy format compatibility policy documented.
 - [ ] Public API compatibility policy for legacy exports is decided.
-- [ ] Findings are reviewed before any architectural refactoring.
+- [ ] Findings are reviewed against the native-tool architecture before refactoring.
 
-## 9. Next step
+## 10. Next step
 
-Proceed to **CQ2 — Readability and code consistency** after reviewing the decisions above. CQ2 should focus on naming, function size, nesting, documentation quality, and consistency; it should not implement architecture changes from this report.
+Before CQ2, complete a targeted native-tool integration trace across the AniCraft host repository and this repository. CQ2 should then assess readability in the context of the actual native-tool path, while treating historical plugin code as compatibility/migration code where confirmed. CQ2 should focus on naming, function size, nesting, documentation quality, and consistency; it should not implement architecture changes from this report.
