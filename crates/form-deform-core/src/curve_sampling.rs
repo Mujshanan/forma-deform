@@ -366,7 +366,7 @@ pub enum CurveSampleMapping {
 pub struct MappedCurveSample {
     pub command_index: u32,
     pub subpath_index: u32,
-    pub sample_index: u32,
+    pub sample_index: usize,
     pub t: f64,
     pub point: Point2,
     pub mapping: CurveSampleMapping,
@@ -431,9 +431,6 @@ pub fn map_curve_samples(
                     }
                 }
             };
-            let sample_index = u32::try_from(sample_index)
-                .map_err(|_| CurveSamplingError::TooManyCommands)
-                .map_err(|_| CurveMappingError::InvalidFaceIndex(u32::MAX))?;
             mapped.push(MappedCurveSample {
                 command_index: segment.command_index,
                 subpath_index: segment.subpath_index,
