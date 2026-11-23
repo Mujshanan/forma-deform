@@ -308,3 +308,8 @@ Angle input and Angle property output use radians and preserve wrapped/unwrapped
 The mapper integration tests cover three-anchor endpoints and clamping, smoothstep symmetry, reversed directed ranges, frame endpoint policy, symbol-frame interpolation/rounding, discrete quantization and typed outputs, pose interpolation by binding identity, relative geometry deltas, Angle semantics, missing pose references, exact pose binding sets, unsupported joystick mapping, and ambiguous multi-input rejection.
 
 This milestone completes the initial pure one-dimensional mapping layer only. It does not establish durable pose storage, native authoring UI, continuous playback evaluation, general multi-axis interpolation, or Smart Controller/Form Deform composition.
+
+
+## Native UI status — 2026-11-23
+
+M1 native Smart Controller UI foundation is merged into AniCraft through [PR #2](https://github.com/Mujshanan/anicraft/pull/2). The implementation is limited to transient Stage handles and a draft-only Properties inspector. It does not complete the M3 native authoring workflow. The manual Windows smoke test and native CI/build evidence remain outstanding; no passing CI is claimed. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
