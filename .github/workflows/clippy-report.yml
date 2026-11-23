@@ -1,0 +1,31 @@
+name: Clippy report (non-blocking)
+
+on:
+  push:
+    branches:
+      - quality/cq2-clippy-report-only
+  pull_request:
+
+jobs:
+  clippy-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Capture Clippy baseline (non-blocking)
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --workspace --all-targets --message-format=short > clippy-report.txt 2>&1
+          status=$?
+          printf '\nclippy_exit_code=%s\n' "$status" >> clippy-report.txt
+          exit 0
+      - name: Upload Clippy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clippy-report
+          path: clippy-report.txt
+          retention-days: 30
