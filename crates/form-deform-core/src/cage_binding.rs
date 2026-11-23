@@ -222,7 +222,7 @@ mod tests {
     use crate::embedding::validate_cage_embedding;
     use crate::topology::{
         ControlPointPosition, ControlPointState, ControlStateRevision,
-        IrregularCageTopology,
+        DeformationControlState, IrregularCageTopology,
     };
 
     fn id(value: u64) -> ControlPointId { ControlPointId::new(value).unwrap() }
