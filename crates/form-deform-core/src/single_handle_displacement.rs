@@ -249,10 +249,8 @@ mod tests {
 
     fn definition(
         parameters: BTreeMap<String, ParameterValue>,
-    ) -> Result<
-        (EvaluationRequest, DeformationDefinition),
-        crate::persistence::PersistenceError,
-    > {
+    ) -> Result<(EvaluationRequest, DeformationDefinition), crate::persistence::PersistenceError>
+    {
         let source_path = sample_path();
         let coordinate_space = space();
         let fingerprint = source_path.fingerprint(&coordinate_space).unwrap();
