@@ -324,11 +324,12 @@ mod tests {
         output_kind: GeometryValueKind,
     ) -> (EvaluationRequest, DeformationDefinition) {
         let path = geometry();
-        let fingerprint = path.fingerprint(&coordinate_space).unwrap();
+        let source_coordinate_space = space();
+        let fingerprint = path.fingerprint(&source_coordinate_space).unwrap();
         let target = target();
         let snapshot = GeometrySnapshot::new(
             target.clone(), GeometryRevision(1), TopologyRevision(1), fingerprint,
-            coordinate_space.clone(), crate::path2d::PATH2D_PAYLOAD_KIND,
+            source_coordinate_space, crate::path2d::PATH2D_PAYLOAD_KIND,
             crate::path2d::PATH2D_SCHEMA_VERSION, path,
         ).unwrap();
         let reference = snapshot.stamp();
