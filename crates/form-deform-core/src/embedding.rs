@@ -695,6 +695,9 @@ fn same_undirected_edge(
     (a == c && b == d) || (a == d && b == c)
 }
 
+// This geometric predicate needs both endpoint identities and coordinates for each
+// edge, the shared identity, and the scale-aware tolerance; these are not interchangeable.
+#[allow(clippy::too_many_arguments)]
 fn edge_only_touches_at_shared_vertex(
     a_id: ControlPointId, b_id: ControlPointId,
     a: ControlPointPosition, b: ControlPointPosition,
