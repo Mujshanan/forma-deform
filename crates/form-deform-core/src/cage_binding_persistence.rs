@@ -408,12 +408,14 @@ pub trait CageBindingHostAdapter {
         target: &HostTargetRef,
     ) -> Result<Option<String>, Self::Error>;
 
-    /// Atomically replace the payload only when its stored revision equals
-    /// expected_revision. None means that no payload currently exists.
+    /// Atomically replace the payload only when both the stored binding revision
+    /// and source snapshot still match the values observed during validation.
+    /// None means that no payload currently exists.
     fn write_cage_binding_payload(
         &mut self,
         target: &HostTargetRef,
         expected_revision: Option<u64>,
+        expected_source_stamp: &GeometrySnapshotStamp,
         payload: String,
     ) -> Result<(), Self::Error>;
 }
@@ -462,7 +464,7 @@ pub fn persist_cage_binding<A: CageBindingHostAdapter>(
         &context.source_stamp, &context.coordinate_space, &context.topology, &geometry, &context.points,
     ).map_err(PersistCageBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistCageBindingError::Persistence)?;
-    adapter.write_cage_binding_payload(target, expected_revision, payload)
+    adapter.write_cage_binding_payload(target, expected_revision, &context.source_stamp, payload)
         .map_err(PersistCageBindingError::Host)
 }
 
@@ -717,6 +719,7 @@ mod tests {
             &mut self,
             _target: &HostTargetRef,
             expected_revision: Option<u64>,
+            expected_source_stamp: &GeometrySnapshotStamp,
             payload: String,
         ) -> Result<(), Self::Error> {
             let current_revision = self.payload.as_deref()
@@ -726,6 +729,9 @@ mod tests {
                 .map(|binding| binding.revision());
             if current_revision != expected_revision {
                 return Err("point-binding revision conflict");
+            }
+            if &snapshot(1).stamp() != expected_source_stamp {
+                return Err("source snapshot changed during point-binding write");
             }
             self.payload = Some(payload);
             Ok(())
