@@ -84,6 +84,12 @@ pub struct EvaluationResult {
 }
 
 #[derive(Clone, Debug)]
+struct EvaluationPreflight {
+    inputs: BTreeMap<InputId, PreflightInput>,
+    diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug)]
 struct PreflightInput {
     definition: InputDefinition,
     resolved: Option<TypedValue>,
@@ -116,8 +122,19 @@ pub fn evaluate<M: ControllerMapper>(
     snapshot: &InputSnapshot,
     mapper: &M,
 ) -> Result<EvaluationResult, CoreError> {
-    // Stage 1a: graph, snapshot, definitions and all references are validated
-    // before the first call into the mapping layer.
+    let preflight = prepare_preflight(graph, definitions, snapshot)?;
+    let order = graph.topological_order()?;
+    let result = evaluate_in_topological_order(graph, order, &preflight, mapper)?;
+    Ok(finalize_evaluation(result))
+}
+
+fn prepare_preflight(
+    graph: &ControllerGraph,
+    definitions: &[InputDefinition],
+    snapshot: &InputSnapshot,
+) -> Result<EvaluationPreflight, CoreError> {
+    // Validate the graph, snapshot, definitions, and every reference before
+    // the first call into the mapping layer.
     graph.validate()?;
     snapshot.validate()?;
     for (_, controller) in graph.iter() {
@@ -204,14 +221,14 @@ pub fn evaluate<M: ControllerMapper>(
 
     // Resolve every non-controller input now. Controller-output inputs are
     // resolved just-in-time after their producer has run.
-    let mut preflight = BTreeMap::new();
+    let mut inputs = BTreeMap::new();
     let mut diagnostics = Vec::new();
     for (id, definition) in &definition_map {
         if !active_input_ids.contains(id) {
             continue;
         }
         if matches!(&definition.source, InputSource::ControllerOutput { .. }) {
-            preflight.insert(
+            inputs.insert(
                 id.clone(),
                 PreflightInput {
                     definition: definition.clone(),
@@ -231,7 +248,7 @@ pub fn evaluate<M: ControllerMapper>(
                 Some(id.clone()),
             )?);
         }
-        preflight.insert(
+        inputs.insert(
             id.clone(),
             PreflightInput {
                 definition: definition.clone(),
@@ -240,12 +257,18 @@ pub fn evaluate<M: ControllerMapper>(
         );
     }
 
-    // Stage 2: deterministic node evaluation. topological_order is called
-    // independently of graph construction as evaluator-side cycle defence.
-    let order = graph.topological_order()?;
+    Ok(EvaluationPreflight { inputs, diagnostics })
+}
+
+fn evaluate_in_topological_order<M: ControllerMapper>(
+    graph: &ControllerGraph,
+    order: Vec<ControllerId>,
+    preflight: &EvaluationPreflight,
+    mapper: &M,
+) -> Result<EvaluationResult, CoreError> {
     let mut outputs: BTreeMap<(ControllerId, BindingId), TypedValue> = BTreeMap::new();
     let mut result = EvaluationResult::default();
-    result.diagnostics = diagnostics;
+    result.diagnostics = preflight.diagnostics.clone();
 
     for controller_id in order {
         let controller = graph.get(&controller_id).ok_or_else(|| {
@@ -280,76 +303,8 @@ pub fn evaluate<M: ControllerMapper>(
             continue;
         }
 
-        let mut resolved_inputs = ResolvedInputs::default();
-        let mut unavailable_required = None;
-        for input_id in &controller.inputs {
-            let item = preflight
-                .get(input_id)
-                .ok_or_else(|| CoreError::MissingInput(input_id.to_string()))?;
-            let value = if let InputSource::ControllerOutput {
-                controller_id: producer,
-                binding_id,
-            } = &item.definition.source
-            {
-                match outputs
-                    .get(&(producer.clone(), binding_id.clone()))
-                    .copied()
-                {
-                    Some(value) => Some(value),
-                    None => match &item.definition.fallback {
-                        FallbackPolicy::UseValue(value) => {
-                            result.diagnostics.push(diagnostic(
-                                INPUT_UNAVAILABLE,
-                                DiagnosticSeverity::Warning,
-                                format!("controller output {}:{} is unavailable; explicit fallback used", producer, binding_id),
-                                Some(controller_id.clone()),
-                                Some(input_id.clone()),
-                            )?);
-                            Some(*value)
-                        }
-                        FallbackPolicy::Unavailable => None,
-                        FallbackPolicy::Reject => {
-                            return Err(CoreError::MissingInput(format!(
-                                "controller output {}:{} for input {}",
-                                producer, binding_id, input_id
-                            )));
-                        }
-                    },
-                }
-            } else {
-                item.resolved
-                    .or_else(|| apply_fallback(&item.definition.fallback))
-            };
-            if value.is_none() {
-                unavailable_required = Some(input_id.clone());
-                break;
-            }
-            if let Some(value) = value {
-                if !item.definition.dimension.accepts(value) {
-                    result.diagnostics.push(diagnostic(
-                        MAPPING_TYPE,
-                        DiagnosticSeverity::Error,
-                        format!(
-                            "input {input_id} resolved to {}, expected {}",
-                            value.kind_name(),
-                            item.definition.dimension.name()
-                        ),
-                        Some(controller_id.clone()),
-                        Some(input_id.clone()),
-                    )?);
-                    unavailable_required = Some(input_id.clone());
-                    break;
-                }
-                resolved_inputs.values.insert(
-                    input_id.clone(),
-                    ResolvedInput {
-                        value: Some(value),
-                        source: item.definition.source.clone(),
-                    },
-                );
-            }
-        }
-
+        let (resolved_inputs, unavailable_required) =
+            resolve_controller_inputs(controller, &controller_id, preflight, &outputs, &mut result)?;
         if let Some(input_id) = unavailable_required {
             result.diagnostics.push(diagnostic(
                 INPUT_UNAVAILABLE,
@@ -367,128 +322,251 @@ pub fn evaluate<M: ControllerMapper>(
             continue;
         }
 
-        let mapped = match mapper.evaluate(controller, &resolved_inputs) {
-            Ok(values) => values,
-            Err(error) if is_controller_mapping_failure(&error) => {
-                result.diagnostics.push(diagnostic(
-                    crate::diagnostic_codes::MAPPING_DOMAIN,
-                    DiagnosticSeverity::Error,
-                    error.to_string(),
-                    Some(controller_id.clone()),
-                    None,
-                )?);
-                mark_controller_outputs_unavailable(
-                    controller,
-                    &controller_id,
-                    &mut result,
-                    "mapping failed",
-                )?;
-                continue;
-            }
-            Err(error) => return Err(error),
+        let Some(mapped) = evaluate_controller_mapping(
+            controller,
+            &controller_id,
+            &resolved_inputs,
+            mapper,
+            &mut result,
+        )? else {
+            continue;
         };
 
-        for binding_id in mapped.keys() {
-            if !controller
-                .bindings
-                .iter()
-                .any(|binding| &binding.id == binding_id)
-            {
-                return Err(CoreError::Evaluation(format!(
-                    "mapper emitted unknown binding {binding_id} for controller {controller_id}"
-                )));
-            }
-        }
+        collect_controller_contributions(
+            controller,
+            &controller_id,
+            &mapped,
+            &mut outputs,
+            &mut result,
+        )?;
+    }
 
-        // Stage 3: collect successful binding contributions. No target is
-        // composed or written here; Phase 4 owns that post-pass.
-        for binding in &controller.bindings {
-            let Some(value) = mapped.get(&binding.id).copied() else {
-                result
-                    .unavailable_outputs
-                    .insert((controller_id.clone(), binding.id.clone()));
-                result.diagnostics.push(diagnostic(
-                    OUTPUT_SKIPPED,
-                    DiagnosticSeverity::Warning,
-                    format!("mapper did not emit binding {}", binding.id),
-                    Some(controller_id.clone()),
-                    None,
-                )?);
-                continue;
-            };
-            if !target_accepts_value(&binding.target, value) {
+    Ok(result)
+}
+
+fn resolve_controller_inputs(
+    controller: &Controller,
+    controller_id: &ControllerId,
+    preflight: &EvaluationPreflight,
+    outputs: &BTreeMap<(ControllerId, BindingId), TypedValue>,
+    result: &mut EvaluationResult,
+) -> Result<(ResolvedInputs, Option<InputId>), CoreError> {
+    let mut resolved_inputs = ResolvedInputs::default();
+    let mut unavailable_required = None;
+    for input_id in &controller.inputs {
+        let item = preflight
+            .inputs
+            .get(input_id)
+            .ok_or_else(|| CoreError::MissingInput(input_id.to_string()))?;
+        let value = if let InputSource::ControllerOutput {
+            controller_id: producer,
+            binding_id,
+        } = &item.definition.source
+        {
+            match outputs
+                .get(&(producer.clone(), binding_id.clone()))
+                .copied()
+            {
+                Some(value) => Some(value),
+                None => match &item.definition.fallback {
+                    FallbackPolicy::UseValue(value) => {
+                        result.diagnostics.push(diagnostic(
+                            INPUT_UNAVAILABLE,
+                            DiagnosticSeverity::Warning,
+                            format!("controller output {}:{} is unavailable; explicit fallback used", producer, binding_id),
+                            Some(controller_id.clone()),
+                            Some(input_id.clone()),
+                        )?);
+                        Some(*value)
+                    }
+                    FallbackPolicy::Unavailable => None,
+                    FallbackPolicy::Reject => {
+                        return Err(CoreError::MissingInput(format!(
+                            "controller output {}:{} for input {}",
+                            producer, binding_id, input_id
+                        )));
+                    }
+                },
+            }
+        } else {
+            item.resolved
+                .or_else(|| apply_fallback(&item.definition.fallback))
+        };
+        if value.is_none() {
+            unavailable_required = Some(input_id.clone());
+            break;
+        }
+        if let Some(value) = value {
+            if !item.definition.dimension.accepts(value) {
                 result.diagnostics.push(diagnostic(
                     MAPPING_TYPE,
                     DiagnosticSeverity::Error,
                     format!(
-                        "binding {} produced {} for an incompatible target",
-                        binding.id,
-                        value.kind_name()
+                        "input {input_id} resolved to {}, expected {}",
+                        value.kind_name(),
+                        item.definition.dimension.name()
                     ),
                     Some(controller_id.clone()),
-                    None,
+                    Some(input_id.clone()),
                 )?);
-                result
-                    .unavailable_outputs
-                    .insert((controller_id.clone(), binding.id.clone()));
-                result.diagnostics.push(diagnostic(
-                    OUTPUT_SKIPPED,
-                    DiagnosticSeverity::Warning,
-                    format!("binding {} was skipped because its output type is incompatible with its target", binding.id),
-                    Some(controller_id.clone()),
-                    None,
-                )?);
-                continue;
+                unavailable_required = Some(input_id.clone());
+                break;
             }
-
-            let (mode, weight, priority, base_ref) = if let Some(config) = &binding.composition {
-                (
-                    config.mode,
-                    config.weight,
-                    config.priority,
-                    config.base_ref.clone(),
-                )
-            } else {
-                match binding.mode {
-                    BindingMode::AbsolutePose => (CompositionMode::Replace, None, None, None),
-                    BindingMode::RelativeDelta => (
-                        CompositionMode::Additive,
-                        None,
-                        None,
-                        Some(BaseRef::Authored),
-                    ),
-                }
-            };
-            let base_value = if mode == CompositionMode::Additive
-                && matches!(base_ref.as_ref(), Some(BaseRef::Authored))
-            {
-                binding.base_value
-            } else {
-                None
-            };
-            let contribution = Contribution {
-                controller_id: controller_id.clone(),
-                binding_id: binding.id.clone(),
-                target_id: binding.target_id.clone(),
-                value,
-                mode,
-                weight,
-                priority,
-                base_ref,
-                base_value,
-            };
-            contribution.validate()?;
-            outputs.insert((controller_id.clone(), binding.id.clone()), value);
-            result.contributions.push(contribution);
+            resolved_inputs.values.insert(
+                input_id.clone(),
+                ResolvedInput {
+                    value: Some(value),
+                    source: item.definition.source.clone(),
+                },
+            );
         }
     }
 
+    Ok((resolved_inputs, unavailable_required))
+}
+
+fn evaluate_controller_mapping<M: ControllerMapper>(
+    controller: &Controller,
+    controller_id: &ControllerId,
+    resolved_inputs: &ResolvedInputs,
+    mapper: &M,
+    result: &mut EvaluationResult,
+) -> Result<Option<BTreeMap<BindingId, TypedValue>>, CoreError> {
+    let mapped = match mapper.evaluate(controller, resolved_inputs) {
+        Ok(values) => values,
+        Err(error) if is_controller_mapping_failure(&error) => {
+            result.diagnostics.push(diagnostic(
+                crate::diagnostic_codes::MAPPING_DOMAIN,
+                DiagnosticSeverity::Error,
+                error.to_string(),
+                Some(controller_id.clone()),
+                None,
+            )?);
+            mark_controller_outputs_unavailable(
+                controller,
+                controller_id,
+                result,
+                "mapping failed",
+            )?;
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+
+    for binding_id in mapped.keys() {
+        if !controller
+            .bindings
+            .iter()
+            .any(|binding| &binding.id == binding_id)
+        {
+            return Err(CoreError::Evaluation(format!(
+                "mapper emitted unknown binding {binding_id} for controller {controller_id}"
+            )));
+        }
+    }
+
+    Ok(Some(mapped))
+}
+
+fn collect_controller_contributions(
+    controller: &Controller,
+    controller_id: &ControllerId,
+    mapped: &BTreeMap<BindingId, TypedValue>,
+    outputs: &mut BTreeMap<(ControllerId, BindingId), TypedValue>,
+    result: &mut EvaluationResult,
+) -> Result<(), CoreError> {
+    // Collect successful binding contributions. No target is composed or
+    // written here; Phase 4 owns that post-pass.
+    for binding in &controller.bindings {
+        let Some(value) = mapped.get(&binding.id).copied() else {
+            result
+                .unavailable_outputs
+                .insert((controller_id.clone(), binding.id.clone()));
+            result.diagnostics.push(diagnostic(
+                OUTPUT_SKIPPED,
+                DiagnosticSeverity::Warning,
+                format!("mapper did not emit binding {}", binding.id),
+                Some(controller_id.clone()),
+                None,
+            )?);
+            continue;
+        };
+        if !target_accepts_value(&binding.target, value) {
+            result.diagnostics.push(diagnostic(
+                MAPPING_TYPE,
+                DiagnosticSeverity::Error,
+                format!(
+                    "binding {} produced {} for an incompatible target",
+                    binding.id,
+                    value.kind_name()
+                ),
+                Some(controller_id.clone()),
+                None,
+            )?);
+            result
+                .unavailable_outputs
+                .insert((controller_id.clone(), binding.id.clone()));
+            result.diagnostics.push(diagnostic(
+                OUTPUT_SKIPPED,
+                DiagnosticSeverity::Warning,
+                format!("binding {} was skipped because its output type is incompatible with its target", binding.id),
+                Some(controller_id.clone()),
+                None,
+            )?);
+            continue;
+        }
+
+        let (mode, weight, priority, base_ref) = if let Some(config) = &binding.composition {
+            (
+                config.mode,
+                config.weight,
+                config.priority,
+                config.base_ref.clone(),
+            )
+        } else {
+            match binding.mode {
+                BindingMode::AbsolutePose => (CompositionMode::Replace, None, None, None),
+                BindingMode::RelativeDelta => (
+                    CompositionMode::Additive,
+                    None,
+                    None,
+                    Some(BaseRef::Authored),
+                ),
+            }
+        };
+        let base_value = if mode == CompositionMode::Additive
+            && matches!(base_ref.as_ref(), Some(BaseRef::Authored))
+        {
+            binding.base_value
+        } else {
+            None
+        };
+        let contribution = Contribution {
+            controller_id: controller_id.clone(),
+            binding_id: binding.id.clone(),
+            target_id: binding.target_id.clone(),
+            value,
+            mode,
+            weight,
+            priority,
+            base_ref,
+            base_value,
+        };
+        contribution.validate()?;
+        outputs.insert((controller_id.clone(), binding.id.clone()), value);
+        result.contributions.push(contribution);
+    }
+
+    Ok(())
+}
+
+fn finalize_evaluation(mut result: EvaluationResult) -> EvaluationResult {
     // Preserve deterministic collection order independent of authored map
     // iteration. Stable sorting retains topological order for equal BindingIds.
     result.contributions.sort_by(|left, right| {
         (&left.binding_id, &left.controller_id).cmp(&(&right.binding_id, &right.controller_id))
     });
-    Ok(result)
+    result
 }
 
 fn resolve_external(
