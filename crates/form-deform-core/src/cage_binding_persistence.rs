@@ -12,7 +12,7 @@ use crate::cage_binding::{
     canonical_triangle_identities, canonical_vertex_ids, validate_topology_view,
 };
 use crate::host_contract::{
-    CoordinateSpaceDescriptor, GeometrySnapshot, GeometrySnapshotStamp,
+    CoordinateSpaceDescriptor, GeometrySnapshotStamp,
     HostTargetRef, SnapshotFreshness,
 };
 use crate::topology::{
@@ -241,20 +241,21 @@ impl PersistedCageBinding {
     /// a freshly certified rest cage. This never rebinds stale data.
     pub fn validate_against(
         &self,
-        snapshot: &GeometrySnapshot,
+        current_source: &GeometrySnapshotStamp,
+        coordinate_space: &CoordinateSpaceDescriptor,
         topology: &DeformationTopology,
         rest_cage: &ValidatedCageGeometry,
         source_points: &[BindingPoint],
     ) -> Result<ValidatedCageBinding, CageBindingDiagnostic> {
-        snapshot.validate_envelope()
+        current_source.validate()
             .map_err(|_| CageBindingDiagnostic::InvalidCurrentSnapshot)?;
         self.validate().map_err(CageBindingDiagnostic::Persistence)?;
-        if snapshot.target() != &self.target
-            || snapshot.coordinate_space() != &self.coordinate_space
+        if current_source.target() != &self.target
+            || coordinate_space != &self.coordinate_space
         {
             return Err(CageBindingDiagnostic::TargetOrCoordinateSpaceMismatch);
         }
-        match self.freshness_against(&snapshot.stamp(), topology) {
+        match self.freshness_against(current_source, topology) {
             CageBindingFreshness::Current => {}
             stale => return Err(CageBindingDiagnostic::Stale(stale)),
         }
@@ -381,7 +382,8 @@ pub enum CageBindingDiagnostic {
 
 /// Current host-owned inputs for validating a persisted generic point binding.
 pub struct CageBindingHostContext {
-    pub snapshot: GeometrySnapshot,
+    pub source_stamp: GeometrySnapshotStamp,
+    pub coordinate_space: CoordinateSpaceDescriptor,
     pub topology: DeformationTopology,
     pub control_state: DeformationControlState,
     /// Stable source point IDs and their current authored positions.
@@ -419,7 +421,7 @@ pub fn persist_cage_binding<A: CageBindingHostAdapter>(
 ) -> Result<(), PersistCageBindingError<A::Error>> {
     let context = adapter.current_cage_binding_context(target)
         .map_err(PersistCageBindingError::Host)?;
-    if context.snapshot.target() != target {
+    if context.source_stamp.target() != target {
         return Err(PersistCageBindingError::Diagnostic(CageBindingDiagnostic::StaleTarget));
     }
     let certificate = validate_cage_embedding(&context.topology, &context.control_state)
@@ -432,7 +434,7 @@ pub fn persist_cage_binding<A: CageBindingHostAdapter>(
         CageBindingDiagnostic::InvalidValidatedGeometry(error),
     ))?;
     persisted.validate_against(
-        &context.snapshot, &context.topology, &geometry, &context.points,
+        &context.source_stamp, &context.coordinate_space, &context.topology, &geometry, &context.points,
     ).map_err(PersistCageBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistCageBindingError::Persistence)?;
     adapter.write_cage_binding_payload(target, payload)
@@ -629,7 +631,8 @@ mod tests {
         let decoded = PersistedCageBinding::from_json(&json).unwrap();
         assert_eq!(decoded, persisted);
         let validated = decoded.validate_against(
-            &source,
+            &source.stamp(),
+            source.coordinate_space(),
             &topology,
             &geometry,
             &[BindingPoint { id: 7, position: point(2.0, 3.0) }],
@@ -647,7 +650,7 @@ mod tests {
         );
         assert!(matches!(
             persisted.validate_against(
-                &source, &topology, &geometry,
+                &source.stamp(), source.coordinate_space(), &topology, &geometry,
                 &[BindingPoint { id: 7, position: point(8.0, 8.0) }],
             ),
             Err(CageBindingDiagnostic::PointReconstructionMismatch { point: 7 })
