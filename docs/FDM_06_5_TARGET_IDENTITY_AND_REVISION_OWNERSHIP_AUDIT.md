@@ -87,16 +87,17 @@ The allocator is useful for generating IDs but cannot by itself prove that a ref
 | Paste artwork / cross-document paste | Allocates fresh element IDs; resource/symbol IDs are remapped as needed | New target incarnations; remap all internal FDM references atomically |
 | Ordinary transform/style/path-point edit | Mutates an existing element in place | Preserve incarnation; advance relevant dependency freshness |
 | Shape rewrite/conversion | May retain one selected ID or allocate new IDs for generated pieces | Explicitly classify each output as retained identity or new identity; never infer from geometry |
-| Group | Creates a group/layer identity and replaces selected top-level artwork with a new group element; children are moved into group content | New group incarnation; define whether moved children retain identity under their new ownership |
-| Ungroup | Reconstructs exposed elements with fresh ElementIds in the audited path | Retire old group/child references and register new output identities; do not silently transfer by index |
-| Convert to symbol / bitmap | Creates symbol/bitmap and replacement instance IDs; removes/replaces source elements | Explicit source-to-result identity map; old targets become stale unless host explicitly declares continuity |
+| Group | Creates a fresh group/layer identity and replaces selected top-level artwork with a new group element; the moved child elements retain their existing ElementIds inside the group | New group incarnation; preserve child incarnations for the moved elements, while recording the changed containment/evaluation context |
+| Ungroup | Restores group members with their existing ElementIds; allocates a fresh ElementId only when an exposed member collides with an element already present in the keyframe | Retire the group incarnation; preserve each non-colliding member incarnation; issue a new incarnation for any collision-remapped member and record the explicit remap |
+| Convert to symbol | Creates a new SymbolId, inner LayerIds and a new stage instance ElementId; selected child Elements are moved into the symbol timeline with their existing ElementIds | New instance incarnation; child incarnations remain attached to the moved elements, but their owner/edit-context dependency changes and the initial main-scene FDM adapter must treat them as out of scope until nested-symbol support is designed |
+| Convert to bitmap | Replaces selected artwork with a bitmap-backed representation and may allocate a new placed element | Explicit source-to-result identity map; source target retires unless a specific output is explicitly declared identity-preserving |
 | Import to stage / SVG import | Allocates fresh element/layer/symbol IDs | Fresh identities; imported extension references require complete-subgraph remapping or quarantine |
 | Delete selection / layer removal | Removes artwork or its containing timeline/layer | Retire affected identities; layer deletion must enumerate every target it removes |
 | Scene duplication | Allocates new layer and element IDs while copying scene content | New identities scoped to the duplicated scene/document graph |
 | Undo/redo | Restores persistent document snapshots | Restore identity ledger with document state; advance runtime epoch independently |
 | Open/replace document | Replaces Session document; clears history; clipboard survives | New session/evaluation epoch; DocumentId comes from persisted host envelope, not path/session |
 
-**Important distinction:** an ElementId may appear in multiple keyframes as the same animated element. It is not a unique keyframe-occurrence ID. FDM target identity should attach to the host's element identity and must separately capture the frame/keyframe/evaluation context in the dependency stamp.
+**Important distinction:** an ElementId may appear in multiple keyframes as the same animated element. It is not a unique keyframe-occurrence ID. Grouping moves child elements into group content without replacing their IDs; ungrouping normally restores those IDs and remaps only collisions. Convert-to-symbol moves selected child elements into a symbol timeline and creates a new stage instance. FDM target identity should attach to the host's element identity and must separately capture owner/edit context and frame/keyframe/evaluation context in the dependency stamp.
 
 ### 3.3 Special continuity hazard: motion tween target fallback
 
@@ -169,7 +170,7 @@ The first implementation may use the host's session-wide revision/epoch plus can
 | Element transform/pivot | `cmds_draw::move_by`, `set_transform`; `cmds_modify::apply`, `transform`, `remove_transform` | Local transform; evaluated world transform | Preserve incarnation; invalidate transform-dependent FDM output |
 | Path point edits | `cmds_path::move_points`, `add_point`, `delete_points`, `convert_point`, `extend`; raw path commands | Geometry/topology | Preserve incarnation for in-place edits; advance geometry/topology freshness |
 | Shape rewrites | `cmds_shape::rewrite` and conversion helpers | Geometry; sometimes target lifecycle | Must return an explicit old→new identity outcome for each result |
-| Group/ungroup | `cmds_group::group`, `ungroup` | Target lifecycle; containment/hierarchy; transforms | New group identity; explicit child continuity/remapping policy |
+| Group/ungroup | `cmds_group::group`, `ungroup` | Target lifecycle; containment/hierarchy; transforms | New group identity; preserve moved child identities; on ungroup preserve member IDs except explicit collision remaps |
 | Copy/paste and cross-document transfer | `cmds_modify::paste_layer`, `transfer` | Target lifecycle; resource/symbol references | New element incarnations; remap extension references atomically |
 | Timeline/keyframe/frame edits | `cmds_timeline::insert_frame_at`, `remove_frame_at`, keyframe insertion/removal/move, cross-layer frame move/copy | Timeline sampling; target presence; geometry | Invalidate affected frame ranges and target presence; preserve identity only where host semantics preserve it |
 | Tween/motion edits | `cmds_timeline::tween_of_kind`; `cmds_motion::set_path`, key/ease operations | Evaluated transform; geometry at frame; timeline | Include frame and tween/key dependencies; stale requests rejected |
@@ -242,7 +243,7 @@ These cases refine the FDM-06.3 test plan. They are acceptance requirements for 
 | FDM-REV-003 | Local transform or pivot edit | Same incarnation; transform dependency changes |
 | FDM-REV-004 | Duplicate target | New ElementId and new incarnation; source unchanged |
 | FDM-REV-005 | Delete then create replacement | Old TargetRef remains dangling; replacement has new incarnation |
-| FDM-REV-006 | Convert shape to symbol/bitmap | Explicit identity transition; old reference never resolves to replacement implicitly |
+| FDM-REV-006 | Convert shape to symbol/bitmap | Symbol conversion creates a new instance but moves children retaining IDs; bitmap conversion may replace the selected target. Test explicit per-output identity mapping and owner-context change; old reference never resolves implicitly to the new instance |
 | FDM-REV-007 | Group/ungroup | Group and generated children receive specified identities; no index-based rebinding |
 | FDM-REV-008 | Paste/import into another document | New identities; complete extension graph remap or reject/quarantine |
 | FDM-REV-009 | Keyframe insert/remove/shift | Frame-dependent target and sample stamps change |
