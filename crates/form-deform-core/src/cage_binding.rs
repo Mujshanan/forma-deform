@@ -181,6 +181,14 @@ fn validate_topology_view(
     {
         return Err(CageBindingError::StaleCageTopology);
     }
+    for face_index in 0..topology.face_count() {
+        if topology.face_at(face_index) != geometry.face(face_index) {
+            return Err(CageBindingError::StaleCageTopology);
+        }
+    }
+    if topology.control_point_ids().iter().any(|id| geometry.position(*id).is_none()) {
+        return Err(CageBindingError::StaleCageTopology);
+    }
     Ok(())
 }
 
