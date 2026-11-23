@@ -17,7 +17,7 @@ The curve-sampling suite also covers straight and curved quadratic segments, cub
 
 ## Verification target
 
-Run the full Rust workspace tests and all existing TypeScript/Bun/application/WASM checks. Any numerical failure should be fixed at the narrowest responsible layer; do not weaken tolerances or discard failing cases to make the suite pass.
+Run the full Rust workspace tests, formatting check, adaptive-sampling benchmark smoke run, and all three release WASM builds. The former standalone TypeScript/Bun rectangle demo and its checks have been retired; they are not part of the current verification contract. Any numerical failure should be fixed at the narrowest responsible layer; do not weaken tolerances or discard failing cases to make the suite pass.
 
 ## Boundaries
 
