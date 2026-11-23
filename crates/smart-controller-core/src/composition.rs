@@ -175,11 +175,7 @@ fn compose_weighted_blend(
 ) -> Result<Option<TypedValue>, CoreError> {
     // Zero weight is valid but contributes nothing. It is excluded before
     // type compatibility and arithmetic checks.
-    let eligible: Vec<&Contribution> = items
-        .iter()
-        .copied()
-        .filter(|item| item.weight.unwrap_or(0.0) > 0.0)
-        .collect();
+    let eligible = eligible_weighted_contributions(items);
     if eligible.is_empty() {
         result.unavailable_targets.insert(target_id.clone());
         result.diagnostics.push(
@@ -193,8 +189,33 @@ fn compose_weighted_blend(
         return Ok(None);
     }
 
+    let total_weight = sum_eligible_weights(&eligible)?;
+    let first = eligible[0].value;
+    validate_blend_compatibility(target_id, first, &eligible)?;
+
+    let value = match first {
+        TypedValue::Scalar(_) => blend_scalar(&eligible, total_weight)?,
+        TypedValue::Vector2(_) => blend_vector2(&eligible, total_weight)?,
+        TypedValue::Angle(first_angle) => {
+            blend_angle(target_id, first_angle, &eligible, total_weight)?
+        }
+    };
+    Ok(Some(value))
+}
+
+fn eligible_weighted_contributions<'a>(
+    items: &[&'a Contribution],
+) -> Vec<&'a Contribution> {
+    items
+        .iter()
+        .copied()
+        .filter(|item| item.weight.unwrap_or(0.0) > 0.0)
+        .collect()
+}
+
+fn sum_eligible_weights(eligible: &[&Contribution]) -> Result<f64, CoreError> {
     let mut total_weight = 0.0;
-    for item in &eligible {
+    for item in eligible {
         let weight = item
             .weight
             .expect("validated weighted contribution has a weight");
@@ -210,76 +231,96 @@ fn compose_weighted_blend(
             binding_id: eligible[0].binding_id.to_string(),
         });
     }
+    Ok(total_weight)
+}
 
-    let first = eligible[0].value;
+fn validate_blend_compatibility(
+    target_id: &TargetId,
+    first: TypedValue,
+    eligible: &[&Contribution],
+) -> Result<(), CoreError> {
     for item in eligible.iter().skip(1) {
         ensure_compatible(target_id, first, item.value)?;
     }
+    Ok(())
+}
 
-    let value = match first {
-        TypedValue::Scalar(_) => {
-            let mut sum = 0.0;
-            for item in &eligible {
-                sum += item.value.as_scalar().expect("type checked")
-                    * (item.weight.expect("validated") / total_weight);
-            }
-            TypedValue::scalar(sum)?
+fn blend_scalar(
+    eligible: &[&Contribution],
+    total_weight: f64,
+) -> Result<TypedValue, CoreError> {
+    let mut sum = 0.0;
+    for item in eligible {
+        sum += item.value.as_scalar().expect("type checked")
+            * (item.weight.expect("validated") / total_weight);
+    }
+    Ok(TypedValue::scalar(sum)?)
+}
+
+fn blend_vector2(
+    eligible: &[&Contribution],
+    total_weight: f64,
+) -> Result<TypedValue, CoreError> {
+    let mut x = 0.0;
+    let mut y = 0.0;
+    for item in eligible {
+        let vector = item.value.as_vector2().expect("type checked");
+        let factor = item.weight.expect("validated") / total_weight;
+        x += vector.x() * factor;
+        y += vector.y() * factor;
+    }
+    Ok(TypedValue::vector2(x, y)?)
+}
+
+fn blend_angle(
+    target_id: &TargetId,
+    first_angle: Angle,
+    eligible: &[&Contribution],
+    total_weight: f64,
+) -> Result<TypedValue, CoreError> {
+    let angles: Vec<(Angle, f64)> = eligible
+        .iter()
+        .map(|item| {
+            (
+                item.value.as_angle().expect("type checked"),
+                item.weight.expect("validated"),
+            )
+        })
+        .collect();
+    if angles
+        .iter()
+        .any(|(angle, _)| angle.is_wrapped() != first_angle.is_wrapped())
+    {
+        return Err(conflict(
+            target_id,
+            "weighted angle contributions mix wrapped and unwrapped semantics",
+        ));
+    }
+    if first_angle.is_wrapped() {
+        let mut sin_sum = 0.0;
+        let mut cos_sum = 0.0;
+        for (angle, weight) in &angles {
+            let normalized_weight = *weight / total_weight;
+            sin_sum += angle.radians().sin() * normalized_weight;
+            cos_sum += angle.radians().cos() * normalized_weight;
         }
-        TypedValue::Vector2(_) => {
-            let mut x = 0.0;
-            let mut y = 0.0;
-            for item in &eligible {
-                let vector = item.value.as_vector2().expect("type checked");
-                let factor = item.weight.expect("validated") / total_weight;
-                x += vector.x() * factor;
-                y += vector.y() * factor;
-            }
-            TypedValue::vector2(x, y)?
+        if sin_sum.hypot(cos_sum) <= 1e-12 {
+            return Err(conflict(
+                target_id,
+                "weighted wrapped-angle mean is undefined for opposing directions",
+            ));
         }
-        TypedValue::Angle(first_angle) => {
-            let angles: Vec<(Angle, f64)> = eligible
-                .iter()
-                .map(|item| {
-                    (
-                        item.value.as_angle().expect("type checked"),
-                        item.weight.expect("validated"),
-                    )
-                })
-                .collect();
-            if angles
-                .iter()
-                .any(|(angle, _)| angle.is_wrapped() != first_angle.is_wrapped())
-            {
-                return Err(conflict(
-                    target_id,
-                    "weighted angle contributions mix wrapped and unwrapped semantics",
-                ));
-            }
-            if first_angle.is_wrapped() {
-                let mut sin_sum = 0.0;
-                let mut cos_sum = 0.0;
-                for (angle, weight) in &angles {
-                    let normalized_weight = *weight / total_weight;
-                    sin_sum += angle.radians().sin() * normalized_weight;
-                    cos_sum += angle.radians().cos() * normalized_weight;
-                }
-                if sin_sum.hypot(cos_sum) <= 1e-12 {
-                    return Err(conflict(
-                        target_id,
-                        "weighted wrapped-angle mean is undefined for opposing directions",
-                    ));
-                }
-                TypedValue::angle(normalize_wrapped_angle(sin_sum.atan2(cos_sum)), true)?
-            } else {
-                let mut sum = 0.0;
-                for (angle, weight) in &angles {
-                    sum += angle.radians() * (*weight / total_weight);
-                }
-                TypedValue::angle(sum, false)?
-            }
+        Ok(TypedValue::angle(
+            normalize_wrapped_angle(sin_sum.atan2(cos_sum)),
+            true,
+        )?)
+    } else {
+        let mut sum = 0.0;
+        for (angle, weight) in &angles {
+            sum += angle.radians() * (*weight / total_weight);
         }
-    };
-    Ok(Some(value))
+        Ok(TypedValue::angle(sum, false)?)
+    }
 }
 
 fn compose_priority_override(items: &[&Contribution]) -> Option<TypedValue> {
