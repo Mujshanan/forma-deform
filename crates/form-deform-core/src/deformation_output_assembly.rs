@@ -252,7 +252,7 @@ mod tests {
         use crate::topology::{
             ControlPointId, ControlPointPosition, ControlPointState, ControlStateRevision,
             DeformationControlState, DeformationTopologyId, DeformationTopologyRevision,
-            IrregularCageTopology, TopologyFace,
+            IrregularCageTopology, TopologyFace, TopologyView,
         };
 
         fn source_path() -> Path2D {
