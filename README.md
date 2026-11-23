@@ -1,12 +1,12 @@
-# Form  Deform
+# Forma Deform
 
-**Form  Deform** is AniCraft's deformation and rig-control product, developed as a native AniCraft tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
+**Forma Deform** is AniCraft's deformation and rig-control product, developed as a native AniCraft tool. It focuses on how artwork responds to bones, pins, parameters, and authored controllers. It is not a standalone animation editor and does not replace AniCraft's document, timeline, rendering, undo, or plugin systems.
 
 ## Product evolution and current implementation status
 
 Forma Deform began as three separate proof-of-concept plugins. Their capabilities were consolidated into one Forma Deform product and codebase, which then evolved toward a native AniCraft tool. The three plugin crates still present in this repository are historical adapters, independently buildable integration probes, and compatibility/reference tracks; they should not be interpreted as three separately shipped products.
 
-The native Smart Controller work is tracked in the AniCraft host repository. At the time of this audit, branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03) contains a native toolbar tool, Stage handle overlay, and Properties inspector. That branch is not merged into AniCraft `main`. The current UI slice is transient authoring scaffolding: controller persistence, a host adapter to the controller core, evaluated source resolution, target application, and live preview are not yet connected. The branch's own tool hint says binding and preview are not connected.
+The native Smart Controller work is tracked in the AniCraft host repository. At the time of this audit, branch [`feat/smart-controller-ui-01-03`](https://github.com/Mujshanan/anicraft/tree/feat/smart-controller-ui-01-03) contains a native toolbar tool, Stage handle overlay, and a basic Properties section for the selected transient handle. That branch is not merged into AniCraft `main`. The current UI slice is transient authoring scaffolding: controller persistence, a host adapter to the controller core, evaluated source resolution, target application, and live preview are not yet connected. The branch's own tool hint says binding and preview are not connected.
 
 This repository remains the home of reusable, host-independent deformation/controller logic and its tests. Native host UI and document/evaluation ownership remain in AniCraft. See [the native host integration traceability report](docs/quality/native-host-integration-traceability.md) for exact branch, source, and capability evidence.
 
