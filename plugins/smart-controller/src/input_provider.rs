@@ -172,6 +172,7 @@ mod tests {
             fallback: FallbackPolicy::UseValue(TypedValue::scalar(3.0).unwrap()),
         };
         let context = HostInputContext {
+            frame: 0,
             manual_values: BTreeMap::new(),
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
@@ -212,6 +213,7 @@ mod tests {
             }],
         };
         let context = HostInputContext {
+            frame: 0,
             manual_values: BTreeMap::new(),
             bone_layers: BTreeMap::new(),
             bone_angle_policy: BoneAnglePolicy::KeyedPoseOnly,
