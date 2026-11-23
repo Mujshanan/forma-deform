@@ -569,13 +569,13 @@ fn validate_face_pair(
             if same_undirected_edge(edge_a, edge_b, edge_c, edge_d) {
                 continue;
             }
-            if shared.len() == 1
-                && edge_only_touches_at_shared_vertex(
+            if shared.iter().copied().any(|shared_id| {
+                edge_only_touches_at_shared_vertex(
                     edge_a, edge_b, a, b,
                     edge_c, edge_d, c, d,
-                    shared[0], tolerance,
+                    shared_id, tolerance,
                 )
-            {
+            }) {
                 continue;
             }
             return Err(EmbeddingError::NonAdjacentFaceIntersection {
