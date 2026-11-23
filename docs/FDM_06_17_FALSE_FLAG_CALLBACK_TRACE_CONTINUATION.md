@@ -97,17 +97,32 @@ The additional traces reinforce the following boundaries:
 
 No new compiler-backed consumer evidence was obtained in this pass. The current quantitative evidence remains the FDM-06.14/FDM-06.16 lexical scan: 762 candidate API call-site lines across 94 files, including test and non-test code. It is not 762 unique semantic consumers and does not establish borrow mutability or compile impact.
 
-The known owner/caller map remains:
+### 4.1 Source-located production ownership paths
 
-- GUI: `App` owns the live `Session`; UI command and gesture paths act on it.
-- Remote: queued requests are drained by the GUI frame loop and call `Session::execute` on the live app session (`src/remote.rs:70-160`).
-- CLI/MCP: sequential request handlers own or borrow a Session and call its command execution surface (`crates/cli/src/lib.rs:180-225, 723-790`; `crates/cli/src/mcp.rs:120-150, 229-305`).
-- Plug-ins and saved macros: nested commands call `Session::execute_nested` (`cmds_plugin.rs:81-99`; `cmds_macro.rs:252-271`).
-- Publisher: callback execution occurs against its own document-derived Session snapshot (`publish.rs:424-488`).
-- Autosave/recovery and render: document clones/snapshots cross into saver/worker paths; freshness-aware result acceptance is still not proven.
-- Tabs: parked Sessions and shared editor state are moved/swapped across document views; they are additional ownership/lifecycle boundaries.
+| Consumer | Pinned source path | Ownership/effect evidence |
+|---|---|---|
+| GUI application | src/app.rs; src/remote.rs:70-145 | App owns the live Session. Remote requests are queued and drained by the GUI frame loop; the Live host calls Session::execute on App.s. A document-changing remote request waits while the user is dragging and ends an open gesture before execution. No remote worker receives a mutable Session reference in this path. |
+| CLI JSON-lines | crates/cli/src/lib.rs:180-225, 723-790 | open_session constructs a Session; request handlers call s.execute; serve processes one line at a time in a sequential loop. The CLI request loop is the Session owner for this process path. |
+| CLI MCP | crates/cli/src/mcp.rs:118-160, 225-260 | Host and Backend are implemented over Session; command tools route through Host::execute. The headless backend owns a Session and automation roots. |
+| GUI remote/MCP bridge | src/remote.rs:70-145; crates/cli/src/mcp.rs | MCP requests are routed back through the GUI app's owner loop; the bridge does not grant the remote client a mutable Session. |
+| Plug-in command | crates/engine/src/cmds_plugin.rs:81-99, 251-270 | SessionHost holds &mut Session and maps plug-in command requests to execute_nested after namespace allowlisting. This is nested mutation under plugin.run, not an independent live Session owner. |
+| Saved macro | crates/engine/src/cmds_macro.rs:252-271 | Each macro step is allowlisted and dispatched through execute_nested; macro.run is the outer command/undo boundary. |
+| Publisher | crates/engine/src/publish.rs:420-490 | Publisher constructs its own Session from a Document snapshot and invokes the selected RunFn against that isolated Session. It is a distinct callback execution context, not the editor's live Session. |
+| Autosave/recovery | src/autosave.rs:184-225; crates/engine/src/recovery.rs | Autosave passes a cloned Document and path to the saver; the worker does not receive &mut Session. The snapshot is still Document-oriented rather than the future full persistent bundle. |
+| Rendering | crates/engine/src/render_service.rs:25-55, 450-615 | FrameJob owns a Document snapshot; RenderService runs a worker and caches results by render keys. This establishes immutable input transfer, not an FDM freshness-acceptance gate. |
+| Multi-document tabs | src/tabs.rs:85-110, 320-365; crates/engine/src/lib.rs:735-752 | Parked tabs own Sessions. Activation swaps the active Session with the parked one and transfers shared editor state with take_shared. Any future owner/session identity must follow the Session across these swaps. |
 
-The unrestricted `Session.doc`, public mutable Document helpers, public `RunFn` and public `CommandSpec.run` remain. The owner-thread model is not mechanically enforced. Compiler-backed workspace consumer classification is still OPEN.
+### 4.2 Remaining consumer proof
+
+The source-located routes above improve ownership classification but do not close the workspace migration inventory. The 762 candidates still need row-level production/test classification, read/write/borrow classification, and a replacement API/owner assignment. The scan spans app src (502 candidate lines), crates/doc (159), crates/render (48), crates/xfl (22), crates/cli (19), and crates/gpu (12). The non-app crate counts include legitimate offline document construction and immutable rendering/import/export consumers; they must not be mechanically treated as live Session mutation bypasses.
+
+Still required:
+
+- A compiler-backed inventory of all public Session fields and methods, RunFn/CommandSpec.run references, and nested Document mutators.
+- A distinction between offline Document builders/importers/decoders and mutation of the authoritative live Document behind Session.
+- Production/test classification, including inline cfg(test) modules that path-only scans miss.
+- Compile-fail/API tests proving external consumers cannot invoke callbacks or mutate the live Document outside the transaction capability.
+- A proof that GUI, CLI, MCP, remote, plugin, macro, Publisher, autosave, recovery, render and tab activation preserve one owner per live Session and do not leak mutable references to workers.
 
 ## 5. Updated S0 gate matrix
 
