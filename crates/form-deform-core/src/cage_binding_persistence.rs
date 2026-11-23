@@ -49,6 +49,8 @@ pub enum BindingFreshness {
     TopologyRevisionRegressed,
     FingerprintIntegrityError,
     TargetMismatch,
+    CageVertexSetChanged,
+    CageTopologyChanged,
 }
 
 impl BindingFreshness {
