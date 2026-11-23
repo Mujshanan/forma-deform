@@ -137,6 +137,9 @@ impl PersistedCageBinding {
         if !self.cage_vertex_ids.windows(2).all(|pair| pair[0] < pair[1]) {
             return Err(CageBindingPersistenceError::NonCanonicalVertexIds);
         }
+        if !self.cage_triangles.windows(2).all(|pair| pair[0] < pair[1]) {
+            return Err(CageBindingPersistenceError::NonCanonicalTriangleIdentities);
+        }
         let mut triangles = std::collections::BTreeSet::new();
         for triangle in &self.cage_triangles {
             if triangle[0] >= triangle[1] || triangle[1] >= triangle[2]
@@ -405,9 +408,12 @@ pub trait CageBindingHostAdapter {
         target: &HostTargetRef,
     ) -> Result<Option<String>, Self::Error>;
 
+    /// Atomically replace the payload only when its stored revision equals
+    /// expected_revision. None means that no payload currently exists.
     fn write_cage_binding_payload(
         &mut self,
         target: &HostTargetRef,
+        expected_revision: Option<u64>,
         payload: String,
     ) -> Result<(), Self::Error>;
 }
@@ -424,6 +430,25 @@ pub fn persist_cage_binding<A: CageBindingHostAdapter>(
     if context.source_stamp.target() != target {
         return Err(PersistCageBindingError::Diagnostic(CageBindingDiagnostic::StaleTarget));
     }
+    let expected_revision = match adapter.read_cage_binding_payload(target)
+        .map_err(PersistCageBindingError::Host)? {
+        Some(existing_payload) => {
+            let existing = PersistedCageBinding::from_json(&existing_payload)
+                .map_err(PersistCageBindingError::Persistence)?;
+            if existing.id != persisted.id {
+                return Err(PersistCageBindingError::Persistence(
+                    CageBindingPersistenceError::BindingIdentityMismatch,
+                ));
+            }
+            if persisted.revision <= existing.revision {
+                return Err(PersistCageBindingError::Persistence(
+                    CageBindingPersistenceError::RevisionConflict,
+                ));
+            }
+            Some(existing.revision)
+        }
+        None => None,
+    };
     let certificate = validate_cage_embedding(&context.topology, &context.control_state)
         .map_err(|error| PersistCageBindingError::Diagnostic(
             CageBindingDiagnostic::InvalidCageEmbedding(error),
@@ -437,7 +462,7 @@ pub fn persist_cage_binding<A: CageBindingHostAdapter>(
         &context.source_stamp, &context.coordinate_space, &context.topology, &geometry, &context.points,
     ).map_err(PersistCageBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistCageBindingError::Persistence)?;
-    adapter.write_cage_binding_payload(target, payload)
+    adapter.write_cage_binding_payload(target, expected_revision, payload)
         .map_err(PersistCageBindingError::Host)
 }
 
@@ -501,6 +526,9 @@ pub enum CageBindingPersistenceError {
     NonCanonicalVertexIds,
     InvalidTriangleIdentity,
     DuplicateTriangleIdentity,
+    NonCanonicalTriangleIdentities,
+    BindingIdentityMismatch,
+    RevisionConflict,
     DuplicatePointId,
     InvalidPointSupport,
     InvalidBarycentricWeights,
@@ -688,8 +716,17 @@ mod tests {
         fn write_cage_binding_payload(
             &mut self,
             _target: &HostTargetRef,
+            expected_revision: Option<u64>,
             payload: String,
         ) -> Result<(), Self::Error> {
+            let current_revision = self.payload.as_deref()
+                .map(PersistedCageBinding::from_json)
+                .transpose()
+                .map_err(|_| "stored payload is invalid")?
+                .map(|binding| binding.revision());
+            if current_revision != expected_revision {
+                return Err("point-binding revision conflict");
+            }
             self.payload = Some(payload);
             Ok(())
         }
@@ -700,6 +737,12 @@ mod tests {
         let (_, _, _, persisted) = record();
         let mut host = MockHost { payload: None };
         persist_cage_binding(&mut host, &target(), &persisted).unwrap();
+        assert!(matches!(
+            persist_cage_binding(&mut host, &target(), &persisted),
+            Err(PersistCageBindingError::Persistence(
+                CageBindingPersistenceError::RevisionConflict,
+            ))
+        ));
         let loaded = load_validated_cage_binding(&host, &target()).unwrap().unwrap();
         assert_eq!(loaded.binding().points()[0].id, 7);
     }
