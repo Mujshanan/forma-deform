@@ -1,58 +1,60 @@
-# UI-01 — Deformation Authoring Workspace
+# UI-01 — Forma Deform Studio Workspace
 
-**Status:** Design contract  
-**Scope:** Native AniCraft UI for Pin & Offset Drivers, Point Arrays & Binding, and Cages, Bézier Splines & Vector Tessellation.  
-**Repository role:** Forma Deform defines tool behavior and deformation-domain contracts. AniCraft owns the actual workspace shell, stage, timeline, document lifecycle, rendering, and undo/redo.
+**Status:** Product and UI architecture contract  
+**Scope:** Standalone desktop authoring workspace for Pin & Offset Drivers, Point Arrays & Binding, and Cages, Bézier Splines & Vector Tessellation.  
+**Product boundary:** Forma Deform Studio is independently launchable. Forma Deform Core owns deformation algorithms and domain contracts. AniCraft is a future host/integration target, not a runtime dependency.
 
 ## 1. Product decision
 
-The production interface is a native AniCraft tool context. The existing TypeScript rectangle/timeline demo is an isolated prototype; it is not the production UI and must not be extended into a competing editor.
+Forma Deform Studio uses the same visual language and interaction conventions intended for AniCraft: consistent typography, spacing, colors, iconography, tool affordances, selection states, inspector patterns, viewport navigation, command presentation, and panel behavior.
 
-The three feature groups are authoring surfaces over existing or planned core capabilities. They are not three new deformation engines.
+This means a familiar AniCraft-style workspace, **not** a copy of AniCraft's complete editor. Forma Deform contains only deformation authoring tools. It does not include general drawing/painting, character rig authoring, a general animation timeline, audio/video, or unrelated asset-management features.
 
-- **Pin & Offset Drivers** expose pin placement, offsets, neutral capture, driver configuration, and deterministic preview.
-- **Point Arrays & Binding** expose point-array authoring, source-to-cage binding, binding inspection, and stale-binding repair.
-- **Cages, Bézier Splines & Vector Tessellation** expose cage construction/editing, curve editing, and non-destructive tessellation controls/overlays.
+The 360 Studio repository currently describes a proposed workspace and contains no implemented UI component system to reuse. Its intended workspace conventions may inform the design, but it is not treated as an existing UI implementation.
 
-Bone identity, transforms, and the authoritative rig remain AniCraft-owned. Smart Controller evaluation and Form Deform pin evaluation remain independent. The UI must not imply automatic composition between them.
+### Shared UI architecture
 
-## 2. Workspace layout
+- Define a small, host-independent **AniCraft UI design kit**: design tokens, foundational controls, panel primitives, toolbars, icons, typography, selection/hover/focus states, and interaction conventions.
+- The design kit must be independently consumable. Forma Deform Studio must not import or launch the AniCraft application to render its UI.
+- AniCraft and Forma Deform Studio may both consume the same kit when the AniCraft application is implemented.
+- Until a real shared package exists, keep the Forma Deform implementation behind clean UI boundaries so the kit can be extracted/reused without coupling the deformation domain to a host.
+- Do not invent or depend on AniCraft host APIs that have not been inspected and verified.
 
-Use AniCraft's existing dockable workspace and stage:
+## 2. Standalone workspace layout
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ AniCraft menus · tool context · command palette                              │
+│ Forma Deform Studio · File · Edit · View · Tools · Help       Commands      │
 ├────────────────┬──────────────────────────────────────┬─────────────────────┤
-│ Deform tools   │ Existing AniCraft stage              │ Properties          │
+│ Deform tools   │ Viewport                             │ Inspector           │
 │                │                                      │                     │
 │ Select         │ Artwork / selected target            │ Target & capability │
 │ Pin            │ Pins / offsets / handles             │ Pin / driver        │
-│ Point Array    │ Cage vertices / edges / faces        │ Array & binding     │
-│ Bind           │ Bézier paths and handles             │ Cage / curve        │
-│ Cage           │ Tessellation preview overlay         │ Tessellation        │
-│ Curve          │ Validation and stale-state overlays  │ Diagnostics         │
-│ Tessellate     │                                      │ Preview values      │
+│ Point Array    │ Array points and binding overlays     │ Array & binding     │
+│ Bind           │ Cage vertices / edges / faces         │ Cage / topology     │
+│ Cage           │ Bézier paths and handles              │ Curve              │
+│ Curve          │ Tessellation preview overlay          │ Tessellation        │
+│ Tessellate     │ Validation / stale-state overlays     │ Diagnostics         │
 ├────────────────┴──────────────────────────────────────┴─────────────────────┤
-│ Existing AniCraft timeline, layers, and playhead                             │
+│ Contextual status · selection details · preview/validation messages         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The tool strip is capability-aware: hide or disable tools that the selected target or host adapter cannot support. The Properties panel changes context with the active selection/tool. Do not add a second scene tree, timeline, renderer, or document panel.
+The shell is standalone and focused. It may provide project open/save, viewport navigation, selection, command history, and undo/redo appropriate to deformation authoring. It must not grow a general animation timeline, general scene editor, or duplicate general-purpose compositor.
 
 ## 3. Tool group A — Pin & Offset Drivers
 
-### Stage interactions
+### Viewport interactions
 
 - Select, add, move, and remove pins on compatible targets.
-- Display each pin's authored/rest position and current preview position distinctly.
-- Edit offset vectors numerically or by dragging a visible offset handle.
-- Show target bounds and the active coordinate-space indicator.
-- Support multi-selection only where the host exposes stable target/pin identities.
+- Display authored/rest positions and evaluated preview positions distinctly.
+- Edit offset vectors numerically or by dragging an offset handle.
+- Show target bounds and active coordinate-space information.
+- Support multi-selection only when stable target and pin identities are available.
 
-### Properties
+### Inspector
 
-- Pin identity and target identity (read-only stable IDs where appropriate).
+- Pin and target identity.
 - Neutral/rest position and offset vector.
 - Driver source and source identity.
 - Input axis/component, neutral input, range, normalization, mapping, easing, and gain.
@@ -64,41 +66,41 @@ The tool strip is capability-aware: hide or disable tools that the selected targ
 1. Select a compatible target and choose Pin.
 2. Add/select a pin and set or capture its neutral position.
 3. Choose a driver source and configure input/range/mapping.
-4. Preview explicitly; preview must not mutate authored geometry or create keyframes.
-5. Save authored settings through the host's supported document boundary.
-6. Apply/bake only through an explicit undoable AniCraft command.
+4. Run preview explicitly; preview must not mutate authored geometry or create keyframes.
+5. Save authored settings through Forma Deform Studio's project/document boundary.
+6. Apply/bake only through an explicit undoable command.
 
-The UI must label Smart Controller preview and pin deformation as separate evaluations. No implicit summing, chaining, or multi-source composition is permitted without a separately approved composition contract.
+Smart Controller evaluation and pin deformation remain independent. The UI must not imply automatic summing, chaining, or multi-source composition.
 
 ## 4. Tool group B — Point Arrays & Binding
 
-### Stage interactions
+### Viewport interactions
 
-- Create/edit point arrays using explicit count, spacing, orientation, and coordinate-space settings.
+- Create/edit point arrays with explicit count, spacing, orientation, and coordinate-space settings.
 - Select individual points, ranges, or the complete array.
-- Display source points, bound cage features, and binding status with distinct visual states.
+- Display source points, bound cage features, and binding status distinctly.
 - Provide a guided source-to-cage binding operation.
-- Make stale, missing, unbound, clamped, and extrapolated states visually distinguishable and textually diagnosable.
+- Distinguish stale, missing, unbound, clamped, and extrapolated states.
 
-### Properties
+### Inspector
 
 - Array identity, count, spacing, orientation, and source coordinate descriptor.
 - Source target/feature identity and revision.
 - Cage identity, topology revision, and selected face/feature.
 - Binding policy and outside-cage policy.
 - Binding status, validation result, and freshness diagnostics.
-- Rebind/unbind actions and a read-only mapping summary.
+- Rebind/unbind actions and read-only mapping summary.
 
 ### Workflow
 
 1. Create or select a point array.
 2. Select source features and a validated cage.
 3. Run binding and inspect per-point results.
-4. Review outside-cage handling and any diagnostics.
-5. Confirm and persist the binding through AniCraft's supported host storage contract.
+4. Review outside-cage handling and diagnostics.
+5. Confirm and persist the binding through the Studio project/document contract.
 6. Revalidate when source identity/revisions/fingerprint or cage topology changes.
 
-A successful JSON parse is not a valid binding. The UI may show a binding as active only after the core validation contract succeeds against the current source snapshot and cage certificate. A stale binding must never be silently used.
+A successful JSON parse is not a valid binding. The UI may show a binding as active only after core validation succeeds against the current source snapshot and cage certificate. A stale binding must never be silently used.
 
 ## 5. Tool group C — Cages, Bézier Splines & Vector Tessellation
 
@@ -107,58 +109,62 @@ A successful JSON parse is not a valid binding. The UI may show a binding as act
 - Create regular lattice cages and supported irregular cages.
 - Add, remove, and move control points using stable IDs.
 - Select vertices, edges, and faces; expose topology-aware editing commands.
-- Display invalid topology/embedding diagnostics before allowing binding/evaluation.
+- Display invalid topology/embedding diagnostics before binding/evaluation.
 - Distinguish rest cage geometry from deformed control state.
 
 ### Bézier editing
 
 - Preserve authored Path2D commands and Bézier handles.
 - Display anchors and incoming/outgoing handles.
-- Support selection and direct manipulation only where the host's canonical path editor contract permits it.
-- Do not replace authored curves with tessellated polylines during editing or persistence.
+- Support direct manipulation only where the canonical path-editing contract permits it.
+- Never replace authored curves with tessellated polylines during editing or persistence.
 
 ### Vector tessellation
 
 - Offer a non-destructive preview overlay for sampled curve segments.
 - Expose source-space deviation tolerance, maximum subdivision depth, and sample budgets.
-- Show sample count, capped/budget-exceeded status, and validation diagnostics.
-- Keep tessellation output derived and disposable; never make it the authoritative authored path.
-- Clearly label the current sampling tolerance as source-space curve-to-chord deviation, not a guarantee of deformed-output-space error.
+- Show sample count, capped/budget-exceeded status, and diagnostics.
+- Keep tessellation output derived and disposable; it is never the authoritative authored path.
+- Label the sampling tolerance as source-space curve-to-chord deviation, not a guarantee of deformed-output-space error.
 
 ## 6. Shared interaction and state rules
 
-- Use stable host target, source, pin, point, cage, and feature identities; never use viewport indices as persistent identities.
-- Keep rest/authored geometry, evaluated preview geometry, and tessellation overlays visually and semantically separate.
-- Preview is read-only and deterministic. It must not write keyframes or mutate the authored document.
-- Persistent changes go through AniCraft commands and participate in its undo/redo model.
-- Use the existing AniCraft timeline and playhead. Do not simulate native playback by repeatedly issuing plugin commands.
-- Revalidate bindings when their source/cage freshness dependencies change.
-- Surface unsupported host capabilities as explicit diagnostics rather than silently falling back.
-- Provide keyboard-accessible tool selection and numeric property editing; dragging must not be the only way to author values.
+- Use stable target, source, pin, point, cage, and feature identities; never use viewport indices as persistent identities.
+- Keep authored/rest geometry, evaluated preview geometry, and tessellation overlays semantically separate.
+- Preview is read-only and deterministic. It must not write keyframes or mutate authored project data.
+- Persistent changes go through explicit commands and participate in the Studio undo/redo model.
+- Revalidate bindings when source/cage freshness dependencies change.
+- Surface unsupported capabilities as explicit diagnostics rather than silently falling back.
+- Provide keyboard-accessible tool selection and numeric property editing; dragging must not be the only authoring method.
+- Keep UI state and rendering adapters separate from deformation-domain logic.
+- Do not create a second production deformation engine or introduce implicit composition between independent engines.
 
 ## 7. Implementation sequence
 
 | Step | Deliverable | Acceptance gate |
 |---|---|---|
-| UI-01 | This workspace and interaction contract | Product boundaries and workflows reviewed |
-| UI-02 | AniCraft host UI capability audit | Verified stage/tool registration, selection, property panel, command, undo, storage, and overlay APIs |
-| UI-03 | Native workspace shell and capability-aware tool registration | Runs inside AniCraft; no duplicate app/document/timeline/renderer |
-| UI-04A | Pin & Offset Drivers panel and stage tools | Pin edits and driver preview use existing contracts; no implicit composition |
-| UI-04B | Point Arrays & Binding panel | Validated bind/unbind/rebind lifecycle and stale diagnostics |
-| UI-04C | Cage, Bézier, and tessellation tools | Topology-safe editing and non-destructive curve/tessellation display |
-| UI-05 | Host integration and UX regression suite | Undo/redo, persistence, stale-state, target capability, and preview non-mutation tests pass |
+| UI-01 | This product and workspace contract | Standalone boundary and shared visual language agreed |
+| UI-02 | Inspect current Forma Deform app structure and AniCraft design references | Existing UI stack, demo limitations, and reusable design conventions verified; no guessed host APIs |
+| UI-03 | Standalone Studio shell and viewport | Independently launches; focused panels; no AniCraft runtime dependency |
+| UI-04 | Shared UI-kit boundary and theme tokens | Components/tokens are reusable without importing the AniCraft application |
+| UI-05A | Pin & Offset Drivers UI | Uses existing contracts; preview is non-mutating; no implicit composition |
+| UI-05B | Point Arrays & Binding UI | Validated bind/unbind/rebind lifecycle and stale diagnostics |
+| UI-05C | Cage, Bézier, and tessellation tools | Topology-safe editing and non-destructive curve/tessellation display |
+| UI-06 | Core integration and UX regression suite | Undo/redo, persistence, stale-state, capability, and preview non-mutation tests pass |
+| UI-07 | Optional AniCraft adapter | Integration is isolated behind an adapter; Studio remains independently usable |
 
-UI-04A/B/C may be developed independently after UI-03, but each must use the same workspace conventions and host command/property APIs.
+Feature panels may be developed independently after UI-03, but must use the same workspace conventions and command/inspector patterns.
 
 ## 8. Out of scope
 
-- A standalone Forma Deform desktop editor.
-- A second document model, timeline, renderer, layer tree, cache, or undo stack.
-- Replacing AniCraft's native bone/rig UI or Asset Warp UI.
+- Requiring AniCraft to launch or use Forma Deform Studio.
+- A general-purpose drawing/painting application or animation editor.
+- A general animation timeline, audio/video tools, or unrelated asset library.
+- Replacing AniCraft's native bone/rig UI.
 - Implicitly combining Smart Controller and pin-deformation outputs.
 - Treating sampled/tessellated geometry as the source of truth.
-- Claiming live playback evaluation until AniCraft exposes and verifies a native evaluator hook.
+- Claiming a host integration before the actual AniCraft repository and extension APIs are identified and verified.
 
 ## 9. Immediate next task
 
-**UI-02 — AniCraft Host UI Capability Audit.** Inspect the actual AniCraft host repository and verify the extension points needed for native tool registration, stage overlays/input, selection, dockable properties, commands, undo/redo, and durable plugin-owned data. Do not implement UI against guessed APIs. If a required host capability is absent, document the smallest host-side contract needed before proceeding.
+**UI-02 — Source and UI Architecture Audit.** Inspect the current Forma Deform app structure, its existing demo and styling, and the available AniCraft/360 Studio design references. Identify what can be reused, what should be replaced, and the smallest independent UI-kit boundary. Do not implement against guessed AniCraft APIs. The audit must preserve standalone launchability and must not alter core deformation semantics.
