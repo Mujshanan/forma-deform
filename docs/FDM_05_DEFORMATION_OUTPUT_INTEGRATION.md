@@ -34,7 +34,7 @@ The core output is a paired, immutable value:
 - **Provenance:** exact source snapshot stamp, rest-cage fingerprint, current-cage fingerprint, curve policy/version, and canonical structured-path fingerprint.
 - **Diagnostics:** counts for mapped, clamped, extrapolated, and unbound source features and curve samples, plus sample-budget/accuracy information.
 
-The output must be constructed only from mutually consistent results. A mismatch in source stamp, rest cage, current cage, policy/version, command/subpath identity, or sample sequence fails closed.
+The output must be constructed only from mutually consistent results. A mismatch in source stamp, complete validated binding stamp (including mapping/outside-cage policy), rest cage, current cage, policy/version, command/subpath identity, or sample sequence fails closed.
 
 ## 4. Curve-accuracy semantics
 
