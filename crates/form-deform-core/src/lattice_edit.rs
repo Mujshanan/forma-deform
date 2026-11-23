@@ -103,10 +103,10 @@ impl RegularLattice {
                         added_ids.push(id);
                     }
                     let mut ids = Vec::with_capacity(rows * (columns + 1));
-                    for row in 0..rows {
+                    for (row, inserted_id) in inserted.iter().copied().enumerate() {
                         let start = row * columns;
                         ids.extend_from_slice(&candidate.topology.control_point_ids[start..start + after_column as usize + 1]);
-                        ids.push(inserted[row]);
+                        ids.push(inserted_id);
                         ids.extend_from_slice(&candidate.topology.control_point_ids[start + after_column as usize + 1..start + columns]);
                     }
                     candidate.topology.control_point_ids = ids;

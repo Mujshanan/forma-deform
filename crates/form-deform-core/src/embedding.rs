@@ -374,9 +374,12 @@ fn position(
     positions.get(&id).copied().ok_or(EmbeddingError::MissingControlPoint(id.get()))
 }
 
+type SharedEdgeKey = (ControlPointId, ControlPointId);
+type EdgeIncidence = (usize, ControlPointId, ControlPointId);
+type EdgeIncidenceMap = HashMap<SharedEdgeKey, Vec<EdgeIncidence>>;
+
 fn validate_shared_edge_incidence(faces: &[FaceGeometry]) -> Result<(), EmbeddingError> {
-    let mut edges: HashMap<(ControlPointId, ControlPointId), Vec<(usize, ControlPointId, ControlPointId)>> =
-        HashMap::new();
+    let mut edges: EdgeIncidenceMap = HashMap::new();
     for face in faces {
         let ids = face.ids.as_slice();
         for edge in 0..ids.len() {
@@ -406,10 +409,7 @@ fn validate_boundary_and_point_usage(
     faces: &[FaceGeometry],
     topology_point_ids: &[ControlPointId],
 ) -> Result<(), EmbeddingError> {
-    let mut edge_faces: HashMap<
-        (ControlPointId, ControlPointId),
-        Vec<(usize, ControlPointId, ControlPointId)>,
-    > = HashMap::new();
+    let mut edge_faces: EdgeIncidenceMap = HashMap::new();
     let mut referenced = HashSet::new();
 
     for face in faces {

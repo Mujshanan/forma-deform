@@ -382,7 +382,7 @@ mod tests {
                     let face = topology.face_at(location.face_index as usize).unwrap();
                     SourceFeatureBinding::Mapped(crate::binding::MappingRecord {
                         locator: feature.locator,
-                        face_index: location.face_index as u32,
+                        face_index: location.face_index,
                         subface_index: 0,
                         control_point_ids: face.control_point_ids().to_vec(),
                         coordinates: location.coordinates,

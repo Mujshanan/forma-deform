@@ -172,7 +172,7 @@ fn nearest_boundary_projection(
         let distance = (query[0] - projected[0]).hypot(query[1] - projected[1]);
         if !distance.is_finite() { return Err(OutsideCageError::InvalidBoundaryGeometry); }
         let candidate = ProjectionCandidate { edge, t, point: projected, distance };
-        if best.map_or(true, |current| projection_precedes(candidate, current)) {
+        if best.is_none_or(|current| projection_precedes(candidate, current)) {
             best = Some(candidate);
         }
     }

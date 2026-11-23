@@ -472,10 +472,10 @@ fn coordinates_are_extrapolated(coordinates: FaceCoordinates) -> bool {
 }
 
 fn validate_outside_policy(policy: OutsideCagePolicy) -> Result<(), BindingError> {
-    if let OutsideCagePolicy::BoundedExtrapolation { max_distance } = policy {
-        if !max_distance.is_finite() || max_distance <= 0.0 {
-            return Err(BindingError::InvalidOutsidePolicyParameter);
-        }
+    if let OutsideCagePolicy::BoundedExtrapolation { max_distance } = policy
+        && (!max_distance.is_finite() || max_distance <= 0.0)
+    {
+        return Err(BindingError::InvalidOutsidePolicyParameter);
     }
     Ok(())
 }

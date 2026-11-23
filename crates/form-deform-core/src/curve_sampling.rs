@@ -414,21 +414,21 @@ pub fn map_curve_samples(
         return Err(CurveMappingError::InvalidSampleSet);
     }
 
-    if let crate::binding::OutsideCagePolicy::BoundedExtrapolation { max_distance } = outside_policy {
-        if !max_distance.is_finite() || max_distance <= 0.0 {
-            return Err(CurveMappingError::OutsideCage(
-                crate::outside_policy::OutsideCageError::InvalidDistanceLimit,
-            ));
-        }
+    if let crate::binding::OutsideCagePolicy::BoundedExtrapolation { max_distance } = outside_policy
+        && (!max_distance.is_finite() || max_distance <= 0.0)
+    {
+        return Err(CurveMappingError::OutsideCage(
+            crate::outside_policy::OutsideCageError::InvalidDistanceLimit,
+        ));
     }
 
     let mut actual_total = 0usize;
     let mut previous_command = None;
     for segment in &sample_set.segments {
-        if previous_command.map_or(false, |previous| previous >= segment.command_index)
+        if previous_command.is_some_and(|previous| previous >= segment.command_index)
             || segment.samples.len() < 2
-            || segment.samples.first().map_or(true, |sample| sample.t != 0.0)
-            || segment.samples.last().map_or(true, |sample| sample.t != 1.0)
+            || segment.samples.first().is_none_or(|sample| sample.t != 0.0)
+            || segment.samples.last().is_none_or(|sample| sample.t != 1.0)
             || segment.samples.windows(2).any(|pair| {
                 !pair[0].t.is_finite() || !pair[1].t.is_finite() || pair[0].t >= pair[1].t
             })
