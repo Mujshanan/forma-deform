@@ -313,3 +313,8 @@ This milestone completes the initial pure one-dimensional mapping layer only. It
 ## Native UI status — 2026-11-23
 
 M1 native Smart Controller UI foundation is merged into AniCraft through [PR #2](https://github.com/Mujshanan/anicraft/pull/2). The implementation is limited to transient Stage handles and a draft-only Properties inspector. It does not complete the M3 native authoring workflow. The manual Windows smoke test and native CI/build evidence remain outstanding; no passing CI is claimed. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
+
+
+## Native UI progress — 2026-11-23
+
+AniCraft PR #3 is merged: transient Smart Controller handles can now be created, selected, dragged, removed and cleared, with live Properties coordinates. This does not add durable binding data or controller evaluation. The native Windows smoke test and build/CI evidence remain outstanding. See [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md).
