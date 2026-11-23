@@ -11,7 +11,6 @@ use crate::path2d::{Path2D, PathCommand, Path2DError, Point2};
 use crate::persistence::{
     DeformationDefinition, DeformationKind, GeometryValueKind, ParameterValue,
 };
-use std::collections::BTreeSet;
 
 pub const SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_ID: &str = "fdm.single-handle-displacement";
 pub const SINGLE_HANDLE_DISPLACEMENT_ALGORITHM_VERSION: u32 = 1;
@@ -45,9 +44,11 @@ struct HandleParameters {
 impl HandleParameters {
     fn from_definition(definition: &DeformationDefinition) -> Result<Self, OperatorFailure> {
         let parameters = definition.parameters();
-        let actual: BTreeSet<&str> = parameters.keys().map(String::as_str).collect();
-        let required: BTreeSet<&str> = REQUIRED_PARAMETERS.into_iter().collect();
-        if actual != required {
+        if parameters.len() != REQUIRED_PARAMETERS.len()
+            || REQUIRED_PARAMETERS
+                .iter()
+                .any(|key| !parameters.contains_key(*key))
+        {
             return Err(OperatorFailure::InvalidParameters);
         }
 
@@ -377,6 +378,70 @@ mod tests {
             run(&input, extra),
             Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::InvalidParameters))
         ));
+    }
+
+    #[test]
+    fn non_finite_parameters_are_rejected() {
+        let input = sample_path();
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(matches!(
+                run(&input, parameters((0.0, 0.0), (invalid, 1.0), 10.0)),
+                Err(crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::InvalidParameters
+                ))
+            ));
+            assert!(matches!(
+                run(&input, parameters((0.0, 0.0), (1.0, 1.0), invalid)),
+                Err(crate::composition_evaluation::OperatorInvocationError::Operator(
+                    OperatorFailure::InvalidParameters
+                ))
+            ));
+        }
+    }
+
+    #[test]
+    fn tiny_radius_and_extreme_coordinates_remain_finite_and_deterministic() {
+        let input = path(vec![
+            PathCommand::MoveTo(point(f64::MAX, 0.0)),
+            PathCommand::LineTo(point(-f64::MAX, 0.0)),
+        ]);
+        let output = run(&input, parameters((0.0, 0.0), (1.0, 1.0), f64::MIN_POSITIVE))
+            .unwrap();
+        assert_eq!(output.geometry(), &input);
+    }
+
+    #[test]
+    fn nonlinear_curve_mapping_is_an_explicit_control_point_approximation() {
+        let input = path(vec![
+            PathCommand::MoveTo(point(-1.0, 0.0)),
+            PathCommand::QuadraticTo {
+                control: point(0.0, 2.0),
+                to: point(1.0, 0.0),
+            },
+        ]);
+        let parameters = HandleParameters {
+            center: point(0.0, 1.0),
+            displacement: (0.0, 2.0),
+            influence_radius: 3.0,
+        };
+        let transformed = displace_path(&input, parameters).unwrap();
+
+        let original_curve_midpoint = point(0.0, 1.0);
+        let pointwise_mapped_midpoint = displace_point(original_curve_midpoint, parameters).unwrap();
+
+        let (mapped_start, mapped_control, mapped_end) = match transformed.commands() {
+            [
+                PathCommand::MoveTo(start),
+                PathCommand::QuadraticTo { control, to: end },
+            ] => (*start, *control, *end),
+            _ => panic!("quadratic path topology changed"),
+        };
+        let represented_curve_midpoint = point(
+            0.25 * mapped_start.x() + 0.5 * mapped_control.x() + 0.25 * mapped_end.x(),
+            0.25 * mapped_start.y() + 0.5 * mapped_control.y() + 0.25 * mapped_end.y(),
+        );
+
+        assert_ne!(represented_curve_midpoint, pointwise_mapped_midpoint);
     }
 
     #[test]
