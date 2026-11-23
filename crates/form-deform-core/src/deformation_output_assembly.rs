@@ -54,7 +54,7 @@ impl AssembledDeformationOutput {
         let refined_curves = refine_path_curves(
             validated, source, topology, rest_cage, current_cage, outside_policy, policy,
         ).map_err(DeformationOutputAssemblyError::Refinement)?;
-        validate_refined_alignment(structured.geometry(), &refined_curves)?;
+        validate_refined_alignment(source.payload(), structured.geometry(), &refined_curves)?;
         Ok(Self { structured, refined_curves })
     }
 
@@ -74,7 +74,8 @@ impl AssembledDeformationOutput {
 }
 
 fn validate_refined_alignment(
-    path: &Path2D,
+    source_path: &Path2D,
+    output_path: &Path2D,
     refined: &RefinedCurveSampleSet,
 ) -> Result<(), DeformationOutputAssemblyError> {
     if refined.policy_version != OUTPUT_REFINEMENT_POLICY_VERSION
@@ -88,59 +89,32 @@ fn validate_refined_alignment(
         return Err(DeformationOutputAssemblyError::InvalidRefinementMetadata);
     }
 
-    // Carry evaluated endpoints alongside stable command/subpath identities.
-    // This closes the gap where a correctly ordered sample set could still be
-    // geometrically disconnected from the authoritative structured Path2D.
-    let mut expected = Vec::new();
-    let mut subpath = 0u32;
-    let mut saw_move = false;
-    let mut current = None;
-    for (index, command) in path.commands().iter().enumerate() {
-        match command {
-            PathCommand::MoveTo(point) => {
-                if saw_move {
-                    subpath = subpath.checked_add(1)
-                        .ok_or(DeformationOutputAssemblyError::SubpathIndexOverflow)?;
-                }
-                saw_move = true;
-                current = Some(*point);
-            }
-            PathCommand::LineTo(point) => {
-                if current.is_none() {
-                    return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
-                }
-                current = Some(*point);
-            }
-            PathCommand::QuadraticTo { to, .. } | PathCommand::CubicTo { to, .. } => {
-                let start = current.ok_or(
-                    DeformationOutputAssemblyError::InvalidPathSequence { command_index: index },
-                )?;
-                let command_index = u32::try_from(index)
-                    .map_err(|_| DeformationOutputAssemblyError::CommandIndexOverflow)?;
-                expected.push((command_index, subpath, start, *to));
-                current = Some(*to);
-            }
-            PathCommand::Close => {
-                if current.is_none() {
-                    return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
-                }
-                current = None;
-            }
-        }
+    let source_endpoints = curve_endpoints(source_path)?;
+    let output_endpoints = curve_endpoints(output_path)?;
+    if source_endpoints.len() != output_endpoints.len()
+        || source_endpoints.iter().zip(&output_endpoints).any(|(source, output)| {
+            source.0 != output.0 || source.1 != output.1
+        })
+    {
+        return Err(DeformationOutputAssemblyError::PathStructureMismatch);
     }
 
-    if refined.segments.len() != expected.len() {
+    if refined.segments.len() != output_endpoints.len() {
         return Err(DeformationOutputAssemblyError::IncompleteCommandCoverage {
-            expected: expected.len(),
+            expected: output_endpoints.len(),
             actual: refined.segments.len(),
         });
     }
 
     let mut counted_samples = 0usize;
-    for (segment, (command_index, subpath_index, expected_start, expected_end))
-        in refined.segments.iter().zip(expected)
+    for (segment, (source_identity, output_identity))
+        in refined.segments.iter().zip(source_endpoints.iter().zip(&output_endpoints))
     {
-        if segment.command_index != command_index || segment.subpath_index != subpath_index {
+        let (source_command, source_subpath, source_start, source_end) = *source_identity;
+        let (command_index, subpath_index, output_start, output_end) = *output_identity;
+        if source_command != command_index || source_subpath != subpath_index
+            || segment.command_index != command_index || segment.subpath_index != subpath_index
+        {
             return Err(DeformationOutputAssemblyError::UnexpectedCommandIdentity {
                 expected_command: command_index,
                 actual_command: segment.command_index,
@@ -166,8 +140,13 @@ fn validate_refined_alignment(
         }
         let first = segment.samples.first().expect("endpoint count checked");
         let last = segment.samples.last().expect("endpoint count checked");
-        if !points_match(first.output_point, expected_start)
-            || !points_match(last.output_point, expected_end)
+        if !points_match(first.source_point, source_start)
+            || !points_match(last.source_point, source_end)
+        {
+            return Err(DeformationOutputAssemblyError::SourceCurveEndpointMismatch { command_index });
+        }
+        if !points_match(first.output_point, output_start)
+            || !points_match(last.output_point, output_end)
         {
             return Err(DeformationOutputAssemblyError::CurveEndpointMismatch { command_index });
         }
@@ -181,6 +160,49 @@ fn validate_refined_alignment(
         });
     }
     Ok(())
+}
+
+fn curve_endpoints(
+    path: &Path2D,
+) -> Result<Vec<(u32, u32, crate::path2d::Point2, crate::path2d::Point2)>, DeformationOutputAssemblyError> {
+    let mut endpoints = Vec::new();
+    let mut subpath = 0u32;
+    let mut saw_move = false;
+    let mut current = None;
+    for (index, command) in path.commands().iter().enumerate() {
+        match command {
+            PathCommand::MoveTo(point) => {
+                if saw_move {
+                    subpath = subpath.checked_add(1)
+                        .ok_or(DeformationOutputAssemblyError::SubpathIndexOverflow)?;
+                }
+                saw_move = true;
+                current = Some(*point);
+            }
+            PathCommand::LineTo(point) => {
+                if current.is_none() {
+                    return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
+                }
+                current = Some(*point);
+            }
+            PathCommand::QuadraticTo { to, .. } | PathCommand::CubicTo { to, .. } => {
+                let start = current.ok_or(
+                    DeformationOutputAssemblyError::InvalidPathSequence { command_index: index },
+                )?;
+                let command_index = u32::try_from(index)
+                    .map_err(|_| DeformationOutputAssemblyError::CommandIndexOverflow)?;
+                endpoints.push((command_index, subpath, start, *to));
+                current = Some(*to);
+            }
+            PathCommand::Close => {
+                if current.is_none() {
+                    return Err(DeformationOutputAssemblyError::InvalidPathSequence { command_index: index });
+                }
+                current = None;
+            }
+        }
+    }
+    Ok(endpoints)
 }
 
 fn points_match(left: crate::path2d::Point2, right: crate::path2d::Point2) -> bool {
@@ -209,6 +231,8 @@ pub enum DeformationOutputAssemblyError {
     CountOverflow,
     SampleCountMismatch { reported: usize, actual: usize },
     CurveEndpointMismatch { command_index: u32 },
+    SourceCurveEndpointMismatch { command_index: u32 },
+    PathStructureMismatch,
 }
 
 impl std::fmt::Display for DeformationOutputAssemblyError {
@@ -433,10 +457,16 @@ mod tests {
             let f = fixture();
             let original = f.source.payload().clone();
             let assembled = AssembledDeformationOutput::build(
-                f.structured, &f.validated, &f.source, &f.topology,
+                f.structured.clone(), &f.validated, &f.source, &f.topology,
                 &f.rest_geometry, &f.current_geometry,
                 OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
             ).unwrap();
+            let repeated = AssembledDeformationOutput::build(
+                f.structured.clone(), &f.validated, &f.source, &f.topology,
+                &f.rest_geometry, &f.current_geometry,
+                OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
+            ).unwrap();
+            assert_eq!(assembled, repeated, "identical immutable inputs must produce identical assembled output");
 
             let output = assembled.structured_path().commands();
             assert_eq!(output.len(), original.commands().len());
@@ -566,7 +596,7 @@ mod tests {
             segment_between(2, 0, point(1.0, 0.0), point(2.0, 0.0)),
             segment_between(5, 1, point(3.0, 0.0), point(6.0, 0.0)),
         ]);
-        assert_eq!(validate_refined_alignment(&path, &assembled), Ok(()));
+        assert_eq!(validate_refined_alignment(&path, &path, &assembled), Ok(()));
         assert_eq!(path.commands().len(), 7);
         assert!(matches!(path.commands()[2], PathCommand::QuadraticTo { .. }));
         assert!(matches!(path.commands()[5], PathCommand::CubicTo { .. }));
@@ -597,6 +627,25 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn rejects_refined_source_endpoints_disconnected_from_source_snapshot() {
+        let source = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.0, 0.0)),
+            PathCommand::QuadraticTo { control: point(1.0, 1.0), to: point(2.0, 0.0) },
+        ]).unwrap();
+        let output = Path2D::new(vec![
+            PathCommand::MoveTo(point(0.25, 0.0)),
+            PathCommand::QuadraticTo { control: point(1.25, 1.0), to: point(2.25, 0.0) },
+        ]).unwrap();
+        let disconnected = refined(vec![segment_between(
+            1, 0, point(0.1, 0.0), point(2.0, 0.0),
+        )]);
+        assert_eq!(
+            validate_refined_alignment(&source, &output, &disconnected),
+            Err(DeformationOutputAssemblyError::SourceCurveEndpointMismatch { command_index: 1 }),
+        );
+    }
 
     #[test]
     fn rejects_curve_endpoints_disconnected_from_authoritative_structured_path() {
