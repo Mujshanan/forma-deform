@@ -611,7 +611,7 @@ mod tests {
             PathCommand::CubicTo { control1: point(4.0, 1.0), control2: point(5.0, 1.0), to: point(6.0, 0.0) },
         ]).unwrap();
         assert!(matches!(
-            validate_refined_alignment(&path, &refined(vec![segment(1, 0)])),
+            validate_refined_alignment(&path, &path, &refined(vec![segment(1, 0)])),
             Err(DeformationOutputAssemblyError::IncompleteCommandCoverage { .. })
         ));
         assert!(matches!(
@@ -653,11 +653,16 @@ mod tests {
             PathCommand::MoveTo(point(0.0, 0.0)),
             PathCommand::QuadraticTo { control: point(1.0, 1.0), to: point(2.0, 0.0) },
         ]).unwrap();
-        let disconnected = refined(vec![segment_between(
-            1, 0, point(0.1, 0.0), point(2.0, 0.0),
-        )]);
+        let disconnected = refined(vec![RefinedCurveSegment {
+            command_index: 1,
+            subpath_index: 0,
+            samples: vec![
+                RefinedCurveSample { t: 0.0, source_point: point(0.0, 0.0), output_point: point(0.1, 0.0) },
+                RefinedCurveSample { t: 1.0, source_point: point(2.0, 0.0), output_point: point(2.0, 0.0) },
+            ],
+        }]);
         assert_eq!(
-            validate_refined_alignment(&path, &disconnected),
+            validate_refined_alignment(&path, &path, &disconnected),
             Err(DeformationOutputAssemblyError::CurveEndpointMismatch { command_index: 1 }),
         );
     }
@@ -671,13 +676,13 @@ mod tests {
         let mut too_few = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0))]);
         too_few.total_evaluations = too_few.total_samples - 1;
         assert_eq!(
-            validate_refined_alignment(&path, &too_few),
+            validate_refined_alignment(&path, &path, &too_few),
             Err(DeformationOutputAssemblyError::InvalidRefinementMetadata),
         );
         let mut over_budget = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(2.0, 0.0))]);
         over_budget.total_evaluations = over_budget.policy.max_total_evaluations + 1;
         assert_eq!(
-            validate_refined_alignment(&path, &over_budget),
+            validate_refined_alignment(&path, &path, &over_budget),
             Err(DeformationOutputAssemblyError::InvalidRefinementMetadata),
         );
     }
@@ -691,14 +696,14 @@ mod tests {
         let mut invalid = segment(1, 0);
         invalid.samples[1].t = 0.0;
         assert!(matches!(
-            validate_refined_alignment(&path, &refined(vec![invalid])),
+            validate_refined_alignment(&path, &path, &refined(vec![invalid])),
             Err(DeformationOutputAssemblyError::InvalidSampleOrder { .. })
         ));
         let mut wrong_count = refined(vec![segment_between(1, 0, point(0.0, 0.0), point(3.0, 0.0))]);
         wrong_count.total_samples += 1;
         wrong_count.total_evaluations += 1;
         assert!(matches!(
-            validate_refined_alignment(&path, &wrong_count),
+            validate_refined_alignment(&path, &path, &wrong_count),
             Err(DeformationOutputAssemblyError::SampleCountMismatch { .. })
         ));
     }
