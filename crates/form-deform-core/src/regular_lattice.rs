@@ -182,8 +182,7 @@ fn reject_coincident_points(points: &[ControlPointPosition], tol: f64) -> Result
         let qx = (point.x / tol).floor();
         let qy = (point.y / tol).floor();
         if !qx.is_finite() || !qy.is_finite()
-            || qx < (i64::MIN + 1) as f64 || qx > (i64::MAX - 1) as f64
-            || qy < (i64::MIN + 1) as f64 || qy > (i64::MAX - 1) as f64 {
+            || qx.abs() > 9.0e18 || qy.abs() > 9.0e18 {
             return Err(RegularLatticeError::CoordinateRangeExceeded);
         }
         let cell = (qx as i64, qy as i64);
