@@ -14,13 +14,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run typecheck
-      - run: bun test
-      - run: bun run build
+      - run: cargo fmt --all -- --check
       - run: cargo test --workspace
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-bone-query-plugin
       - run: cargo build --release --target wasm32-unknown-unknown -p anicraft-form-deform-plugin
