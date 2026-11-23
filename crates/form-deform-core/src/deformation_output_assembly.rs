@@ -385,8 +385,13 @@ mod tests {
             Fixture { source, topology, rest_state, rest_geometry, validated, current_geometry, structured }
         }
 
+        fn assert_point_near(actual: crate::path2d::Point2, expected: crate::path2d::Point2) {
+            assert!((actual.x() - expected.x()).abs() < 1.0e-12, "x: {actual:?} != {expected:?}");
+            assert!((actual.y() - expected.y()).abs() < 1.0e-12, "y: {actual:?} != {expected:?}");
+        }
+
         #[test]
-        fn public_constructor_assembles_matching_evaluated_inputs_and_preserves_authored_path() {
+        fn public_constructor_assembles_matching_evaluated_inputs_and_preserves_authored_command_structure() {
             let f = fixture();
             let original = f.source.payload().clone();
             let assembled = AssembledDeformationOutput::build(
@@ -395,17 +400,44 @@ mod tests {
                 OutsideCagePolicy::UnboundZeroInfluence, OutputRefinementPolicy::default(),
             ).unwrap();
 
-            assert_eq!(assembled.structured_path().commands(), original.commands());
+            let output = assembled.structured_path().commands();
+            assert_eq!(output.len(), original.commands().len());
+            assert!(matches!(output[0], PathCommand::MoveTo(_)));
+            assert!(matches!(output[1], PathCommand::LineTo(_)));
+            assert!(matches!(output[2], PathCommand::QuadraticTo { .. }));
+            assert!(matches!(output[3], PathCommand::Close));
+            assert!(matches!(output[4], PathCommand::MoveTo(_)));
+            assert!(matches!(output[5], PathCommand::CubicTo { .. }));
+            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (output[0], original.commands()[0]) {
+                assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
+            } else { panic!("first authored command must remain MoveTo"); }
+            if let (PathCommand::LineTo(actual), PathCommand::LineTo(expected)) = (output[1], original.commands()[1]) {
+                assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
+            } else { panic!("second authored command must remain LineTo"); }
+            if let (
+                PathCommand::QuadraticTo { control: actual_control, to: actual_to },
+                PathCommand::QuadraticTo { control: expected_control, to: expected_to },
+            ) = (output[2], original.commands()[2]) {
+                assert_point_near(*actual_control, point(expected_control.x() + 0.25, expected_control.y()));
+                assert_point_near(*actual_to, point(expected_to.x() + 0.25, expected_to.y()));
+            } else { panic!("quadratic command and handles must be preserved"); }
+            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (output[4], original.commands()[4]) {
+                assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
+            } else { panic!("second subpath must remain MoveTo"); }
+            if let (
+                PathCommand::CubicTo { control1: actual_c1, control2: actual_c2, to: actual_to },
+                PathCommand::CubicTo { control1: expected_c1, control2: expected_c2, to: expected_to },
+            ) = (output[5], original.commands()[5]) {
+                assert_point_near(*actual_c1, point(expected_c1.x() + 0.25, expected_c1.y()));
+                assert_point_near(*actual_c2, point(expected_c2.x() + 0.25, expected_c2.y()));
+                assert_point_near(*actual_to, point(expected_to.x() + 0.25, expected_to.y()));
+            } else { panic!("cubic command and both handles must be preserved"); }
+
             assert_eq!(assembled.refined_curves().segments.len(), 2);
             assert_eq!(assembled.refined_curves().segments[0].command_index, 2);
             assert_eq!(assembled.refined_curves().segments[0].subpath_index, 0);
             assert_eq!(assembled.refined_curves().segments[1].command_index, 5);
             assert_eq!(assembled.refined_curves().segments[1].subpath_index, 1);
-            assert!(matches!(assembled.structured_path().commands()[2],
-                PathCommand::QuadraticTo { control, .. } if control == point(1.0, 0.8)));
-            assert!(matches!(assembled.structured_path().commands()[5],
-                PathCommand::CubicTo { control1, control2, .. }
-                    if control1 == point(0.5, 0.6) && control2 == point(0.8, 0.7)));
             assert_eq!(f.source.payload(), &original);
         }
 
