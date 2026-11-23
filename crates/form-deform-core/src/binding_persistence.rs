@@ -145,6 +145,7 @@ pub enum BindingPersistenceError {
     InvalidStamp(BindingError),
     Serialization,
     ResourceLimitExceeded,
+    InvalidBindingRevision,
 }
 
 impl std::fmt::Display for BindingPersistenceError {
@@ -210,9 +211,64 @@ pub struct HostBindingContext {
     pub control_state: DeformationControlState,
 }
 
+/// Host-issued monotonic revision for the Path2D binding payload slot.
+/// This is separate from source geometry revisions and is never read from FDM JSON.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BindingPayloadRevision(u64);
+
+impl BindingPayloadRevision {
+    pub fn new(value: u64) -> Result<Self, BindingPersistenceError> {
+        if value == 0 {
+            return Err(BindingPersistenceError::InvalidBindingRevision);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+
+/// Payload and host-issued slot revision observed together by the adapter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VersionedBindingPayload {
+    revision: BindingPayloadRevision,
+    payload: String,
+}
+
+impl VersionedBindingPayload {
+    pub fn new(revision: BindingPayloadRevision, payload: String) -> Self {
+        Self { revision, payload }
+    }
+
+    pub fn revision(&self) -> BindingPayloadRevision {
+        self.revision
+    }
+
+    pub fn payload(&self) -> &str {
+        &self.payload
+    }
+}
+
+/// Why the host rejected a conditional write. The host determines these flags
+/// atomically with the authoritative document transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BindingWriteConflict {
+    pub source_snapshot_changed: bool,
+    pub binding_revision_changed: bool,
+}
+
+/// Result of the host's atomic compare-and-swap operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindingWriteOutcome {
+    Written,
+    Conflict(BindingWriteConflict),
+}
+
 /// Minimal host integration boundary. The adapter stores opaque FDM JSON in
-/// the host's authoritative document; it must make writes atomic with its
-/// document transaction and must not persist runtime caches or certificates.
+/// the host's authoritative document; it must not persist runtime caches or
+/// certificates. Payload revisions are host-owned and monotonically increase
+/// whenever this slot is replaced.
 pub trait BindingHostAdapter {
     type Error;
 
@@ -224,17 +280,23 @@ pub trait BindingHostAdapter {
     fn read_binding_payload(
         &self,
         target: &HostTargetRef,
-    ) -> Result<Option<String>, Self::Error>;
+    ) -> Result<Option<VersionedBindingPayload>, Self::Error>;
 
+    /// Atomically replace the payload only if the target's current source stamp
+    /// and this binding slot's revision still equal the values observed before
+    /// validation. An absent expected revision means the slot was absent.
+    /// The host must perform both comparisons and the replacement in one transaction.
     fn write_binding_payload(
         &mut self,
         target: &HostTargetRef,
+        expected_binding_revision: Option<BindingPayloadRevision>,
+        expected_source_stamp: &crate::host_contract::GeometrySnapshotStamp,
         payload: String,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<BindingWriteOutcome, Self::Error>;
 }
 
-/// Validate and write a binding through the host's document transaction.
-/// The adapter is responsible for making the write atomic with its document.
+/// Validate and conditionally write a binding through the host's document transaction.
+/// A source edit or competing slot write between validation and commit is rejected.
 pub fn persist_binding<A: BindingHostAdapter>(
     adapter: &mut A,
     target: &HostTargetRef,
@@ -244,10 +306,22 @@ pub fn persist_binding<A: BindingHostAdapter>(
     if context.snapshot.target() != target {
         return Err(PersistBindingError::Diagnostic(BindingDiagnostic::StaleTarget));
     }
+    let expected_source_stamp = context.snapshot.stamp();
+    let expected_binding_revision = adapter.read_binding_payload(target)
+        .map_err(PersistBindingError::Host)?
+        .map(|existing| existing.revision());
     persisted.validate_against(&context.snapshot, &context.topology, &context.control_state)
         .map_err(PersistBindingError::Diagnostic)?;
     let payload = persisted.to_json().map_err(PersistBindingError::Persistence)?;
-    adapter.write_binding_payload(target, payload).map_err(PersistBindingError::Host)
+    match adapter.write_binding_payload(
+        target,
+        expected_binding_revision,
+        &expected_source_stamp,
+        payload,
+    ).map_err(PersistBindingError::Host)? {
+        BindingWriteOutcome::Written => Ok(()),
+        BindingWriteOutcome::Conflict(conflict) => Err(PersistBindingError::Conflict(conflict)),
+    }
 }
 
 #[derive(Debug)]
@@ -255,6 +329,7 @@ pub enum PersistBindingError<E> {
     Host(E),
     Persistence(BindingPersistenceError),
     Diagnostic(BindingDiagnostic),
+    Conflict(BindingWriteConflict),
 }
 
 /// Load, deserialize, and validate. No stale record is silently rebound.
@@ -265,7 +340,7 @@ pub fn load_validated_binding<A: BindingHostAdapter>(
     let Some(payload) = adapter.read_binding_payload(target).map_err(LoadBindingError::Host)? else {
         return Ok(None);
     };
-    let persisted = PersistedBinding::from_json(&payload)
+    let persisted = PersistedBinding::from_json(payload.payload())
         .map_err(LoadBindingError::Persistence)?;
     let context = adapter.current_binding_context(target).map_err(LoadBindingError::Host)?;
     if context.snapshot.target() != target {
