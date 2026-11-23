@@ -43,14 +43,13 @@ Its numerical tolerance is based on a relative factor of `1e-12`. It does not pr
 
 The canonical integration line already has a global validator over stable typed topology and control state. It supports triangles and convex quads, bounds point/face counts and pairwise candidate work, and uses a sweep/AABB broad phase.
 
-Its acceptance semantics differ:
+The two implementations still differ in representation and numerical policy:
 
-- it currently requires one connected face component;
-- it currently requires one closed boundary cycle;
-- its relative embedding tolerance is `1e-9`;
-- it has no separately named vertex-link validation pass, although shared-vertex intersections and boundary checks reject some malformed fans.
+- FDM-02.6 accepts triangles only; FDM-03 supports triangles and strictly convex quads.
+- FDM-02.6 uses an indexed cage with raw `u64` IDs; FDM-03 uses typed stable IDs, topology revisions, and separately revisioned control state.
+- FDM-02.6 uses a `1e-12` relative tolerance; FDM-03 retains its `1e-9` relative tolerance and bounded AABB candidate budget.
 
-Therefore, simply deleting FDM-02.6 would silently lose accepted multi-component cases and some explicit validation guarantees. Simply importing FDM-02.6 would create a second authoritative geometry model and validator.
+The canonical FDM-03 validator has now been extended to preserve the important FDM-02.6 acceptance guarantees: explicit vertex-link validation, disconnected manifold components, and multiple independent boundary loops. The FDM-02.6 source model itself is not imported, so there remains one authoritative validator.
 
 ## 4. Binding models are related but serve different inputs
 
@@ -83,17 +82,19 @@ A later document-schema decision can choose a unified container, but that must b
 
 **Complete on the integration branch.** FDM-01.3/01.4 source, tests, documentation, and CI gates are integrated. The unified branch passes rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
 
-### LINEAGE-03.B — validator parity and policy decision
+### LINEAGE-03.B — validator parity
 
-Before porting the generic point binding:
+**Implemented on the canonical integration branch.**
 
-1. Add parity tests on the canonical validator for bow-tie vertex fans and shared-vertex collinear overlap.
-2. Decide whether multiple disconnected cage components and multiple boundary loops are valid. Recommended default: permit disjoint components/loops when each component is independently manifold and non-overlapping, because the FDM-02.6 contract explicitly accepts separate components and artwork may contain disconnected islands.
-3. Preserve convex-quad validation and the existing bounded pair-candidate work limit.
-4. Keep the canonical FDM-03 tolerance policy unless a deliberate numerical-policy version change is approved. Do not silently replace `1e-9` with the FDM-02.6 `1e-12` threshold.
-5. Return one certificate tied to topology identity/revision, control-state revision, and the exact geometry fingerprint.
+- Added generic vertex-link validation for triangle and quad faces; bow-tie/disconnected face fans fail closed.
+- Disconnected, non-overlapping manifold components are accepted and counted in the certificate.
+- Multiple independent boundary loops are accepted and counted; each loop must be closed, consistently directed, and contain at least three vertices.
+- Added regression coverage for separate components, a connected quad ring with an inner boundary, bow-tie vertices, and collinear same-ray shared-vertex overlap.
+- Preserved convex-quad validation and the bounded AABB pair-candidate budget.
+- Kept the FDM-03 `1e-9` relative tolerance; the FDM-02.6 `1e-12` policy was not silently substituted.
+- The certificate now reports connected-component and boundary-loop counts in addition to face count, and remains tied to topology identity/revision, control-state revision, and the exact geometry fingerprint.
 
-The validator must remain one implementation. If the acceptance policy is broadened, implement it in `embedding.rs` and version/document the policy.
+The canonical validator remains a single implementation in `embedding.rs`. FDM-02.6's raw indexed cage and duplicate validator were not copied.
 
 ### LINEAGE-03.C — generic point-binding adapter port
 
@@ -122,6 +123,8 @@ The validator must remain one implementation. If the acceptance policy is broade
 ## 8. Current branch and PR status
 
 - PR #47 remains a draft and is not merged.
-- The integration branch is 82 commits ahead and 0 behind its declared FDM-02.1 base.
+- The integration branch is 86 commits ahead and 0 behind its declared FDM-02.1 base.
+- Integrated head: `aeef380d1256916df082b29202c5be5d13925daf`.
+- GitHub Actions run [#45157173045](https://github.com/Mujshanan/forma-deform/actions/runs/45157173045) passed rustfmt, Clippy, workspace tests, benchmark smoke, and all three release WASM builds.
 - PR #37 and PR #40 remain open drafts on their original lineage; neither has been merged into the canonical line.
-- FDM-02.6/02.7 source has not been copied into the canonical line by this assessment.
+- FDM-02.6's validation semantics have been ported into the canonical generic validator. FDM-02.7's generic point-binding adapter and persistence model remain to be ported; their original branches are unchanged.
