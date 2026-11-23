@@ -408,26 +408,26 @@ mod tests {
             assert!(matches!(output[3], PathCommand::Close));
             assert!(matches!(output[4], PathCommand::MoveTo(_)));
             assert!(matches!(output[5], PathCommand::CubicTo { .. }));
-            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (output[0], original.commands()[0]) {
+            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (&output[0], &original.commands()[0]) {
                 assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
             } else { panic!("first authored command must remain MoveTo"); }
-            if let (PathCommand::LineTo(actual), PathCommand::LineTo(expected)) = (output[1], original.commands()[1]) {
+            if let (PathCommand::LineTo(actual), PathCommand::LineTo(expected)) = (&output[1], &original.commands()[1]) {
                 assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
             } else { panic!("second authored command must remain LineTo"); }
             if let (
                 PathCommand::QuadraticTo { control: actual_control, to: actual_to },
                 PathCommand::QuadraticTo { control: expected_control, to: expected_to },
-            ) = (output[2], original.commands()[2]) {
+            ) = (&output[2], &original.commands()[2]) {
                 assert_point_near(*actual_control, point(expected_control.x() + 0.25, expected_control.y()));
                 assert_point_near(*actual_to, point(expected_to.x() + 0.25, expected_to.y()));
             } else { panic!("quadratic command and handles must be preserved"); }
-            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (output[4], original.commands()[4]) {
+            if let (PathCommand::MoveTo(actual), PathCommand::MoveTo(expected)) = (&output[4], &original.commands()[4]) {
                 assert_point_near(*actual, point(expected.x() + 0.25, expected.y()));
             } else { panic!("second subpath must remain MoveTo"); }
             if let (
                 PathCommand::CubicTo { control1: actual_c1, control2: actual_c2, to: actual_to },
                 PathCommand::CubicTo { control1: expected_c1, control2: expected_c2, to: expected_to },
-            ) = (output[5], original.commands()[5]) {
+            ) = (&output[5], &original.commands()[5]) {
                 assert_point_near(*actual_c1, point(expected_c1.x() + 0.25, expected_c1.y()));
                 assert_point_near(*actual_c2, point(expected_c2.x() + 0.25, expected_c2.y()));
                 assert_point_near(*actual_to, point(expected_to.x() + 0.25, expected_to.y()));
