@@ -3,7 +3,7 @@
 //! Authored Path2D remains authoritative. This module evaluates only derived
 //! tessellation samples and never rewrites or flattens the source path.
 
-use crate::binding::{BindingError, FaceCoordinates, OutsideCagePolicy, ValidatedCageGeometry};
+use crate::binding::{BindingError, FaceCoordinates, ValidatedCageGeometry};
 use crate::binding_persistence::ValidatedBindingRecord;
 use crate::curve_sampling::{
     map_curve_samples, sample_path_curves, CurveMappingError, CurveSampleMapping,
