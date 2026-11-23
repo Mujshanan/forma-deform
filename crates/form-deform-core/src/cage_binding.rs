@@ -28,6 +28,7 @@ pub struct BoundPoint {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CageBinding {
     cage_vertex_ids: Vec<u64>,
+    cage_triangles: Vec<[u64; 3]>,
     points: Vec<BoundPoint>,
 }
 
@@ -37,6 +38,7 @@ pub enum CageBindingError {
     DuplicatePointId { id: u64 },
     PointOutsideCage { point: u64 },
     InconsistentCageVertexSet,
+    InconsistentCageTopology,
     NonFiniteEvaluation { point: u64 },
 }
 
@@ -113,7 +115,8 @@ impl CageBinding {
 
         let mut cage_vertex_ids = cage.vertices.iter().map(|vertex| vertex.id).collect::<Vec<_>>();
         cage_vertex_ids.sort_unstable();
-        Ok(Self { cage_vertex_ids, points: bound })
+        let cage_triangles = triangle_identities(cage);
+        Ok(Self { cage_vertex_ids, cage_triangles, points: bound })
     }
 
     pub fn points(&self) -> &[BoundPoint] {
@@ -132,6 +135,9 @@ impl CageBinding {
         current_ids.sort_unstable();
         if current_ids != self.cage_vertex_ids {
             return Err(CageBindingError::InconsistentCageVertexSet);
+        }
+        if triangle_identities(cage) != self.cage_triangles {
+            return Err(CageBindingError::InconsistentCageTopology);
         }
 
         let positions = cage.vertices.iter()
@@ -153,6 +159,16 @@ impl CageBinding {
         }
         Ok(evaluated)
     }
+}
+
+fn triangle_identities(cage: &CageEmbedding) -> Vec<[u64; 3]> {
+    let mut identities = cage.triangles.iter().map(|triangle| {
+        let mut ids = triangle.vertices.map(|index| cage.vertices[index].id);
+        ids.sort_unstable();
+        ids
+    }).collect::<Vec<_>>();
+    identities.sort_unstable();
+    identities
 }
 
 fn orient(a: Point2, b: Point2, c: Point2) -> f64 {
@@ -220,6 +236,18 @@ mod tests {
             ]),
             Err(CageBindingError::DuplicatePointId { id: 1 }),
         );
+    }
+
+    #[test]
+    fn changed_triangulation_with_same_vertices_requires_rebind() {
+        let rest = square(0.0);
+        let binding = CageBinding::bind(&rest, &[BindingPoint { id: 1, position: point(2.0, 3.0) }]).unwrap();
+        let mut changed = square(0.0);
+        changed.triangles = vec![
+            CageTriangle { vertices: [0, 1, 3] },
+            CageTriangle { vertices: [1, 2, 3] },
+        ];
+        assert_eq!(binding.evaluate(&changed), Err(CageBindingError::InconsistentCageTopology));
     }
 
     #[test]
