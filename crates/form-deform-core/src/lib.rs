@@ -1,5 +1,6 @@
 //! Deterministic, non-accumulating bone-to-warp-pin deformation math.
 
+pub mod cage_embedding;
 pub mod composition_evaluation;
 pub mod geometry;
 pub mod composition_graph;
