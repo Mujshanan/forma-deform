@@ -1,24 +1,25 @@
 # Forma Deform — Development and Architecture
 
-**Project role:** AniCraft deformation and rig-control tool/plugin.  
-**Status:** prototype and architecture definition; native tool integration is staged and must not be represented as complete.  
-**Canonical scope:** deformation, controller authoring/preview, target bindings, and deformation evaluation.  
-**Non-goal:** a second animation application or a duplicate of AniCraft host infrastructure.
+**Project role:** standalone deformation authoring Studio with independent deformation engines and an optional future AniCraft adapter.  
+**Status:** core capabilities and browser prototype exist; the focused standalone Studio shell is planned and must not be represented as implemented.  
+**Canonical scope:** deformation authoring, controller preview, point arrays and bindings, cages/curves/tessellation, validation, and deterministic deformation evaluation.  
+**Non-goals:** a general animation editor, general drawing/painting application, or a runtime dependency on AniCraft.
 
 ## 1. Product boundary
 
-Forma Deform answers: **how should artwork deform when bones, pins, parameters, and authored controllers change?**
+Forma Deform answers: **how should geometry deform under explicitly authored deformation models and inputs?**
 
-It owns:
+Forma Deform owns:
 - Pure deformation algorithms and deformation-specific data structures.
 - Smart Controller model, normalization, mapping, easing, validation, and preview.
-- Binding specifications between controller inputs and deformation targets.
-- Corrective poses, additive deformation contributions, and deformation presets.
-- Deterministic evaluation of its own data against explicit host inputs.
+- Pin/offset authoring, point-array and binding specifications, cages, Bézier-derived inputs, and tessellation controls.
+- Corrective poses, additive deformation contributions, and deformation presets, subject to explicit composition semantics.
+- Deterministic evaluation of its own data against explicit inputs.
+- The standalone Studio shell, focused project lifecycle, viewport, selection, command dispatch, and undo/redo for Studio-authored changes.
 
-AniCraft owns the authoritative document, bones, transforms, Asset Warp, timeline, rendering, persistence, undo/redo, command registry, plugin lifecycle, evaluation scheduling, cache invalidation, and export.
+AniCraft remains a future optional host/integration target and owns its own authoritative document, bones, transforms, Asset Warp, timeline, rendering, persistence, undo/redo, command registry, plugin lifecycle, evaluation scheduling, cache invalidation, and export. The Studio must not import or launch the AniCraft application to operate.
 
-The plugin may define versioned schemas for its own authored data, but persistence must be implemented through a supported AniCraft document/extension boundary. Do not invent an independent file store or silently mutate host document structures.
+The Studio may define a versioned project/document format for its standalone workflow. A future AniCraft adapter must map supported data through a verified host document/extension boundary; it must not silently mutate host document structures or introduce a runtime dependency on AniCraft.
 
 ## 2. Accepted semantic and integration constraints
 
@@ -86,47 +87,70 @@ FDM owns a versioned authored payload schema (`forma-deform-document` v1), defor
 
 Composition is independent by default. Sequential, parallel and weighted-blend operators require explicit graph nodes and inputs; the graph validator rejects cycles, missing references, orphan nodes, duplicate IDs, incompatible value signatures, target/reference/coordinate mismatches and invalid blend weights. Smart Controller output is not a graph source under CCC-01.5. See `docs/M1_FDM_PERSISTENCE_AND_COMPOSITION_SCHEMA.md`.
 
-## 4. UI proposal
+## 4. Standalone Studio UI
 
-The UI is a native AniCraft tool context using existing stage, properties, timeline, command, and dockable-panel infrastructure.
+Forma Deform Studio is a standalone application. It uses the visual language and interaction conventions intended for AniCraft, but it contains only deformation authoring tools and does not depend on the AniCraft application.
 
-### 4.1 Layout
+### 4.1 Shared visual language boundary
+
+- Use a compact dark workspace, consistent typography and spacing, neutral panel surfaces, warm accent for primary actions/active tools, and clear focus/selection/diagnostic states.
+- Define theme tokens and reusable controls/panel primitives behind a host-independent UI boundary.
+- The shared UI design kit must be independently consumable by both applications; do not import AniCraft application modules into Forma Deform.
+- The AniCraft 360 Studio repository is currently a proposal containing documentation only. It is not an implemented component library.
+- Do not claim parity with actual AniCraft components until the real AniCraft application source and design system are identified and inspected.
+
+### 4.2 Standalone workspace layout
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ AniCraft menus / contextual tool options / command palette               │
-├──────────────┬───────────────────────────────────────┬───────────────────┤
-│ Tool strip   │ Stage                                 │ Properties        │
-│ Select       │ Selected artwork                      │ Target            │
-│ Pin          │ Deformation mesh                       │ Source input      │
-│ Handle       │ Neutral/rest markers                   │ Range / neutral   │
-│ Soft select  │ Preview displacement                   │ Mapping / easing  │
-│ Bind         │                                        │ Target gains      │
-│ Preview      │                                        │ Diagnostics       │
-├──────────────┴───────────────────────────────────────┴───────────────────┤
-│ Existing AniCraft timeline / layers / playhead                           │
-└──────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Forma Deform Studio · File · Edit · View · Tools · Help       Commands      │
+├────────────────┬──────────────────────────────────────┬─────────────────────┤
+│ Deform tools   │ Viewport                             │ Inspector           │
+│ Select         │ Artwork / selected target            │ Target & capability │
+│ Pin            │ Pins / offsets / handles             │ Pin / driver        │
+│ Point Array    │ Array points and binding overlays     │ Array & binding     │
+│ Bind           │ Cage vertices / edges / faces         │ Cage / topology     │
+│ Cage           │ Bézier paths and handles              │ Curve               │
+│ Bézier         │ Tessellation preview overlay          │ Tessellation        │
+│ Tessellate     │ Validation / stale-state overlays     │ Diagnostics         │
+├────────────────┴──────────────────────────────────────┴─────────────────────┤
+│ Contextual status · selection details · preview/validation messages         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Interaction model
+### 4.3 Interaction model
 
-- Selecting a target populates the Properties panel; no duplicate scene/layer tree.
-- Pin and handle tools appear only for compatible targets.
-- Binding is a guided action: choose source, choose target, capture/confirm neutral, configure range/mapping, validate, preview, then explicitly save/apply.
-- Preview displays source input, normalized input, mapping result, and target displacement.
-- Preview must not write keyframes, change authored pin positions, or modify the document.
-- Apply/bake is an explicit host command with one coherent undo operation.
-- Timeline scrubbing uses AniCraft's playhead. V1 must not simulate playback by repeatedly issuing commands and then describe that as a native evaluator.
-- Diagnostics should identify missing source IDs, stale targets, invalid ranges, unsupported target types, cycles, and host capability gaps.
+- Selecting a target populates the Inspector; do not add an unrelated general-purpose scene editor.
+- Tools appear only when the selected target supports them.
+- Pin/offset, point-array/binding, and cage/curve/tessellation features use their own focused inspectors.
+- Preview is explicit, deterministic, and non-mutating.
+- Persistent changes go through Studio commands and participate in Studio undo/redo.
+- Binding freshness, topology validity, stable IDs, and authored-versus-derived geometry remain core-owned contracts.
+- No general animation timeline, keyframe editor, audio/video tools, or unrelated asset library.
+- A future AniCraft adapter is optional and isolated. It must not alter standalone launchability.
 
-### 4.3 UI evolution
+### 4.4 Feature groups
 
-| Stage | UI capability |
+| Group | UI responsibility |
 |---|---|
-| Prototype | Command/MCP-driven inspection and on-demand preview |
-| Native authoring tool | Tool strip, target inspector, binding editor, diagnostics |
-| Persistent model | Binding list, stable IDs, versioned authored settings |
-| Host evaluator integration | Live evaluated overlay and playback only after AniCraft exposes a verified evaluator hook |
+| Pin & Offset Drivers | Pin placement, neutral/rest position, offsets, driver source/range/mapping, preview values |
+| Point Arrays & Binding | Array parameters, source/cage selection, bind/unbind/rebind, freshness and outside-cage diagnostics |
+| Cages & Bézier | Topology-aware cage editing, stable control-point identities, authored path/handle editing |
+| Vector Tessellation | Non-destructive sampling preview, tolerance/budget controls, capped/validation diagnostics |
+
+### 4.5 Implementation sequence
+
+| Step | Deliverable |
+|---|---|
+| UI-01 | Standalone workspace/product contract |
+| UI-02 | Source and UI architecture audit |
+| UI-03 | Standalone shell, viewport, project/command boundaries |
+| UI-04 | Reusable theme tokens and foundational primitives |
+| UI-05 | Pin, point-array/binding, cage/Bézier/tessellation feature panels |
+| UI-06 | Project persistence, undo/redo, and UX regression coverage |
+| UI-07 | Optional AniCraft adapter after host APIs are verified |
+
+See [UI-01 workspace contract](docs/UI_01_DEFORMATION_AUTHORING_WORKSPACE.md) and [UI-02 source/UI architecture audit](docs/UI_02_SOURCE_AND_UI_ARCHITECTURE_AUDIT.md).
 
 ## 5. External feature and code-reuse audit
 
