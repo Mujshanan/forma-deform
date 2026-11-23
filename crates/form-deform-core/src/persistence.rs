@@ -415,4 +415,47 @@ mod tests {
         let too_large = " ".repeat(MAX_DOCUMENT_BYTES + 1);
         assert_eq!(FdmDocument::from_json(&too_large), Err(PersistenceError::ResourceLimitExceeded));
     }
+    #[test]
+    fn cage_bindings_round_trip_with_the_authored_document() {
+        use crate::cage_binding_persistence::{PersistedBoundPoint, PersistedCageBinding};
+        let binding = PersistedCageBinding::new(
+            "binding-main", 1, target(), reference(), space(),
+            vec![10, 20, 30], vec![[10, 20, 30]],
+            vec![PersistedBoundPoint {
+                point_id: 7,
+                cage_vertex_ids: [10, 20, 30],
+                barycentric: [0.25, 0.25, 0.5],
+            }],
+        ).unwrap();
+        let mut document = sample_document();
+        document.cage_bindings.push(binding);
+        document.validate().unwrap();
+        let encoded = document.to_json().unwrap();
+        let loaded = FdmDocument::from_json(&encoded).unwrap();
+        assert_eq!(loaded.cage_bindings().len(), 1);
+        assert_eq!(loaded.to_json().unwrap(), encoded);
+    }
+
+    #[test]
+    fn legacy_document_without_cage_bindings_loads_as_empty() {
+        let json = sample_document().to_json().unwrap();
+        let legacy = json.replace(",\"cage_bindings\":[]", "");
+        let loaded = FdmDocument::from_json(&legacy).unwrap();
+        assert!(loaded.cage_bindings().is_empty());
+    }
+
+    #[test]
+    fn duplicate_persisted_cage_binding_ids_are_rejected() {
+        use crate::cage_binding_persistence::{PersistedBoundPoint, PersistedCageBinding};
+        let binding = || PersistedCageBinding::new(
+            "duplicate", 1, target(), reference(), space(),
+            vec![10, 20, 30], vec![[10, 20, 30]],
+            vec![PersistedBoundPoint { point_id: 1, cage_vertex_ids: [10, 20, 30], barycentric: [0.2, 0.3, 0.5] }],
+        ).unwrap();
+        assert_eq!(
+            FdmDocument::new_with_cage_bindings("doc", 1, vec![], vec![], vec![binding(), binding()]),
+            Err(PersistenceError::DuplicateCageBindingId),
+        );
+    }
+
 }
