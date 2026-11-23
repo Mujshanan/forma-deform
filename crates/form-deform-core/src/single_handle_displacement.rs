@@ -381,9 +381,9 @@ mod tests {
 
     #[test]
     fn output_overflow_is_rejected() {
-        let input = path(vec![PathCommand::MoveTo(point(1.0, 0.0))]);
+        let input = path(vec![PathCommand::MoveTo(point(f64::MAX, 0.0))]);
         assert!(matches!(
-            run(&input, parameters((1.0, 0.0), (f64::MAX, 0.0), 10.0)),
+            run(&input, parameters((f64::MAX, 0.0), (f64::MAX, 0.0), 10.0)),
             Err(crate::composition_evaluation::OperatorInvocationError::Operator(OperatorFailure::NonFiniteResult))
         ));
     }
