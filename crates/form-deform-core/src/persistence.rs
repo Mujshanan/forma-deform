@@ -157,6 +157,27 @@ impl FdmDocument {
             revision,
             deformers,
             composition_graphs,
+            cage_bindings: Vec::new(),
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn new_with_cage_bindings(
+        document_id: impl Into<String>,
+        revision: u64,
+        deformers: Vec<DeformationDefinition>,
+        composition_graphs: Vec<CompositionGraph>,
+        cage_bindings: Vec<PersistedCageBinding>,
+    ) -> Result<Self, PersistenceError> {
+        let value = Self {
+            schema_name: FDM_DOCUMENT_SCHEMA.into(),
+            schema_version: FDM_DOCUMENT_SCHEMA_VERSION,
+            document_id: document_id.into(),
+            revision,
+            deformers,
+            composition_graphs,
+            cage_bindings,
         };
         value.validate()?;
         Ok(value)
@@ -180,7 +201,13 @@ impl FdmDocument {
             }
         }
 
-        let mut binding_ids = std::collections::BTreeSet::new();\n        for binding in &self.cage_bindings {\n            binding.validate().map_err(PersistenceError::CageBinding)?;\n            if !binding_ids.insert(binding.id()) { return Err(PersistenceError::DuplicateCageBindingId); }\n        }\n\n        let mut graph_ids = std::collections::BTreeSet::new();
+        let mut binding_ids = std::collections::BTreeSet::new();
+        for binding in &self.cage_bindings {
+            binding.validate().map_err(PersistenceError::CageBinding)?;
+            if !binding_ids.insert(binding.id()) { return Err(PersistenceError::DuplicateCageBindingId); }
+        }
+
+        let mut graph_ids = std::collections::BTreeSet::new();
         for graph in &self.composition_graphs {
             if !graph_ids.insert(graph.graph_id()) {
                 return Err(PersistenceError::DuplicateCompositionGraphId);
