@@ -18,6 +18,7 @@ pub const BINDING_SCHEMA_NAME: &str = "forma-deform-path2d-binding";
 pub const BINDING_SCHEMA_VERSION: u32 = 1;
 pub const MAPPING_POLICY_VERSION: u32 = 1;
 pub const MAPPING_NUMERICAL_POLICY_VERSION: u32 = 1;
+pub const OUTSIDE_CAGE_POLICY_VERSION: u32 = 1;
 
 // Centralized v1 acceptance tolerances; changing them requires a policy version bump.
 const WEIGHT_SUM_TOLERANCE: f64 = 1.0e-9;
@@ -149,11 +150,11 @@ impl MappingPolicy {
     pub const fn version(self) -> u32 { MAPPING_POLICY_VERSION }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OutsideCagePolicy {
     UnboundZeroInfluence,
     ClampToBoundary,
-    Extrapolate,
+    BoundedExtrapolation { max_distance: f64 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -173,6 +174,7 @@ pub struct BindingStamp {
     pub mapping_policy: MappingPolicy,
     pub numerical_policy_version: u32,
     pub outside_policy: OutsideCagePolicy,
+    pub outside_policy_version: u32,
 }
 
 impl BindingStamp {
@@ -183,9 +185,7 @@ impl BindingStamp {
         outside_policy: OutsideCagePolicy,
     ) -> Result<Self, BindingError> {
         snapshot.validate_envelope().map_err(|_| BindingError::InvalidSourceSnapshot)?;
-        if outside_policy != OutsideCagePolicy::UnboundZeroInfluence {
-            return Err(BindingError::UnsupportedOutsidePolicy(outside_policy));
-        }
+        validate_outside_policy(outside_policy)?;
         let fingerprint = snapshot.fingerprint();
         Ok(Self {
             target: snapshot.target().clone(),
@@ -203,6 +203,7 @@ impl BindingStamp {
             mapping_policy,
             numerical_policy_version: MAPPING_NUMERICAL_POLICY_VERSION,
             outside_policy,
+            outside_policy_version: OUTSIDE_CAGE_POLICY_VERSION,
         })
     }
 
@@ -217,12 +218,11 @@ impl BindingStamp {
             || self.schema_name != BINDING_SCHEMA_NAME
             || self.schema_version != BINDING_SCHEMA_VERSION
             || self.numerical_policy_version != MAPPING_NUMERICAL_POLICY_VERSION
+            || self.outside_policy_version != OUTSIDE_CAGE_POLICY_VERSION
         {
             return Err(BindingError::InvalidStamp);
         }
-        if self.outside_policy != OutsideCagePolicy::UnboundZeroInfluence {
-            return Err(BindingError::UnsupportedOutsidePolicy(self.outside_policy));
-        }
+        validate_outside_policy(self.outside_policy)?;
         Ok(())
     }
 
@@ -315,6 +315,8 @@ pub struct MappingRecord {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SourceFeatureBinding {
     Mapped(MappingRecord),
+    Clamped(MappingRecord),
+    Extrapolated(MappingRecord),
     Unbound,
 }
 
@@ -362,9 +364,29 @@ impl BindingRecord {
             if feature.locator != entry.locator || !seen.insert(entry.locator) {
                 return Err(BindingError::InvalidSourceFeature(entry.locator));
             }
-            if let SourceFeatureBinding::Mapped(mapping) = &entry.status {
-                if mapping.locator != entry.locator { return Err(BindingError::InvalidSourceFeature(entry.locator)); }
-                validate_mapping(mapping, feature.point, geometry)?;
+            match &entry.status {
+                SourceFeatureBinding::Mapped(mapping) => {
+                    if mapping.locator != entry.locator { return Err(BindingError::InvalidSourceFeature(entry.locator)); }
+                    validate_mapping(mapping, feature.point, geometry)?;
+                }
+                SourceFeatureBinding::Clamped(mapping) => {
+                    if mapping.locator != entry.locator || self.stamp.outside_policy != OutsideCagePolicy::ClampToBoundary {
+                        return Err(BindingError::OutsidePolicyRecordMismatch);
+                    }
+                    validate_clamped_mapping(mapping, feature.point, geometry)?;
+                }
+                SourceFeatureBinding::Extrapolated(mapping) => {
+                    if mapping.locator != entry.locator { return Err(BindingError::InvalidSourceFeature(entry.locator)); }
+                    let OutsideCagePolicy::BoundedExtrapolation { max_distance } = self.stamp.outside_policy else {
+                        return Err(BindingError::OutsidePolicyRecordMismatch);
+                    };
+                    validate_extrapolated_mapping(mapping, feature.point, geometry, max_distance)?;
+                }
+                SourceFeatureBinding::Unbound => {
+                    if self.stamp.outside_policy != OutsideCagePolicy::UnboundZeroInfluence {
+                        return Err(BindingError::OutsidePolicyRecordMismatch);
+                    }
+                }
             }
         }
         if seen.len() != features.len() { return Err(BindingError::IncompleteFeatureCoverage); }
@@ -372,10 +394,15 @@ impl BindingRecord {
     }
 }
 
-fn validate_mapping(
+fn validate_mapping(mapping: &MappingRecord, source_point: Point2, geometry: &ValidatedCageGeometry) -> Result<(), BindingError> {
+    validate_mapping_domain(mapping, source_point, geometry, false)
+}
+
+fn validate_mapping_domain(
     mapping: &MappingRecord,
     source_point: Point2,
     geometry: &ValidatedCageGeometry,
+    allow_extrapolation: bool,
 ) -> Result<(), BindingError> {
     let face_index = mapping.face_index as usize;
     if mapping.subface_index != 0 { return Err(BindingError::UnsupportedSubface(mapping.subface_index)); }
@@ -392,7 +419,7 @@ fn validate_mapping(
     let reconstructed = match (&face, mapping.coordinates) {
         (TopologyFace::Triangle(_), FaceCoordinates::TriangleBarycentric { weights }) => {
             if weights.iter().any(|weight| !weight.is_finite()) { return Err(BindingError::NonFiniteCoordinate); }
-            if weights.iter().any(|weight| *weight < 0.0 || *weight > 1.0) {
+            if !allow_extrapolation && weights.iter().any(|weight| *weight < 0.0 || *weight > 1.0) {
                 return Err(BindingError::CoordinateOutsideDomain);
             }
             let sum = weights.iter().sum::<f64>();
@@ -403,7 +430,7 @@ fn validate_mapping(
         }
         (TopologyFace::Quad(_), FaceCoordinates::QuadBilinear { u, v }) => {
             if !u.is_finite() || !v.is_finite() { return Err(BindingError::NonFiniteCoordinate); }
-            if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+            if !allow_extrapolation && (!(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v)) {
                 return Err(BindingError::CoordinateOutsideDomain);
             }
             bilinear_point(&points, u, v)?
@@ -418,6 +445,60 @@ fn validate_mapping(
         return Err(BindingError::SourcePointReconstructionMismatch { face_index });
     }
     Ok(())
+}
+
+ 
+fn validate_outside_policy(policy: OutsideCagePolicy) -> Result<(), BindingError> {
+    if let OutsideCagePolicy::BoundedExtrapolation { max_distance } = policy {
+        if !max_distance.is_finite() || max_distance <= 0.0 {
+            return Err(BindingError::InvalidOutsidePolicyParameter);
+        }
+    }
+    Ok(())
+}
+
+fn validate_clamped_mapping(
+    mapping: &MappingRecord,
+    source_point: Point2,
+    geometry: &ValidatedCageGeometry,
+) -> Result<(), BindingError> {
+    use crate::outside_policy::{resolve_outside_point, OutsideCageResolution, OutsideCageResolutionPolicy};
+    if matches!(crate::point_location::locate_point(source_point, geometry), Ok(crate::point_location::PointLocationOutcome::Located(_))) {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    }
+    let OutsideCageResolution::Clamped(projection) = resolve_outside_point(
+        source_point, geometry, OutsideCageResolutionPolicy::ClampToBoundary,
+    ).map_err(|_| BindingError::OutsidePolicyRecordMismatch)? else {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    };
+    if mapping.face_index != projection.face_index || mapping.coordinates != projection.coordinates {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    }
+    validate_mapping_domain(mapping, projection.point, geometry, false)
+}
+
+fn validate_extrapolated_mapping(
+    mapping: &MappingRecord,
+    source_point: Point2,
+    geometry: &ValidatedCageGeometry,
+    max_distance: f64,
+) -> Result<(), BindingError> {
+    use crate::outside_policy::{resolve_outside_point, OutsideCageResolution, OutsideCageResolutionPolicy};
+    if !max_distance.is_finite() || max_distance <= 0.0 {
+        return Err(BindingError::InvalidOutsidePolicyParameter);
+    }
+    if matches!(crate::point_location::locate_point(source_point, geometry), Ok(crate::point_location::PointLocationOutcome::Located(_))) {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    }
+    let OutsideCageResolution::Extrapolated { boundary, coordinates, .. } = resolve_outside_point(
+        source_point, geometry, OutsideCageResolutionPolicy::BoundedExtrapolation { max_distance },
+    ).map_err(|_| BindingError::OutsidePolicyRecordMismatch)? else {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    };
+    if mapping.face_index != boundary.face_index || mapping.coordinates != coordinates {
+        return Err(BindingError::OutsidePolicyRecordMismatch);
+    }
+    validate_mapping_domain(mapping, source_point, geometry, true)
 }
 
 fn weighted_sum(points: &[ControlPointPosition], weights: &[f64; 3]) -> Result<Point2, BindingError> {
@@ -456,6 +537,8 @@ pub enum BindingError {
     InvalidSourceSnapshot,
     InvalidStamp,
     UnsupportedOutsidePolicy(OutsideCagePolicy),
+    InvalidOutsidePolicyParameter,
+    OutsidePolicyRecordMismatch,
     UnsupportedMappingPolicy,
     StaleTarget,
     StaleGeometryRevision,
@@ -488,7 +571,9 @@ impl std::fmt::Display for BindingError {
         match self {
             Self::InvalidSourceSnapshot => write!(f, "source geometry snapshot is invalid"),
             Self::InvalidStamp => write!(f, "binding stamp is malformed or unsupported"),
-            Self::UnsupportedOutsidePolicy(policy) => write!(f, "outside-cage policy {policy:?} is not supported by FDM-03.1"),
+            Self::UnsupportedOutsidePolicy(policy) => write!(f, "outside-cage policy {policy:?} is not supported"),
+            Self::InvalidOutsidePolicyParameter => write!(f, "outside-cage policy parameter is invalid"),
+            Self::OutsidePolicyRecordMismatch => write!(f, "binding entry does not match its stamped outside-cage policy"),
             Self::UnsupportedMappingPolicy => write!(f, "mapping policy is not supported"),
             Self::StaleTarget => write!(f, "binding host target identity or generation is stale"),
             Self::StaleGeometryRevision => write!(f, "binding source geometry revision is stale"),
@@ -744,7 +829,7 @@ mod tests {
     fn unsupported_outside_policies_fail_closed() {
         let (topology, _) = cage();
         assert!(matches!(BindingStamp::from_snapshot(&snapshot(),&topology,
-            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,OutsideCagePolicy::Extrapolate),
+            MappingPolicy::TriangleBarycentricQuadBilinearInsideV1,OutsideCagePolicy::BoundedExtrapolation { max_distance: 1.0 }),
             Err(BindingError::UnsupportedOutsidePolicy(OutsideCagePolicy::Extrapolate))));
     }
 
